@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { scanTemplateTexts } from "@/utils/pptxScanner";
 import { generateProposalPPTX } from "@/services/proposalService";
 import { Button } from "@/components/ui/button";
@@ -45,6 +45,16 @@ const KEYS = [
   "endereço",
 ];
 
+function normalizeForMatch(s?: string) {
+  if (!s) return "";
+  // remove braces, punctuation we don't care about, lower case, remove accents
+  const noBraces = s.replace(/[{}]/g, "");
+  const lower = noBraces.toLowerCase();
+  const noAccents = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // keep only letters and numbers for robust substring checks
+  return noAccents.replace(/[^a-z0-9]/g, "");
+}
+
 export default function TokenScannerPage() {
   const [found, setFound] = useState<Array<{ text: string; count: number }>>([]);
   const [loading, setLoading] = useState(false);
@@ -56,6 +66,8 @@ export default function TokenScannerPage() {
       return {};
     }
   });
+
+  const autoMappedRef = useRef(false);
 
   useEffect(() => {
     (async () => {
@@ -71,6 +83,103 @@ export default function TokenScannerPage() {
       }
     })();
   }, []);
+
+  // Attempt automatic mapping once after we have the 'found' texts and if not already auto-mapped
+  useEffect(() => {
+    if (found.length === 0) return;
+    if (autoMappedRef.current) return;
+
+    const existing = { ...mapping };
+    const foundByNormalized: Array<{ raw: string; normalized: string; count: number }> = found.map((f) => ({
+      raw: f.text,
+      normalized: normalizeForMatch(f.text),
+      count: f.count,
+    }));
+
+    // helper to find best match for a key
+    function findMatchForKey(key: string): string | undefined {
+      const keyNorm = normalizeForMatch(key);
+
+      // direct exact match (normalized)
+      let match = foundByNormalized.find((f) => f.normalized === keyNorm);
+      if (match) return match.raw;
+
+      // substring match where found contains key
+      match = foundByNormalized.find((f) => f.normalized.includes(keyNorm));
+      if (match) return match.raw;
+
+      // special heuristics
+      // qtd -> busca 'qtd' ou 'quant' (quantidade)
+      if (keyNorm.startsWith("qtd")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("qtd") || f.normalized.includes("quant"));
+        if (match) return match.raw;
+      }
+
+      // descrição -> busca 'descri' ou 'descricao' ou 'descrição'
+      if (keyNorm.includes("descricao") || keyNorm.includes("descri")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("descri") || f.normalized.includes("descricao") || f.normalized.includes("description"));
+        if (match) return match.raw;
+      }
+
+      // users -> busca 'user' or 'usuario' / 'usuarios'
+      if (keyNorm.includes("user") || keyNorm.includes("users")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("user") || f.normalized.includes("usuario") || f.normalized.includes("usuarios"));
+        if (match) return match.raw;
+      }
+
+      // devices -> busca 'device' or 'dispositivo' / 'dispositivos'
+      if (keyNorm.includes("device") || keyNorm.includes("devices")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("device") || f.normalized.includes("disposit"));
+        if (match) return match.raw;
+      }
+
+      // CNPJ -> busca 'cnpj'
+      if (keyNorm === "cnpj") {
+        match = foundByNormalized.find((f) => f.normalized.includes("cnpj"));
+        if (match) return match.raw;
+      }
+
+      // endereço -> busca 'endereco' ou 'endereço' ou 'address'
+      if (keyNorm.includes("endereco") || keyNorm.includes("endereco")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("endereco") || f.normalized.includes("address"));
+        if (match) return match.raw;
+      }
+
+      // fallback: pick the most frequent short text (likely a label)
+      const shortCandidates = foundByNormalized.filter((f) => f.raw.length < 40).sort((a, b) => b.count - a.count);
+      if (shortCandidates.length > 0) return shortCandidates[0].raw;
+
+      return undefined;
+    }
+
+    let anyMapped = false;
+    const newMapping = { ...existing };
+
+    for (const key of KEYS) {
+      if (newMapping[key]) continue; // don't overwrite manual mapping
+      const matched = findMatchForKey(key);
+      if (matched) {
+        newMapping[key] = matched;
+        anyMapped = true;
+      }
+    }
+
+    if (anyMapped) {
+      setMapping(newMapping);
+      try {
+        localStorage.setItem("pptx_token_map", JSON.stringify(newMapping));
+        toast.success("Mapeamento automático aplicado (você pode ajustar manualmente)");
+      } catch (err) {
+        console.warn("failed to save automatic mapping", err);
+      }
+    } else {
+      // no automatic matches found (not an error)
+      console.debug("TokenScanner: no automatic mapping candidates found");
+    }
+
+    autoMappedRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [found]);
 
   const saveMapping = () => {
     try {
@@ -219,6 +328,7 @@ export default function TokenScannerPage() {
                 <Button variant="outline" onClick={() => {
                   // refresh scan
                   setFound([]);
+                  autoMappedRef.current = false;
                   (async () => {
                     try {
                       const texts = await scanTemplateTexts();
