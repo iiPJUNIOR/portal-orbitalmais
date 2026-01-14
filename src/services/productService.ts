@@ -14,10 +14,10 @@ const mockProducts: Product[] = [
     urn: true,
     qr: true,
     description: "Catraca pedestral biométrica com facial Max",
-    value_12m: 1200.00,
-    value_24m: 1000.00,
+    value_12m: 1200.0,
+    value_24m: 1000.0,
     part_number: "IDB-NEXT-001",
-    status: "Ativo"
+    status: "Ativo",
   },
   {
     id: "2",
@@ -31,10 +31,10 @@ const mockProducts: Product[] = [
     urn: false,
     qr: true,
     description: "Catraca balcão com facial Lite",
-    value_12m: 950.00,
-    value_24m: 800.00,
+    value_12m: 950.0,
+    value_24m: 800.0,
     part_number: "IDB-NEXT-BQC-001",
-    status: "Ativo"
+    status: "Ativo",
   },
   {
     id: "3",
@@ -48,10 +48,10 @@ const mockProducts: Product[] = [
     urn: true,
     qr: false,
     description: "Torniquete com facial 2",
-    value_12m: 1500.00,
-    value_24m: 1250.00,
+    value_12m: 1500.0,
+    value_24m: 1250.0,
     part_number: "IDB-V2-001",
-    status: "Ativo"
+    status: "Ativo",
   },
   {
     id: "4",
@@ -65,10 +65,10 @@ const mockProducts: Product[] = [
     urn: false,
     qr: true,
     description: "Catraca balcão com facial 1",
-    value_12m: 850.00,
-    value_24m: 720.00,
+    value_12m: 850.0,
+    value_24m: 720.0,
     part_number: "IDB-BAL-001",
-    status: "Ativo"
+    status: "Ativo",
   },
   {
     id: "5",
@@ -82,62 +82,71 @@ const mockProducts: Product[] = [
     urn: false,
     qr: true,
     description: "Controlador de porta com facial Pro",
-    value_12m: 650.00,
-    value_24m: 550.00,
+    value_12m: 650.0,
+    value_24m: 550.0,
     part_number: "IDF-PRO-001",
-    status: "Ativo"
-  }
+    status: "Ativo",
+  },
 ];
 
 export const fetchProducts = async (filters: ProductFilters = {}): Promise<Product[]> => {
   // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  return mockProducts.filter(product => {
+  await new Promise((resolve) => setTimeout(resolve, 500));
+
+  return mockProducts.filter((product) => {
     // Category filter
     if (filters.category && product.category !== filters.category) {
       return false;
     }
-    
+
     // Model filter
     if (filters.model && product.model !== filters.model) {
       return false;
     }
-    
+
     // Biometrics filter
     if (filters.biometrics !== undefined && product.biometrics !== filters.biometrics) {
       return false;
     }
-    
+
     // Facial filter
-    if (filters.facial && filters.facial !== 'None' && product.facial !== filters.facial) {
+    if (filters.facial && filters.facial !== "None" && product.facial !== filters.facial) {
       return false;
     }
-    
+
     // Proximity filter
-    if (filters.proximity && filters.proximity !== 'None' && product.proximity !== filters.proximity) {
+    if (filters.proximity && filters.proximity !== "None" && product.proximity !== filters.proximity) {
       return false;
     }
-    
+
     // Urn filter
     if (filters.urn !== undefined && product.urn !== filters.urn) {
       return false;
     }
-    
+
     // QR filter
     if (filters.qr !== undefined && product.qr !== filters.qr) {
       return false;
     }
-    
+
     // Price range filter
-    const productPrice = filters.minPrice !== undefined ? product.value_12m : product.value_24m;
-    if (filters.minPrice !== undefined && productPrice < filters.minPrice) {
-      return false;
+    // Include product if at least one of the prices (12m or 24m) falls within the requested range.
+    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+      const minPriceFilter = filters.minPrice ?? Number.NEGATIVE_INFINITY;
+      const maxPriceFilter = filters.maxPrice ?? Number.POSITIVE_INFINITY;
+
+      const lowestPrice = Math.min(product.value_12m, product.value_24m);
+      const highestPrice = Math.max(product.value_12m, product.value_24m);
+
+      // If both prices are strictly less than min OR both strictly greater than max, exclude.
+      if (highestPrice < minPriceFilter) {
+        return false;
+      }
+      if (lowestPrice > maxPriceFilter) {
+        return false;
+      }
     }
-    if (filters.maxPrice !== undefined && productPrice > filters.maxPrice) {
-      return false;
-    }
-    
+
     // Search filter
     if (filters.search) {
       const searchLower = filters.search.toLowerCase();
@@ -149,19 +158,19 @@ export const fetchProducts = async (filters: ProductFilters = {}): Promise<Produ
         return false;
       }
     }
-    
+
     return product.status === "Ativo";
   });
 };
 
 export const getProductById = async (id: string): Promise<Product | undefined> => {
-  return mockProducts.find(product => product.id === id);
+  return mockProducts.find((product) => product.id === id);
 };
 
 export const getCategories = (): string[] => {
-  return Array.from(new Set(mockProducts.map(p => p.category)));
+  return Array.from(new Set(mockProducts.map((p) => p.category)));
 };
 
 export const getModels = (): string[] => {
-  return Array.from(new Set(mockProducts.map(p => p.model)));
+  return Array.from(new Set(mockProducts.map((p) => p.model)));
 };
