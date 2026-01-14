@@ -15,7 +15,6 @@ import { Product } from "@/types/product";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
-import { normalizeModelDisplay } from "@/lib/normalizeModel";
 
 type QuoteItem = {
   id: string;
@@ -40,8 +39,7 @@ function normalizeImportedRow(row: any, idx: number): Product {
   const id = row.id || row.ID || row.sku || row.SKU || `imported-${idx}-${Date.now()}`;
   const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
   const description = row.description || row.Description || row.Descrição || row["Product"] || sku;
-  const modelRaw = row.model || row.Modelo || row.Model || "Importado";
-  const model = normalizeModelDisplay(String(modelRaw));
+  const model = row.model || row.Modelo || row.Model || "Importado";
   const category = (row.category || row.Categoria || "Controladores Porta") as Product["category"];
   const colorsRaw = row.colors || row.Colors || row.Cor || "";
   const colors = typeof colorsRaw === "string"
@@ -71,7 +69,7 @@ function normalizeImportedRow(row: any, idx: number): Product {
     id: String(id),
     sku: String(sku),
     category,
-    model,
+    model: String(model),
     colors,
     biometrics,
     facial: facial as any,

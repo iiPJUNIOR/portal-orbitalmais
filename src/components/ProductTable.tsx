@@ -14,7 +14,6 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Minus } from "lucide-react";
 import { Product } from "@/types/product";
-import { normalizeModelDisplay } from "@/lib/normalizeModel";
 
 interface ProductTableProps {
   products: Product[];
@@ -72,7 +71,7 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
               <TableCell className="font-medium">
                 <div>{product.description}</div>
                 <div className="text-sm text-muted-foreground">
-                  {product.part_number} | {normalizeModelDisplay(product.model)}
+                  {product.part_number} | {product.model}
                 </div>
               </TableCell>
               <TableCell>
