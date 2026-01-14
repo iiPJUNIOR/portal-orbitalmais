@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as googleClient from "@/integrations/google/client";
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const ENV_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+const LOCAL_STORAGE_KEY = "google_client_id_override";
 
 // Fields expected from the user mapping
 const MAPPING_FIELDS = [
@@ -45,7 +46,17 @@ export default function Settings() {
   const [range, setRange] = useState<string>("A1:Z1000");
   const [apiErrorInfo, setApiErrorInfo] = useState<{ activationUrl?: string; serviceTitle?: string; message?: string } | null>(null);
 
-  const isGoogleConfigured = !!GOOGLE_CLIENT_ID;
+  // runtime override for client id (so devs can paste an id without env var)
+  const [overrideClientId, setOverrideClientId] = useState<string>(() => {
+    try {
+      return (localStorage.getItem(LOCAL_STORAGE_KEY) || "");
+    } catch {
+      return "";
+    }
+  });
+
+  const effectiveClientId = ENV_GOOGLE_CLIENT_ID || (overrideClientId || undefined);
+  const isGoogleConfigured = !!effectiveClientId;
 
   useEffect(() => {
     // Try to restore token and files from localStorage on mount
@@ -95,7 +106,7 @@ export default function Settings() {
 
   const handleConnect = async () => {
     if (!isGoogleConfigured) {
-      toast.error("VITE_GOOGLE_CLIENT_ID não está definido. Verifique as variáveis de ambiente.");
+      toast.error("VITE_GOOGLE_CLIENT_ID não está definido. Defina via variável de ambiente ou cole um Client ID abaixo.");
       return;
     }
 
@@ -362,6 +373,34 @@ export default function Settings() {
     });
   }, [files, fileSearch]);
 
+  // Save override client id to localStorage
+  const saveOverrideClientId = () => {
+    try {
+      if (!overrideClientId) {
+        toast.error("Cole um Client ID válido antes de salvar.");
+        return;
+      }
+      localStorage.setItem(LOCAL_STORAGE_KEY, overrideClientId);
+      toast.success("Client ID salvo para esta sessão (localStorage).");
+      // reload page to ensure other modules pick it up if necessary
+      // but our google client reads localStorage at runtime so immediate usage should work
+    } catch (err) {
+      console.error("Erro ao salvar override client id:", err);
+      toast.error("Não foi possível salvar o Client ID.");
+    }
+  };
+
+  const clearOverrideClientId = () => {
+    try {
+      localStorage.removeItem(LOCAL_STORAGE_KEY);
+      setOverrideClientId("");
+      toast.success("Client ID de override removido.");
+    } catch (err) {
+      console.error("Erro ao limpar override client id:", err);
+      toast.error("Não foi possível limpar o Client ID.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -381,10 +420,22 @@ export default function Settings() {
           <div className="mb-6 p-4 border rounded bg-yellow-50 text-yellow-900">
             <strong>Variável ausente:</strong> VITE_GOOGLE_CLIENT_ID não está definida.
             <div className="text-sm mt-2">
-              Para conectar ao Google, defina a variável de ambiente VITE_GOOGLE_CLIENT_ID com o Client ID da sua aplicação.
-              Exemplo local: crie um arquivo <code className="bg-white rounded px-1 py-0.5">.env</code> na raiz com:
-              <div className="mt-1 font-mono text-sm">VITE_GOOGLE_CLIENT_ID=seu_client_id_aqui</div>
-              Ou defina a variável no painel de variáveis de ambiente do seu serviço de hospedagem.
+              Você pode definir a variável de ambiente VITE_GOOGLE_CLIENT_ID na sua máquina/host, ou colar um Client ID abaixo para uso local (salvo em localStorage).
+              <div className="mt-2">
+                <Label>Client ID (opcional, para desenvolvimento)</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    placeholder="Cole aqui o Client ID do Google (ex: 1234-abcdefg.apps.googleusercontent.com)"
+                    value={overrideClientId}
+                    onChange={(e) => setOverrideClientId(e.target.value)}
+                  />
+                  <Button onClick={saveOverrideClientId}>Salvar</Button>
+                  <Button variant="outline" onClick={clearOverrideClientId}>Limpar</Button>
+                </div>
+                <div className="mt-2 text-sm">
+                  Depois de salvar, tente clicar em "Conectar ao Google". O Client ID será lido do armazenamento local.
+                </div>
+              </div>
             </div>
           </div>
         )}
