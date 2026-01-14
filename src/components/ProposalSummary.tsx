@@ -12,7 +12,7 @@ import {
   TableRow 
 } from "@/components/ui/table";
 import { calculateProposalSummary, generateProposalNumber, formatDateForProposal } from "@/services/proposalService";
-import { QuoteItem } from "@/types/product";
+import { QuoteItem } from "@/types/quote";
 
 interface ProposalSummaryProps {
   items: QuoteItem[];
@@ -42,9 +42,8 @@ export function ProposalSummary({
   const formattedDate = formatDateForProposal(proposalData.proposalDate);
   
   const totalPrice = items.reduce((sum, item) => {
-    const unitPrice = item.priceModel === '12m' 
-      ? item.product.value_12m 
-      : item.product.value_24m;
+    // Prefer stored unitPrice if present (this covers edited values in review)
+    const unitPrice = (item as any).unitPrice ?? (item.priceModel === '12m' ? item.product.value_12m : item.product.value_24m);
     return sum + (unitPrice * item.quantity);
   }, 0);
 
@@ -88,9 +87,7 @@ export function ProposalSummary({
               </TableHeader>
               <TableBody>
                 {items.map((item) => {
-                  const unitPrice = item.priceModel === '12m' 
-                    ? item.product.value_12m 
-                    : item.product.value_24m;
+                  const unitPrice = (item as any).unitPrice ?? (item.priceModel === '12m' ? item.product.value_12m : item.product.value_24m);
                   const subtotal = unitPrice * item.quantity;
                   
                   return (

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Table,
   TableBody,
@@ -21,6 +21,7 @@ interface QuoteItem {
   product: Product;
   quantity: number;
   priceModel: '12m' | '24m';
+  unitPrice?: number;
 }
 
 interface QuoteBuilderProps {
@@ -28,6 +29,7 @@ interface QuoteBuilderProps {
   onRemoveItem: (id: string) => void;
   onUpdateQuantity: (id: string, quantity: number) => void;
   onUpdatePriceModel: (id: string, model: '12m' | '24m') => void;
+  onUpdateUnitPrice: (id: string, unitPrice: number) => void;
   onGenerateProposal: () => void;
 }
 
@@ -36,18 +38,24 @@ export function QuoteBuilder({
   onRemoveItem, 
   onUpdateQuantity, 
   onUpdatePriceModel,
+  onUpdateUnitPrice,
   onGenerateProposal
 }: QuoteBuilderProps) {
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
   
   const total12m = items.reduce((sum, item) => {
-    const price = item.priceModel === '12m' ? item.product.value_12m : item.product.value_24m;
-    return sum + (price * item.quantity);
+    const defaultPrice = item.priceModel === '12m' ? item.product.value_12m : item.product.value_24m;
+    const unitPrice = item.unitPrice ?? defaultPrice;
+    return sum + (unitPrice * item.quantity);
   }, 0);
   
   const total24m = items.reduce((sum, item) => {
-    const price = item.priceModel === '12m' ? item.product.value_12m * 2 : item.product.value_24m;
-    return sum + (price * item.quantity);
+    const defaultPrice = item.priceModel === '12m' ? item.product.value_12m * 2 : item.product.value_24m;
+    // NOTE: For the 24m aggregate we still prefer item.unitPrice if present (assume unitPrice reflects chosen model)
+    const unitPrice = item.unitPrice ?? (item.priceModel === '12m' ? item.product.value_12m : item.product.value_24m);
+    // multiply by 2 is an earlier business rule — keep identical behavior but use override if present
+    const effective = item.priceModel === '12m' ? unitPrice * 2 : unitPrice;
+    return sum + (effective * item.quantity);
   }, 0);
 
   return (
@@ -70,9 +78,11 @@ export function QuoteBuilder({
             </TableHeader>
             <TableBody>
               {items.map((item) => {
-                const unitPrice = item.priceModel === '12m' 
+                const defaultUnit = item.priceModel === '12m' 
                   ? item.product.value_12m 
                   : item.product.value_24m;
+                
+                const unitPrice = item.unitPrice ?? defaultUnit;
                 
                 const subtotal = unitPrice * item.quantity;
                 
@@ -100,7 +110,22 @@ export function QuoteBuilder({
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell>R$ {unitPrice.toFixed(2)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={Number((Math.round((unitPrice + Number.EPSILON) * 100) / 100).toFixed(2))}
+                          onChange={(e) => {
+                            const val = parseFloat(e.target.value || "0");
+                            onUpdateUnitPrice(item.id, Number(isNaN(val) ? 0 : val));
+                          }}
+                          className="w-28"
+                        />
+                        <div className="text-sm text-muted-foreground">R$</div>
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Input
                         type="number"
