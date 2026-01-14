@@ -7,7 +7,7 @@ import PptxGenJS from "pptxgenjs";
  * Scans the PPTX template and returns a list of unique text fragments found in slide <a:t> nodes,
  * along with occurrence counts. This helps mapping template text to replacement keys.
  *
- * This version tries both the src-relative template and a public root fallback (/proposal-template.pptx).
+ * This version tries both a public root fallback (/proposal-template.pptx) and the src-relative template.
  * If fetching a binary PPTX fails or returns a non-ZIP resource, the function will generate a small
  * fallback PPTX in-memory (using pptxgenjs) and scan that so the UI doesn't break during development.
  */
@@ -15,14 +15,15 @@ import PptxGenJS from "pptxgenjs";
 async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
   const candidateUrls: string[] = [];
 
+  // Try the public path first (this is the most reliable in dev/preview)
+  candidateUrls.push("/proposal-template.pptx");
+
   try {
     const modUrl = new URL("../templates/proposal-template.pptx", import.meta.url).href;
     candidateUrls.push(modUrl);
   } catch {
     // ignore
   }
-
-  candidateUrls.push("/proposal-template.pptx");
 
   let lastErr: any = null;
 
@@ -78,7 +79,8 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
     slide.addText("Fallback Proposal Template", { x: 0.5, y: 0.6, fontSize: 20, bold: true });
     slide.addText("{{companyName}}", { x: 0.5, y: 1.4, fontSize: 14 });
     slide.addText("{{contactName}}", { x: 0.5, y: 1.8, fontSize: 12 });
-    slide.addText("{{items_list}}", { x: 0.5, y: 2.4, fontSize: 11, w: "90%" });
+    slide.addText("{{date}}", { x: 0.5, y: 2.2, fontSize: 12 }); // ensure date token exists in fallback
+    slide.addText("{{items_list}}", { x: 0.5, y: 2.6, fontSize: 11, w: "90%" });
 
     // create a Blob and convert to ArrayBuffer
     // @ts-ignore - pptxgenjs typing may not include 'write' signature consistently
