@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,8 @@ interface ProductFilterProps {
   onFilterChange: (filters: ProductFilters) => void;
 }
 
+const DEBOUNCE_MS = 300;
+
 export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
@@ -39,6 +41,8 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   });
   
   const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
+  const debounceRef = useRef<number | null>(null);
+  const mountedRef = useRef(false); // avoid triggering filter on initial mount
 
   useEffect(() => {
     const loadFilters = async () => {
@@ -51,10 +55,45 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
     loadFilters();
   }, []);
 
+  // Debounced filter application: wait DEBOUNCE_MS after the last change
   useEffect(() => {
-    onFilterChange(filters);
+    // Skip applying filters on initial mount to avoid duplicate loads
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+
+    // clear previous
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = window.setTimeout(() => {
+      onFilterChange({
+        // ensure we pass primitive values (avoid unexpected references)
+        category: filters.category,
+        model: filters.model,
+        biometrics: filters.biometrics,
+        facial: filters.facial,
+        proximity: filters.proximity,
+        urn: filters.urn,
+        qr: filters.qr,
+        minPrice: filters.minPrice,
+        maxPrice: filters.maxPrice,
+        search: (filters.search || "").trim()
+      });
+      debounceRef.current = null;
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, [filters, onFilterChange]);
 
+  // Helper to update filters state
   const handleInputChange = (field: keyof ProductFilters, value: string | boolean | undefined) => {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
@@ -69,7 +108,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   };
 
   const resetFilters = () => {
-    setFilters({
+    const reset = {
       category: undefined,
       model: undefined,
       biometrics: undefined,
@@ -80,8 +119,16 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
       minPrice: undefined,
       maxPrice: undefined,
       search: ""
-    });
+    };
+    setFilters(reset);
     setPriceRange([0, 5000]);
+
+    // Apply immediately (don't wait for debounce)
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    onFilterChange(reset);
   };
 
   return (
