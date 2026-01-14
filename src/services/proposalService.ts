@@ -127,6 +127,51 @@ Total: R$ ${proposalSummary.toFixed(2)}
   }
 };
 
+/**
+ * Calculate a simple summary for the proposal used in the UI.
+ * Returns an object with totalUsers and totalDevices.
+ *
+ * Note: the app doesn't have explicit user/device mapping for every product in the catalog,
+ * so this function derives totals from item quantities:
+ *  - totalDevices: sum of quantities across items
+ *  - totalUsers: same as totalDevices (can be adjusted later if you want different heuristics)
+ */
+export function calculateProposalSummary(items: Array<{ quantity?: number }>) {
+  const totalDevices = (items || []).reduce((sum, it) => sum + (it.quantity || 0), 0);
+  const totalUsers = totalDevices; // default heuristic; adjust if you want a different rule
+  return {
+    totalDevices,
+    totalUsers,
+  };
+}
+
+/**
+ * Generate a short human-readable proposal number.
+ * Format: YYYYMMDD-HHMMSS-<4hex>
+ */
+export function generateProposalNumber(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const datePart = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+  const timePart = `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  const randomPart = Math.random().toString(16).slice(2, 6).toUpperCase();
+  return `${datePart}-${timePart}-${randomPart}`;
+}
+
+/**
+ * Format a date string for display on the proposal (pt-BR). If parsing fails, returns the original input.
+ */
+export function formatDateForProposal(input?: string) {
+  if (!input) return "";
+  try {
+    const d = new Date(input);
+    if (isNaN(d.getTime())) return input;
+    return d.toLocaleDateString("pt-BR");
+  } catch {
+    return input;
+  }
+}
+
 function extractIdFromPipedriveUrl(url?: string) {
   if (!url) return "";
   try {
