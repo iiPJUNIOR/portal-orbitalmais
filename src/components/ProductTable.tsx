@@ -66,8 +66,8 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {products.map((product) => (
-            <TableRow key={product.id}>
+          {products.map((product, idx) => (
+            <TableRow key={`${product.sku ?? product.id}-${idx}`}>
               <TableCell className="font-medium">
                 <div>{product.description}</div>
                 <div className="text-sm text-muted-foreground">
