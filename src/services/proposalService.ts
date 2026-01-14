@@ -142,6 +142,27 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     // model names array
     const modelNames = (data.items || []).map((it) => it.product.model || it.product.description || "");
 
+    // --- New: populate Portuguese/extra replacement keys requested ---
+    // descriptions (first three)
+    const firstThree = (data.items || []).slice(0, 3);
+    replacements["descrição"] = firstThree[0]?.product?.description ?? "";
+    replacements["descrição1"] = firstThree[1]?.product?.description ?? "";
+    replacements["descrição2"] = firstThree[2]?.product?.description ?? "";
+
+    // quantities for first three
+    replacements["qtd"] = firstThree[0]?.quantity ?? 0;
+    replacements["qtd1"] = firstThree[1]?.quantity ?? 0;
+    replacements["qtd2"] = firstThree[2]?.quantity ?? 0;
+
+    // totals users/devices from summary
+    const summary = calculateProposalSummary(data.items || []);
+    replacements["users"] = summary.totalUsers;
+    replacements["devices"] = summary.totalDevices;
+
+    // CNPJ and address
+    replacements["CNPJ"] = data.cnpj || "";
+    replacements["endereço"] = data.address || "";
+
     // Attempt template-based generation (JSZip-based editor). This is the preferred flow.
     const blob = await generatePptxFromTemplate({
       replacements,
@@ -183,9 +204,9 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       // Slide 4 - seller
       const slideSeller = pptx.addSlide();
       slideSeller.addText("Vendedor", { x: 0.5, y: 0.8, fontSize: 14, bold: true });
-      slideSeller.addText(localStorage.getItem("seller_name") || "", { x: 0.5, y: 1.3, fontSize: 12 });
-      slideSeller.addText(localStorage.getItem("seller_role") || "", { x: 0.5, y: 1.7, fontSize: 11 });
-      slideSeller.addText(`${localStorage.getItem("seller_email") || ""} · ${localStorage.getItem("seller_phone") || ""}`, { x: 0.5, y: 2.1, fontSize: 11 });
+      slideSeller.addText("Nome: " + (localStorage.getItem("seller_name") || ""), { x: 0.5, y: 1.3, fontSize: 12 });
+      slideSeller.addText("Cargo: " + (localStorage.getItem("seller_role") || ""), { x: 0.5, y: 1.7, fontSize: 11 });
+      slideSeller.addText("Contato: " + `${localStorage.getItem("seller_email") || ""} · ${localStorage.getItem("seller_phone") || ""}`, { x: 0.5, y: 2.1, fontSize: 11 });
 
       // Slide total
       const slideTotal = pptx.addSlide();
@@ -206,6 +227,8 @@ Data: ${data.proposalDate}
 Contato: ${data.contactName}
 E-mail: ${data.email}
 Telefone: ${data.phone}
+Endereço: ${data.address || ""}
+
 Itens:
 ${(data.items || []).map(it => `- ${it.product.description} (Qtd: ${it.quantity})`).join("\n")}
 

@@ -11,8 +11,17 @@ import { toast } from "sonner";
 /**
  * Replacement keys we expect to populate in the template.
  * The UI will allow mapping a source text from the PPTX to each of these keys.
+ *
+ * Added Portuguese keys per request:
+ *  - descrição, descrição1, descrição2
+ *  - qtd, qtd1, qtd2
+ *  - users, devices
+ *  - CNPJ, endereço
+ *
+ * Keeping original English keys as well for backward compatibility.
  */
 const KEYS = [
+  // existing keys
   "companyName",
   "contactName",
   "date",
@@ -23,6 +32,17 @@ const KEYS = [
   "sellerEmail",
   "sellerPhone",
   "totalPrice",
+  // requested Portuguese keys (may contain accented chars)
+  "descrição",
+  "descrição1",
+  "descrição2",
+  "qtd",
+  "qtd1",
+  "qtd2",
+  "users",
+  "devices",
+  "CNPJ",
+  "endereço",
 ];
 
 export default function TokenScannerPage() {
@@ -95,6 +115,28 @@ export default function TokenScannerPage() {
             status: "Ativo",
           },
           quantity: 2,
+          priceModel: "12m" as const,
+        },
+        {
+          id: "p2",
+          product: {
+            id: "p2",
+            sku: "IDB-BAL-001",
+            category: "Catraca Balcão",
+            model: "iDBlock Balcão",
+            colors: ["Preta"],
+            biometrics: true,
+            facial: "1" as any,
+            proximity: "ASK" as any,
+            urn: false,
+            qr: true,
+            description: "Catraca balcão com facial 1",
+            value_12m: 850,
+            value_24m: 720,
+            part_number: "IDB-BAL-001",
+            status: "Ativo",
+          },
+          quantity: 1,
           priceModel: "12m" as const,
         },
       ],
