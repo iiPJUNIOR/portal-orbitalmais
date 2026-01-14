@@ -26,11 +26,11 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const [models, setModels] = useState<string[]>([]);
   
   const [filters, setFilters] = useState<ProductFilters>({
-    category: "",
-    model: "",
+    category: undefined,
+    model: undefined,
     biometrics: undefined,
-    facial: "",
-    proximity: "",
+    facial: undefined,
+    proximity: undefined,
     urn: undefined,
     qr: undefined,
     minPrice: undefined,
@@ -70,11 +70,11 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
 
   const resetFilters = () => {
     setFilters({
-      category: "",
-      model: "",
+      category: undefined,
+      model: undefined,
       biometrics: undefined,
-      facial: "",
-      proximity: "",
+      facial: undefined,
+      proximity: undefined,
       urn: undefined,
       qr: undefined,
       minPrice: undefined,
@@ -104,14 +104,14 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         <div className="space-y-2">
           <Label htmlFor="category">Categoria</Label>
           <Select 
-            value={filters.category || ""} 
-            onValueChange={(value) => handleInputChange("category", value || undefined)}
+            value={filters.category ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("category", value === "ALL" ? undefined : value)}
           >
             <SelectTrigger id="category">
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas</SelectItem>
+              <SelectItem value="ALL">Todas</SelectItem>
               {categories.map(category => (
                 <SelectItem key={category} value={category}>{category}</SelectItem>
               ))}
@@ -122,14 +122,14 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         <div className="space-y-2">
           <Label htmlFor="model">Modelo</Label>
           <Select 
-            value={filters.model || ""} 
-            onValueChange={(value) => handleInputChange("model", value || undefined)}
+            value={filters.model ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("model", value === "ALL" ? undefined : value)}
           >
             <SelectTrigger id="model">
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos</SelectItem>
+              <SelectItem value="ALL">Todos</SelectItem>
               {models.map(model => (
                 <SelectItem key={model} value={model}>{model}</SelectItem>
               ))}
@@ -193,14 +193,14 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         <div className="space-y-2">
           <Label htmlFor="facial">Facial</Label>
           <Select 
-            value={filters.facial || ""} 
-            onValueChange={(value) => handleInputChange("facial", value || undefined)}
+            value={filters.facial ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("facial", value === "ALL" ? undefined : value)}
           >
             <SelectTrigger id="facial">
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas</SelectItem>
+              <SelectItem value="ALL">Todas</SelectItem>
               <SelectItem value="1">1</SelectItem>
               <SelectItem value="2">2</SelectItem>
               <SelectItem value="Lite">Lite</SelectItem>
@@ -212,14 +212,14 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         <div className="space-y-2">
           <Label htmlFor="proximity">Proximidade</Label>
           <Select 
-            value={filters.proximity || ""} 
-            onValueChange={(value) => handleInputChange("proximity", value || undefined)}
+            value={filters.proximity ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("proximity", value === "ALL" ? undefined : value)}
           >
             <SelectTrigger id="proximity">
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todas</SelectItem>
+              <SelectItem value="ALL">Todas</SelectItem>
               <SelectItem value="ASK">ASK</SelectItem>
               <SelectItem value="Mifare">Mifare</SelectItem>
             </SelectContent>
