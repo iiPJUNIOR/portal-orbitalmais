@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
 import { ProductTable } from "@/components/ProductTable";
@@ -83,8 +83,8 @@ export default function Index() {
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const navigate = useNavigate();
-  
-  // Memoize loadProducts so its reference doesn't change across renders.
+
+  // Keep a stable loadProducts function that actually fetches data
   const loadProducts = useCallback(async (filters: ProductFilters = {}) => {
     setLoading(true);
     try {
@@ -112,8 +112,27 @@ export default function Index() {
     }
   }, []);
 
+  // Debounced wrapper around loadProducts to ensure search & filter updates are reliable
+  const debounceRef = useRef<number | null>(null);
+  const debouncedLoadProducts = useCallback((filters: ProductFilters = {}, delay = 300) => {
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = window.setTimeout(() => {
+      loadProducts(filters);
+      debounceRef.current = null;
+    }, delay);
+  }, [loadProducts]);
+
   useEffect(() => {
+    // Initial load without filters
     loadProducts();
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
   }, [loadProducts]);
 
   const handleAddToQuote = (product: Product, quantity: number) => {
@@ -319,7 +338,8 @@ export default function Index() {
           <div className="lg:col-span-2 space-y-8">
             <div className="bg-white p-6 rounded-lg shadow-sm">
               <h2 className="text-xl font-semibold mb-4">Catálogo de Produtos</h2>
-              <ProductFilter onFilterChange={loadProducts} />
+              {/* Pass debounced loader so typing triggers a single stable fetch */}
+              <ProductFilter onFilterChange={(filters) => debouncedLoadProducts(filters)} />
               
               <div className="mt-6">
                 {loading ? (
