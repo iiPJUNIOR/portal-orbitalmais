@@ -1,5 +1,6 @@
 import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
+import { normalizeModelDisplay } from "@/lib/normalizeModel";
 
 interface QuoteItem {
   id: string;
@@ -91,8 +92,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["sellerEmail"] = sellerEmail;
     replacements["sellerPhone"] = sellerPhone;
 
-    // model names array
-    const modelNames = (data.items || []).map((it) => it.product.model || it.product.description || "");
+    // model names array (normalized for display)
+    const modelNames = (data.items || []).map((it) => normalizeModelDisplay(it.product.model || it.product.description || ""));
 
     // Call the template generator
     const blob = await generatePptxFromTemplate({
