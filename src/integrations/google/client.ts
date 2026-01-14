@@ -11,6 +11,7 @@
  *  await requestAccessToken(); // prompts consent if needed
  *  const files = await listDriveSpreadsheets(token);
  *  const values = await getSpreadsheetValues(token, spreadsheetId, range);
+ *  const sheets = await getSpreadsheetSheets(token, spreadsheetId);
  */
 
 declare global {
@@ -128,7 +129,7 @@ export async function revokeToken(accessToken: string) {
 }
 
 /**
- * List spreadsheets in the user's Drive (first 100). Returns array of { id, name, mimeType, createdTime }.
+ * List spreadsheets in the user's Drive (first 200). Returns array of { id, name, mimeType, createdTime }.
  */
 export async function listDriveSpreadsheets(accessToken: string) {
   if (!accessToken) throw new Error("accessToken required");
@@ -167,4 +168,26 @@ export async function getSpreadsheetValues(accessToken: string, spreadsheetId: s
   }
   const json = await res.json();
   return json; // contains range, majorDimension, values
+}
+
+/**
+ * Get sheet (tab) titles for a spreadsheet.
+ * Returns an array of strings (sheet titles).
+ */
+export async function getSpreadsheetSheets(accessToken: string, spreadsheetId: string) {
+  if (!accessToken) throw new Error("accessToken required");
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${encodeURIComponent(spreadsheetId)}?fields=sheets.properties.title`;
+  const res = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      Accept: "application/json",
+    },
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Sheets metadata API error: ${res.status} ${text}`);
+  }
+  const json = await res.json();
+  const sheets = (json.sheets || []).map((s: any) => s.properties?.title).filter(Boolean);
+  return sheets;
 }

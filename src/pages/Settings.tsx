@@ -11,6 +11,23 @@ import * as googleClient from "@/integrations/google/client";
 
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 
+// Fields expected from the user mapping
+const MAPPING_FIELDS = [
+  { key: "category", label: "Categoria" },
+  { key: "tipo", label: "Tipo" },
+  { key: "model", label: "Modelo" },
+  { key: "colors", label: "Cor / Material" },
+  { key: "biometrics", label: "Biometria" },
+  { key: "facial", label: "Facial" },
+  { key: "proximity", label: "Proximidade" },
+  { key: "urn", label: "Urna" },
+  { key: "qr", label: "QR Code" },
+  { key: "part_number", label: "Partnumber" },
+  { key: "description", label: "Descrição" },
+  { key: "value_12m", label: "Valor mensal 12 meses" },
+  { key: "value_24m", label: "Valor mensal 24 meses" },
+];
+
 export default function Settings() {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
@@ -18,7 +35,13 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
   const [spreadsheetLink, setSpreadsheetLink] = useState<string>("");
-  const [range, setRange] = useState<string>("Sheet1!A1:Z1000");
+  const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
+  const [sheetTitles, setSheetTitles] = useState<string[]>([]);
+  const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [mappings, setMappings] = useState<Record<string, string>>({});
+  const [stage, setStage] = useState<"idle" | "sheetsLoaded" | "headersLoaded" | "mapped">("idle");
+  const [range, setRange] = useState<string>("A1:Z1000");
 
   const isGoogleConfigured = !!GOOGLE_CLIENT_ID;
 
@@ -45,8 +68,28 @@ export default function Settings() {
           setLoading(false);
         }
       })();
+    } else {
+      // restore cached files if any (non-sensitive)
+      const cached = localStorage.getItem("google_drive_files");
+      if (cached) {
+        try {
+          setFiles(JSON.parse(cached));
+        } catch {}
+      }
     }
   }, []);
+
+  function extractSpreadsheetId(input: string): string | null {
+    if (!input) return null;
+    const trimmed = input.trim();
+    // Match standard URL pattern /spreadsheets/d/<id>
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) return match[1];
+    // If a raw id was provided (alphanumeric of reasonable length)
+    const rawMatch = trimmed.match(/[a-zA-Z0-9-_]{20,}/);
+    if (rawMatch) return rawMatch[0];
+    return null;
+  }
 
   const handleConnect = async () => {
     if (!isGoogleConfigured) {
@@ -98,6 +141,12 @@ export default function Settings() {
     setAccessToken(null);
     setConnected(false);
     setFiles([]);
+    setSpreadsheetId(null);
+    setSheetTitles([]);
+    setSelectedSheet(null);
+    setHeaders([]);
+    setMappings({});
+    setStage("idle");
     // clear persisted session data
     localStorage.removeItem("google_access_token");
     localStorage.removeItem("google_drive_files");
@@ -128,61 +177,148 @@ export default function Settings() {
     }
   };
 
-  function extractSpreadsheetId(input: string): string | null {
-    if (!input) return null;
-    const trimmed = input.trim();
-    // Match standard URL pattern /spreadsheets/d/<id>
-    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
-    if (match && match[1]) return match[1];
-    // If a raw id was provided (alphanumeric of reasonable length)
-    const rawMatch = trimmed.match(/[a-zA-Z0-9-_]{20,}/);
-    if (rawMatch) return rawMatch[0];
-    return null;
-  }
-
-  const handleImport = async () => {
-    if (!spreadsheetLink) {
-      toast.error("Cole o link da planilha ou insira o ID da planilha.");
+  const handleLoadSheets = async () => {
+    const id = extractSpreadsheetId(spreadsheetLink);
+    if (!id) {
+      toast.error("Não foi possível extrair o ID da planilha. Cole o link completo ou ID.");
       return;
     }
     if (!accessToken) {
       toast.error("Você precisa conectar ao Google primeiro.");
       return;
     }
+
     setLoading(true);
     try {
-      const spreadsheetId = extractSpreadsheetId(spreadsheetLink);
-      if (!spreadsheetId) {
-        toast.error("Não foi possível extrair o ID da planilha. Verifique o link/ID.");
-        setLoading(false);
-        return;
-      }
-      const sheet = await googleClient.getSpreadsheetValues(accessToken as string, spreadsheetId, range);
-      const values: string[][] = sheet.values || [];
-      if (values.length === 0) {
-        toast.error("Planilha vazia");
-        setLoading(false);
-        return;
-      }
-      const headers = values[0].map((h: string) => String(h).trim());
-      const rows = values.slice(1).map((row: any[]) => {
-        const obj: any = {};
-        headers.forEach((header, idx) => {
-          obj[header || `col_${idx}`] = row[idx] ?? "";
-        });
-        return obj;
-      });
-
-      // Save to localStorage as imported products (temporary)
-      localStorage.setItem("importedProducts", JSON.stringify(rows));
-      toast.success(`Importado ${rows.length} linhas e salvo em localStorage (importedProducts)`);
-      console.log("Imported rows preview:", rows.slice(0, 20));
+      const titles = await googleClient.getSpreadsheetSheets(accessToken, id);
+      setSpreadsheetId(id);
+      setSheetTitles(titles);
+      setSelectedSheet(titles[0] ?? null);
+      setStage("sheetsLoaded");
+      toast.success(`Encontradas ${titles.length} abas`);
     } catch (err: any) {
       console.error(err);
-      toast.error("Erro ao importar planilha: " + (err?.message || err));
+      toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleLoadHeaders = async () => {
+    if (!accessToken || !spreadsheetId || !selectedSheet) {
+      toast.error("Selecione a planilha e a aba primeiro.");
+      return;
+    }
+    setLoading(true);
+    try {
+      // fetch first row headers
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${selectedSheet}!1:1`);
+      const values: any[] = res.values || [];
+      const row = values[0] || [];
+      const headerStrings = row.map((h: any) => String(h).trim());
+      setHeaders(headerStrings);
+      // create initial empty mapping
+      const initial: Record<string, string> = {};
+      MAPPING_FIELDS.forEach(f => {
+        initial[f.key] = "";
+      });
+      setMappings(initial);
+      setStage("headersLoaded");
+      toast.success("Cabeçalhos carregados. Faça o mapeamento das colunas.");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao carregar cabeçalhos: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSetMapping = (fieldKey: string, headerName: string) => {
+    setMappings(prev => ({ ...prev, [fieldKey]: headerName }));
+  };
+
+  const handleImportWithMapping = async () => {
+    if (!accessToken || !spreadsheetId || !selectedSheet) {
+      toast.error("Selecione a planilha e a aba primeiro.");
+      return;
+    }
+
+    // Validate that at least description and partnumber and price are mapped
+    if (!mappings.description || (!mappings.value_12m && !mappings.value_24m)) {
+      toast.error("Mapeie pelo menos Descrição e um dos valores (12 meses ou 24 meses).");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Fetch full range from selected sheet using provided range columns (A1:Z...) but relative to sheet
+      const fullRange = `${selectedSheet}!${range}`;
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+      const values: any[][] = res.values || [];
+      if (values.length <= 1) {
+        toast.error("Planilha não contém linhas de dados além do cabeçalho.");
+        setLoading(false);
+        return;
+      }
+      const headerRow = values[0].map((h: any) => String(h).trim());
+      const rows = values.slice(1);
+
+      const mappedRows = rows.map((row) => {
+        const obj: any = {};
+        headerRow.forEach((h: string, idx: number) => {
+          obj[h] = row[idx] ?? "";
+        });
+
+        // Build output object using mappings
+        const out: any = {};
+        // category
+        if (mappings.category) out.category = obj[mappings.category];
+        // tipo/model handling: prefer model mapping, fall back to tipo
+        const modelVal = mappings.model ? obj[mappings.model] : (mappings.tipo ? obj[mappings.tipo] : "");
+        out.model = modelVal || "";
+        // colors
+        out.colors = mappings.colors ? String(obj[mappings.colors] || "").split(",").map((c: string) => c.trim()).filter(Boolean) : [];
+        // biometrics
+        out.biometrics = mappings.biometrics ? String(obj[mappings.biometrics] || "").toLowerCase() === "true" || String(obj[mappings.biometrics] || "").toLowerCase() === "sim" : false;
+        // facial
+        out.facial = mappings.facial ? String(obj[mappings.facial] || "None") : "None";
+        // proximity
+        out.proximity = mappings.proximity ? String(obj[mappings.proximity] || "None") : "None";
+        // urn
+        out.urn = mappings.urn ? String(obj[mappings.urn] || "").toLowerCase() === "true" || String(obj[mappings.urn] || "").toLowerCase() === "sim" : false;
+        // qr
+        out.qr = mappings.qr ? String(obj[mappings.qr] || "").toLowerCase() === "true" || String(obj[mappings.qr] || "").toLowerCase() === "sim" : false;
+        // part_number
+        out.part_number = mappings.part_number ? String(obj[mappings.part_number] || "") : "";
+        // description
+        out.description = mappings.description ? String(obj[mappings.description] || "") : "";
+        // values
+        out.value_12m = mappings.value_12m ? parseFloat(String(obj[mappings.value_12m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
+        out.value_24m = mappings.value_24m ? parseFloat(String(obj[mappings.value_24m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
+        // sku/id fallback
+        out.sku = out.part_number || out.description || `imported-${Math.random().toString(36).slice(2, 9)}`;
+
+        // status default
+        out.status = "Ativo";
+
+        return out;
+      });
+
+      // Save mappedRows to localStorage as importedProducts
+      localStorage.setItem("importedProducts", JSON.stringify(mappedRows));
+      toast.success(`Importado ${mappedRows.length} linhas e salvo em localStorage (importedProducts)`);
+      console.log("Imported mapped rows preview:", mappedRows.slice(0, 20));
+      setStage("mapped");
+    } catch (err: any) {
+      console.error(err);
+      toast.error("Erro ao importar planilha com mapeamento: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUseFileLink = (id: string) => {
+    setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${id}`);
   };
 
   return (
@@ -247,9 +383,23 @@ export default function Settings() {
                     onChange={(e) => setSpreadsheetLink(e.target.value)}
                     className="mt-2"
                   />
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Exemplo: https://docs.google.com/spreadsheets/d/1aBcD_EfGhIjKlMnOpQrStUvWxYz/edit
-                  </p>
+                  <div className="flex gap-2 mt-2">
+                    <Button onClick={handleLoadSheets} disabled={!connected || loading || !spreadsheetLink}>
+                      Carregar Abas da Planilha
+                    </Button>
+                    <Button onClick={() => {
+                      // quick clear
+                      setSpreadsheetLink("");
+                      setSpreadsheetId(null);
+                      setSheetTitles([]);
+                      setSelectedSheet(null);
+                      setHeaders([]);
+                      setMappings({});
+                      setStage("idle");
+                    }} variant="outline">
+                      Limpar
+                    </Button>
+                  </div>
 
                   {files.length > 0 && (
                     <div className="mt-4">
@@ -262,7 +412,7 @@ export default function Settings() {
                               <Button
                                 size="sm"
                                 variant="outline"
-                                onClick={() => setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`)}
+                                onClick={() => handleUseFileLink(f.id)}
                               >
                                 Usar link
                               </Button>
@@ -274,17 +424,71 @@ export default function Settings() {
                   )}
                 </div>
 
-                <div className="space-y-2 mt-4">
-                  <Label>Range (Sheets API)</Label>
-                  <Input value={range} onChange={(e) => setRange(e.target.value)} />
-                  <p className="text-sm text-muted-foreground">Exemplo: Sheet1!A1:Z1000</p>
-                </div>
+                {stage === "sheetsLoaded" && (
+                  <div className="space-y-2 pt-4 border-t">
+                    <Label>Selecione a aba (sheet)</Label>
+                    <div className="flex gap-2 items-center">
+                      <select
+                        className="border rounded px-2 py-1"
+                        value={selectedSheet ?? ""}
+                        onChange={(e) => setSelectedSheet(e.target.value)}
+                      >
+                        {sheetTitles.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                      <Button onClick={handleLoadHeaders} disabled={!selectedSheet || loading}>
+                        Carregar Cabeçalhos (1ª linha)
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-                <div className="flex gap-2">
-                  <Button onClick={handleImport} disabled={!connected || loading}>
-                    {loading ? "Importando..." : "Importar Planilha para Produtos"}
-                  </Button>
-                </div>
+                {stage === "headersLoaded" && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <Label>Range de importação dentro da aba</Label>
+                    <Input value={range} onChange={(e) => setRange(e.target.value)} />
+                    <p className="text-sm text-muted-foreground">Exemplo: A1:Z1000 (será prefixado com a aba)</p>
+
+                    <div>
+                      <h3 className="font-semibold mb-2">Mapeie as colunas</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {MAPPING_FIELDS.map((field) => (
+                          <div key={field.key} className="space-y-1">
+                            <Label>{field.label}</Label>
+                            <select
+                              className="border rounded w-full px-2 py-1"
+                              value={mappings[field.key] ?? ""}
+                              onChange={(e) => handleSetMapping(field.key, e.target.value)}
+                            >
+                              <option value="">-- selecionar coluna --</option>
+                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+
+                      <div className="flex justify-end mt-4 gap-2">
+                        <Button onClick={() => {
+                          // Reset mappings
+                          const initial: Record<string,string> = {};
+                          MAPPING_FIELDS.forEach(f => initial[f.key] = "");
+                          setMappings(initial);
+                        }} variant="outline">
+                          Resetar Mapeamento
+                        </Button>
+
+                        <Button onClick={handleImportWithMapping} disabled={loading}>
+                          Importar com Mapeamento
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {stage === "mapped" && (
+                  <div className="p-3 bg-green-50 border rounded text-green-900">
+                    Importação concluída e salva em localStorage como <strong>importedProducts</strong>. Vá para a página inicial para ver o catálogo atualizado.
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
