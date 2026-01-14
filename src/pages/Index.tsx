@@ -15,6 +15,7 @@ import { ProductFilters } from "@/types/product";
 import { Quote } from "@/types/quote";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 interface QuoteItem {
   id: string;
@@ -43,6 +44,7 @@ export default function Index() {
   const [showProposalSummary, setShowProposalSummary] = useState(false);
   const [showQuoteHistory, setShowQuoteHistory] = useState(false);
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
+  const navigate = useNavigate();
   
   useEffect(() => {
     loadProducts();
@@ -244,14 +246,20 @@ export default function Index() {
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Plataforma de Cotação Control iD</h1>
-          <p className="text-gray-600">Selecione produtos e gere propostas personalizadas</p>
-        </div>
-        
-        <div className="mb-6">
-          <Button variant="outline" onClick={handleViewQuoteHistory}>
-            Ver Histórico de Orçamentos
-          </Button>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">Plataforma de Cotação Control iD</h1>
+              <p className="text-gray-600">Selecione produtos e gere propostas personalizadas</p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate("/settings")}>
+                Configurações
+              </Button>
+              <Button variant="outline" onClick={handleViewQuoteHistory}>
+                Ver Histórico de Orçamentos
+              </Button>
+            </div>
+          </div>
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
