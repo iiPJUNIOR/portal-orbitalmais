@@ -14,9 +14,8 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
 
-interface ProposalFormData {
+export interface ProposalFormData {
   cnpj: string;
   companyName: string;
   contactName: string;
@@ -26,6 +25,19 @@ interface ProposalFormData {
   proposalDate: string;
   observations: string;
   priceModel: '12m' | '24m';
+  pipedriveUrl?: string;
+  // global flags for conditional slides (option B)
+  flags?: {
+    botoeira?: boolean;
+    idfaceEntry?: boolean;
+    idfaceExit?: boolean;
+    idAccessNanoEntry?: boolean;
+    idFlexProEntry?: boolean;
+    idFlexProGlass?: boolean;
+    hasCatraca?: boolean;
+    systemIncluded?: boolean;
+  };
+  overrideTotal?: number | null;
 }
 
 interface ProposalFormProps {
@@ -43,11 +55,27 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     address: "",
     proposalDate: format(new Date(), "yyyy-MM-dd"),
     observations: "",
-    priceModel: '12m'
+    priceModel: '12m',
+    pipedriveUrl: "",
+    flags: {
+      botoeira: false,
+      idfaceEntry: false,
+      idfaceExit: false,
+      idAccessNanoEntry: false,
+      idFlexProEntry: false,
+      idFlexProGlass: false,
+      hasCatraca: false,
+      systemIncluded: false,
+    },
+    overrideTotal: null,
   });
 
-  const handleChange = (field: keyof ProposalFormData, value: string) => {
+  const handleChange = (field: keyof ProposalFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleFlagChange = (flag: keyof NonNullable<ProposalFormData["flags"]>, value: boolean) => {
+    setFormData(prev => ({ ...prev, flags: { ...(prev.flags || {}), [flag]: value } }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -198,6 +226,75 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
               onChange={(e) => handleChange('observations', e.target.value)}
               rows={4}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="pipedrive">Pipedrive URL (opcional)</Label>
+              <Input
+                id="pipedrive"
+                placeholder="https://controlid.pipedrive.com/deal/214049"
+                value={formData.pipedriveUrl}
+                onChange={(e) => handleChange('pipedriveUrl', e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="overrideTotal">Valor Total (sobrescrever)</Label>
+              <Input
+                id="overrideTotal"
+                type="number"
+                step="0.01"
+                placeholder="Deixe vazio para calcular automaticamente"
+                value={formData.overrideTotal === null || formData.overrideTotal === undefined ? "" : String(formData.overrideTotal)}
+                onChange={(e) => handleChange('overrideTotal', e.target.value ? parseFloat(e.target.value) : null)}
+              />
+            </div>
+          </div>
+
+          <div>
+            <h3 className="font-semibold mb-2">Opções da Proposta (flags)</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.botoeira} onChange={(e) => handleFlagChange('botoeira', e.target.checked)} />
+                <span>Botoeira incluída</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.idfaceEntry} onChange={(e) => handleFlagChange('idfaceEntry', e.target.checked)} />
+                <span>IdFace para entrada</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.idfaceExit} onChange={(e) => handleFlagChange('idfaceExit', e.target.checked)} />
+                <span>IdFace para saída</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.idAccessNanoEntry} onChange={(e) => handleFlagChange('idAccessNanoEntry', e.target.checked)} />
+                <span>iDAccess Nano para entrada</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.idFlexProEntry} onChange={(e) => handleFlagChange('idFlexProEntry', e.target.checked)} />
+                <span>iDFlex PRO IP65 para entrada</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.idFlexProGlass} onChange={(e) => handleFlagChange('idFlexProGlass', e.target.checked)} />
+                <span>iDFlex PRO em portas de vidro</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.hasCatraca} onChange={(e) => handleFlagChange('hasCatraca', e.target.checked)} />
+                <span>Contém catraca</span>
+              </label>
+
+              <label className="flex items-center space-x-2">
+                <input type="checkbox" checked={!!formData.flags?.systemIncluded} onChange={(e) => handleFlagChange('systemIncluded', e.target.checked)} />
+                <span>Sistema considerado no projeto (usuários obrigatórios)</span>
+              </label>
+            </div>
           </div>
           
           <div className="flex justify-end space-x-4">

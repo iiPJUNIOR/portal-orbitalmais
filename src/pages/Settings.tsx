@@ -92,6 +92,12 @@ export default function Settings() {
     }
   }, []);
 
+  // Seller fields (persisted to localStorage)
+  const [sellerName, setSellerName] = useState<string>(() => localStorage.getItem("seller_name") || "");
+  const [sellerRole, setSellerRole] = useState<string>(() => localStorage.getItem("seller_role") || "");
+  const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
+  const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
+
   function extractSpreadsheetId(input: string): string | null {
     if (!input) return null;
     const trimmed = input.trim();
@@ -401,6 +407,37 @@ export default function Settings() {
     }
   };
 
+  // Seller persistence functions
+  const saveSeller = () => {
+    try {
+      localStorage.setItem("seller_name", sellerName);
+      localStorage.setItem("seller_role", sellerRole);
+      localStorage.setItem("seller_email", sellerEmail);
+      localStorage.setItem("seller_phone", sellerPhone);
+      toast.success("Dados do vendedor salvos.");
+    } catch (err) {
+      console.error("Erro ao salvar dados do vendedor:", err);
+      toast.error("Não foi possível salvar os dados do vendedor.");
+    }
+  };
+
+  const clearSeller = () => {
+    try {
+      localStorage.removeItem("seller_name");
+      localStorage.removeItem("seller_role");
+      localStorage.removeItem("seller_email");
+      localStorage.removeItem("seller_phone");
+      setSellerName("");
+      setSellerRole("");
+      setSellerEmail("");
+      setSellerPhone("");
+      toast.success("Dados do vendedor removidos.");
+    } catch (err) {
+      console.error("Erro ao limpar dados do vendedor:", err);
+      toast.error("Não foi possível limpar os dados do vendedor.");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -631,6 +668,41 @@ export default function Settings() {
                     Importação concluída e salva em localStorage como <strong>importedProducts</strong>. Vá para a página inicial para ver o catálogo atualizado.
                   </div>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Seller configuration card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Dados do Vendedor (preenchidos no slide 4)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Nome do Vendedor</Label>
+                  <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Cargo</Label>
+                  <Input value={sellerRole} onChange={(e) => setSellerRole(e.target.value)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>E-mail</Label>
+                  <Input value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Telefone</Label>
+                  <Input value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <Button onClick={saveSeller}>Salvar Dados do Vendedor</Button>
+                <Button variant="outline" onClick={clearSeller}>Limpar Dados</Button>
               </div>
             </CardContent>
           </Card>
