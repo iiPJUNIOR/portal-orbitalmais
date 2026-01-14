@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
 import { ProductTable } from "@/components/ProductTable";
@@ -46,11 +46,8 @@ export default function Index() {
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const navigate = useNavigate();
   
-  useEffect(() => {
-    loadProducts();
-  }, []);
-
-  const loadProducts = async (filters: ProductFilters = {}) => {
+  // Memoize loadProducts so its reference doesn't change across renders.
+  const loadProducts = useCallback(async (filters: ProductFilters = {}) => {
     setLoading(true);
     try {
       const data = await fetchProducts(filters);
@@ -61,7 +58,11 @@ export default function Index() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
 
   const handleAddToQuote = (product: Product, quantity: number) => {
     // Check if product is already in quote
