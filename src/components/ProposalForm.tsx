@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +14,7 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { format } from "date-fns";
+import { toast } from "sonner";
 
 export interface ProposalFormData {
   cnpj: string;
@@ -70,6 +71,10 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     overrideTotal: null,
   });
 
+  const [fetchingCnpj, setFetchingCnpj] = useState(false);
+  const [lastFetchedCnpj, setLastFetchedCnpj] = useState<string | null>(null);
+  const debounceRef = useRef<number | null>(null);
+
   const handleChange = (field: keyof ProposalFormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
@@ -115,6 +120,118 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     setFormData(prev => ({ ...prev, phone: formatted }));
   };
 
+  // Helper: build an address string from multiple possible fields returned by APIs
+  function buildAddressFromApi(data: any) {
+    // Common fields: logradouro, numero, complemento, bairro, municipio, uf, cep
+    const parts: string[] = [];
+    const street = data.logradouro || data.street || data.address || data.rua || "";
+    const number = data.numero || data.number || data.numero_endereco || "";
+    const complement = data.complemento || data.complement || "";
+    const neighborhood = data.bairro || data.neighborhood || "";
+    const city = data.municipio || data.municipio_nome || data.city || data.nome_cidade || "";
+    const uf = data.uf || data.estado || data.state || "";
+    const cep = data.cep || data.CEP || "";
+
+    if (street) {
+      const s = `${street}${number ? `, ${number}` : ""}${complement ? ` ${complement}` : ""}`;
+      parts.push(s);
+    }
+    if (neighborhood) parts.push(neighborhood);
+    if (city || uf) parts.push([city, uf].filter(Boolean).join("/"));
+    if (cep) parts.push(cep);
+
+    return parts.filter(Boolean).join(" - ");
+  }
+
+  // Fetch CNPJ data from Brasil API (fallbacks handled)
+  async function fetchCnpjData(rawDigits: string) {
+    if (!rawDigits || rawDigits.length !== 14) return;
+    // Avoid refetching the same CNPJ repeatedly
+    if (lastFetchedCnpj === rawDigits) {
+      return;
+    }
+
+    setFetchingCnpj(true);
+    setLastFetchedCnpj(rawDigits);
+    const toastId = toast.loading("Buscando dados do CNPJ...");
+
+    try {
+      // Try Brasil API endpoint
+      const url = `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`;
+      const res = await fetch(url);
+      if (!res.ok) {
+        throw new Error(`API retornou ${res.status}`);
+      }
+      const data = await res.json();
+
+      // Map various possible fields to our form
+      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.social || "";
+      const email = data.email || data.e_mail || data.contato_email || "";
+      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || "";
+      const address = buildAddressFromApi(data);
+
+      setFormData(prev => ({
+        ...prev,
+        companyName: companyName || prev.companyName,
+        email: email || prev.email,
+        phone: phone || prev.phone,
+        address: address || prev.address,
+      }));
+
+      toast.dismiss(toastId);
+      toast.success("Dados do CNPJ preenchidos automaticamente");
+    } catch (err: any) {
+      console.error("fetchCnpjData error", err);
+      toast.dismiss(toastId);
+      // If Brasil API fails, show a helpful error but don't block user
+      toast.error("Não foi possível obter dados para o CNPJ informado.");
+      setLastFetchedCnpj(null); // allow retry later
+    } finally {
+      setFetchingCnpj(false);
+    }
+  }
+
+  // Auto-trigger fetch when CNPJ reaches 14 digits or after user stops typing
+  useEffect(() => {
+    const digits = (formData.cnpj || "").replace(/\D/g, "");
+    // Clear any pending debounce timer
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    // If user typed full CNPJ, wait a short delay and then fetch
+    if (digits.length === 14) {
+      debounceRef.current = window.setTimeout(() => {
+        fetchCnpjData(digits);
+        debounceRef.current = null;
+      }, 600);
+    } else {
+      // If not full length, avoid auto-fetching; but clear lastFetchedCnpj so user can re-trigger later
+      // Do not clear lastFetchedCnpj immediately to prevent spamming; only when user clears input completely
+      if (digits.length === 0) {
+        setLastFetchedCnpj(null);
+      }
+    }
+
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formData.cnpj]);
+
+  const handleManualCnpjLookup = () => {
+    const digits = (formData.cnpj || "").replace(/\D/g, "");
+    if (digits.length !== 14) {
+      toast.error("Informe um CNPJ válido (14 dígitos) para buscar");
+      return;
+    }
+    fetchCnpjData(digits);
+  };
+
   return (
     <Card>
       <CardHeader>
@@ -125,13 +242,21 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="cnpj">CNPJ *</Label>
-              <Input
-                id="cnpj"
-                placeholder="00.000.000/0000-00"
-                value={formData.cnpj}
-                onChange={handleCnpjChange}
-                required
-              />
+              <div className="flex gap-2">
+                <Input
+                  id="cnpj"
+                  placeholder="00.000.000/0000-00"
+                  value={formData.cnpj}
+                  onChange={handleCnpjChange}
+                  required
+                />
+                <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>
+                  {fetchingCnpj ? "Buscando..." : "Buscar"}
+                </Button>
+              </div>
+              <div className="text-sm text-muted-foreground mt-1">
+                Ao digitar o CNPJ completo o sistema tentará preencher automaticamente os dados.
+              </div>
             </div>
             
             <div className="space-y-2">
