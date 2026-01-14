@@ -10,32 +10,21 @@ import { toast } from "sonner";
 
 /**
  * Replacement keys we expect to populate in the template.
- * The UI will allow mapping a source text from the PPTX to each of these keys.
- *
- * Added Portuguese keys per request:
- *  - descrição, descrição1, descrição2
- *  - qtd, qtd1, qtd2
- *  - users, devices
- *  - CNPJ, endereço
- *
- * Keeping original English keys as well for backward compatibility.
+ * Using the exact keys you provided so the automatic mapping targets them.
  */
 const KEYS = [
-  // existing keys
   "companyName",
   "contactName",
   "date",
   "proposalNumber",
   "items_list",
+  "items_list1",
+  "items_list2",
   "sellerName",
   "sellerRole",
   "sellerEmail",
   "sellerPhone",
   "totalPrice",
-  // requested Portuguese keys (may contain accented chars)
-  "descrição",
-  "descrição1",
-  "descrição2",
   "qtd",
   "qtd1",
   "qtd2",
@@ -108,38 +97,32 @@ export default function TokenScannerPage() {
       match = foundByNormalized.find((f) => f.normalized.includes(keyNorm));
       if (match) return match.raw;
 
-      // special heuristics
-      // qtd -> busca 'qtd' ou 'quant' (quantidade)
+      // special heuristics for common synonyms / Portuguese words
+      if (keyNorm.startsWith("items") || keyNorm.includes("descri") || keyNorm.includes("item")) {
+        match = foundByNormalized.find((f) => f.normalized.includes("item") || f.normalized.includes("descri") || f.normalized.includes("descrição") || f.normalized.includes("descr"));
+        if (match) return match.raw;
+      }
+
       if (keyNorm.startsWith("qtd")) {
         match = foundByNormalized.find((f) => f.normalized.includes("qtd") || f.normalized.includes("quant"));
         if (match) return match.raw;
       }
 
-      // descrição -> busca 'descri' ou 'descricao' ou 'descrição'
-      if (keyNorm.includes("descricao") || keyNorm.includes("descri")) {
-        match = foundByNormalized.find((f) => f.normalized.includes("descri") || f.normalized.includes("descricao") || f.normalized.includes("description"));
-        if (match) return match.raw;
-      }
-
-      // users -> busca 'user' or 'usuario' / 'usuarios'
-      if (keyNorm.includes("user") || keyNorm.includes("users")) {
+      if (keyNorm.includes("user") || keyNorm.includes("usuarios") || keyNorm.includes("usuario")) {
         match = foundByNormalized.find((f) => f.normalized.includes("user") || f.normalized.includes("usuario") || f.normalized.includes("usuarios"));
         if (match) return match.raw;
       }
 
-      // devices -> busca 'device' or 'dispositivo' / 'dispositivos'
-      if (keyNorm.includes("device") || keyNorm.includes("devices")) {
+      if (keyNorm.includes("device") || keyNorm.includes("disposit")) {
         match = foundByNormalized.find((f) => f.normalized.includes("device") || f.normalized.includes("disposit"));
         if (match) return match.raw;
       }
 
-      // CNPJ -> busca 'cnpj'
       if (keyNorm === "cnpj") {
         match = foundByNormalized.find((f) => f.normalized.includes("cnpj"));
         if (match) return match.raw;
       }
 
-      // endereço -> busca 'endereco' ou 'endereço' ou 'address'
       if (keyNorm.includes("endereco") || keyNorm.includes("endereco")) {
         match = foundByNormalized.find((f) => f.normalized.includes("endereco") || f.normalized.includes("address"));
         if (match) return match.raw;

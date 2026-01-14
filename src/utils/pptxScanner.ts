@@ -77,10 +77,35 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
     const pptx = new PptxGenJS();
     const slide = pptx.addSlide();
     slide.addText("Fallback Proposal Template", { x: 0.5, y: 0.6, fontSize: 20, bold: true });
-    slide.addText("{{companyName}}", { x: 0.5, y: 1.4, fontSize: 14 });
-    slide.addText("{{contactName}}", { x: 0.5, y: 1.8, fontSize: 12 });
-    slide.addText("{{date}}", { x: 0.5, y: 2.2, fontSize: 12 }); // ensure date token exists in fallback
-    slide.addText("{{items_list}}", { x: 0.5, y: 2.6, fontSize: 11, w: "90%" });
+
+    // include a broad set of tokens so scanner can auto-detect them even when real template isn't present
+    slide.addText("{{companyName}}", { x: 0.5, y: 1.2, fontSize: 14 });
+    slide.addText("{{contactName}}", { x: 0.5, y: 1.6, fontSize: 12 });
+    slide.addText("{{date}}", { x: 0.5, y: 2.0, fontSize: 12 });
+    slide.addText("{{proposalNumber}}", { x: 0.5, y: 2.4, fontSize: 11 });
+    slide.addText("{{items_list}}", { x: 0.5, y: 2.8, fontSize: 11, w: "90%" });
+    slide.addText("{{items_list1}}", { x: 0.5, y: 3.4, fontSize: 11 });
+    slide.addText("{{items_list2}}", { x: 0.5, y: 3.8, fontSize: 11 });
+
+    // quantities and small tokens
+    slide.addText("{{qtd}}", { x: 6, y: 1.6, fontSize: 11 });
+    slide.addText("{{qtd1}}", { x: 6, y: 2.0, fontSize: 11 });
+    slide.addText("{{qtd2}}", { x: 6, y: 2.4, fontSize: 11 });
+
+    // seller and totals
+    slide.addText("{{sellerName}}", { x: 0.5, y: 4.4, fontSize: 11 });
+    slide.addText("{{sellerRole}}", { x: 0.5, y: 4.8, fontSize: 11 });
+    slide.addText("{{sellerEmail}}", { x: 0.5, y: 5.2, fontSize: 11 });
+    slide.addText("{{sellerPhone}}", { x: 0.5, y: 5.6, fontSize: 11 });
+    slide.addText("{{totalPrice}}", { x: 0.5, y: 6.2, fontSize: 14, bold: true });
+
+    // summary tokens
+    slide.addText("{{users}}", { x: 6, y: 3.2, fontSize: 11 });
+    slide.addText("{{devices}}", { x: 6, y: 3.6, fontSize: 11 });
+
+    // CNPJ / address
+    slide.addText("{{CNPJ}}", { x: 0.5, y: 6.8, fontSize: 11 });
+    slide.addText("{{endereço}}", { x: 0.5, y: 7.2, fontSize: 11, w: "90%" });
 
     // create a Blob and convert to ArrayBuffer
     // @ts-ignore - pptxgenjs typing may not include 'write' signature consistently

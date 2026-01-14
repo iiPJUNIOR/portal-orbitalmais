@@ -114,10 +114,24 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     const itemsTextLines = (data.items || []).map((it) => {
       const unit = it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m;
       const subtotal = unit * it.quantity;
+      // keep a compact line that includes description, qty and subtotal
       return `${it.product.description} — Qtd: ${it.quantity} — R$ ${subtotal.toFixed(2)}`;
     });
 
+    // Full list (multi-line) and also first/second as separate keys
     replacements["items_list"] = itemsTextLines.join("\n");
+    replacements["items_list1"] = itemsTextLines[0] ?? "";
+    replacements["items_list2"] = itemsTextLines[1] ?? "";
+    // Keep compatibility with earlier Portuguese 'descrição' tokens (map first three descriptions)
+    const firstThree = (data.items || []).slice(0, 3);
+    replacements["descrição"] = firstThree[0]?.product?.description ?? "";
+    replacements["descrição1"] = firstThree[1]?.product?.description ?? "";
+    replacements["descrição2"] = firstThree[2]?.product?.description ?? "";
+
+    // quantities for first three (qtd, qtd1, qtd2)
+    replacements["qtd"] = firstThree[0]?.quantity ?? 0;
+    replacements["qtd1"] = firstThree[1]?.quantity ?? 0;
+    replacements["qtd2"] = firstThree[2]?.quantity ?? 0;
 
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
@@ -139,21 +153,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["sellerEmail"] = sellerEmail;
     replacements["sellerPhone"] = sellerPhone;
 
-    // model names array
-    const modelNames = (data.items || []).map((it) => it.product.model || it.product.description || "");
-
-    // --- New: populate Portuguese/extra replacement keys requested ---
-    // descriptions (first three)
-    const firstThree = (data.items || []).slice(0, 3);
-    replacements["descrição"] = firstThree[0]?.product?.description ?? "";
-    replacements["descrição1"] = firstThree[1]?.product?.description ?? "";
-    replacements["descrição2"] = firstThree[2]?.product?.description ?? "";
-
-    // quantities for first three
-    replacements["qtd"] = firstThree[0]?.quantity ?? 0;
-    replacements["qtd1"] = firstThree[1]?.quantity ?? 0;
-    replacements["qtd2"] = firstThree[2]?.quantity ?? 0;
-
     // totals users/devices from summary
     const summary = calculateProposalSummary(data.items || []);
     replacements["users"] = summary.totalUsers;
@@ -166,7 +165,7 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     // Attempt template-based generation (JSZip-based editor). This is the preferred flow.
     const blob = await generatePptxFromTemplate({
       replacements,
-      modelNames,
+      modelNames: (data.items || []).map((it) => it.product.model || it.product.description || ""),
       flags: data.flags,
       keepSlidesOverride: null,
     });
@@ -191,7 +190,7 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       slide2.addText(data.contactName || "", { x: 0.5, y: 1.2, fontSize: 16 });
       slide2.addText(`${data.email || ""} · ${data.phone || ""}`, { x: 0.5, y: 1.8, fontSize: 11 });
 
-      // Slide 3 - items summary
+      // Slide 3 - items summary (full list)
       const slideItems = pptx.addSlide();
       slideItems.addText("Itens", { x: 0.5, y: 0.5, fontSize: 18, bold: true });
       const itemsText = (data.items || []).map(it => {
