@@ -15,13 +15,13 @@ import { Product } from "@/types/product";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
+import { formatModelLabel } from "@/lib/formatters";
 
 type QuoteItem = {
   id: string;
   product: Product;
   quantity: number;
   priceModel: "12m" | "24m";
-  unitPrice?: number;
 };
 
 type ProposalFormData = {
@@ -40,7 +40,8 @@ function normalizeImportedRow(row: any, idx: number): Product {
   const id = row.id || row.ID || row.sku || row.SKU || `imported-${idx}-${Date.now()}`;
   const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
   const description = row.description || row.Description || row.Descrição || row["Product"] || sku;
-  const model = row.model || row.Modelo || row.Model || "Importado";
+  const modelRaw = row.model || row.Modelo || row.Model || "Importado";
+  const model = formatModelLabel(String(modelRaw));
   const category = (row.category || row.Categoria || "Controladores Porta") as Product["category"];
   const colorsRaw = row.colors || row.Colors || row.Cor || "";
   const colors = typeof colorsRaw === "string"
@@ -70,7 +71,7 @@ function normalizeImportedRow(row: any, idx: number): Product {
     id: String(id),
     sku: String(sku),
     category,
-    model: String(model),
+    model,
     colors,
     biometrics,
     facial: facial as any,
@@ -160,7 +161,7 @@ export default function Index() {
     } else {
       setQuoteItems((prev) => [
         ...prev,
-        { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: product.value_12m },
+        { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m" },
       ]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
@@ -175,22 +176,7 @@ export default function Index() {
   };
 
   const handleUpdatePriceModel = (id: string, model: "12m" | "24m") => {
-    setQuoteItems((prev) =>
-      prev.map((it) =>
-        it.id === id
-          ? {
-              ...it,
-              priceModel: model,
-              // If user hasn't customized unitPrice keep it aligned with the selected model
-              unitPrice: (model === "12m" ? it.product.value_12m : it.product.value_24m),
-            }
-          : it
-      )
-    );
-  };
-
-  const handleUpdateUnitPrice = (id: string, unitPrice: number) => {
-    setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, unitPrice: Math.max(0, unitPrice) } : it)));
+    setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, priceModel: model } : it)));
   };
 
   const openProposalForm = () => {
@@ -212,7 +198,7 @@ export default function Index() {
 
   const computeTotalPrice = () => {
     return quoteItems.reduce((sum, item) => {
-      const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
+      const unit = item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m;
       return sum + unit * item.quantity;
     }, 0);
   };
@@ -251,7 +237,7 @@ export default function Index() {
       };
 
       const itemsToSave = quoteItems.map((it) => {
-        const unit = it.unitPrice ?? (it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
+        const unit = it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m;
         return {
           sku: it.product.sku,
           productDescription: it.product.description,
@@ -366,7 +352,6 @@ export default function Index() {
                   onRemoveItem={handleRemoveItem}
                   onUpdateQuantity={handleUpdateQuantity}
                   onUpdatePriceModel={handleUpdatePriceModel}
-                  onUpdateUnitPrice={handleUpdateUnitPrice}
                   onGenerateProposal={() => setStep("review")}
                 />
                 <div className="mt-4 flex gap-2">
@@ -394,7 +379,6 @@ export default function Index() {
                 onRemoveItem={handleRemoveItem}
                 onUpdateQuantity={handleUpdateQuantity}
                 onUpdatePriceModel={handleUpdatePriceModel}
-                onUpdateUnitPrice={handleUpdateUnitPrice}
                 onGenerateProposal={() => setStep("form")}
               />
             </div>

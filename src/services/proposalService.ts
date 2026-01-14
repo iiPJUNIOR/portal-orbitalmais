@@ -1,5 +1,6 @@
 import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
+import { formatModelLabel } from "@/lib/formatters";
 
 interface QuoteItem {
   id: string;
@@ -91,8 +92,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["sellerEmail"] = sellerEmail;
     replacements["sellerPhone"] = sellerPhone;
 
-    // model names array
-    const modelNames = (data.items || []).map((it) => it.product.model || it.product.description || "");
+    // model names array - normalize formatting (e.g. ensure 'iDFace' capitalization)
+    const modelNames = (data.items || []).map((it) => formatModelLabel(it.product.model || it.product.description || ""));
 
     // Call the template generator
     const blob = await generatePptxFromTemplate({
