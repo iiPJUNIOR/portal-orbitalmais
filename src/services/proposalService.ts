@@ -2,6 +2,7 @@ import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
 // pptxgenjs is used as a robust fallback generator when template-based editing fails
 import PptxGenJS from "pptxgenjs";
+import { format, parseISO } from "date-fns";
 
 interface QuoteItem {
   id: string;
@@ -37,6 +38,53 @@ interface ProposalData {
   // Optional override total
   overrideTotal?: number | null;
 }
+
+/**
+ * Compute a small proposal summary used in the UI.
+ * - totalDevices: sum of quantities
+ * - totalUsers: attempts to use product.users/per-device hint if present, otherwise assumes 1 user per device
+ */
+export const calculateProposalSummary = (items: Array<any>) => {
+  const totalDevices = (items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
+  const totalUsers = (items || []).reduce((s, it) => {
+    const qty = Number(it.quantity) || 0;
+    // prefer explicit per-device users if provided on the product or item
+    const perDevice =
+      (it.product && (Number((it.product as any).users) || undefined)) ||
+      (Number((it as any).users) || undefined) ||
+      1;
+    return s + qty * perDevice;
+  }, 0);
+  return {
+    totalDevices,
+    totalUsers,
+  };
+};
+
+/**
+ * Generate a readable proposal number. Format: YYYYMMDD-XXXXXX (random 6 digits)
+ */
+export const generateProposalNumber = (): string => {
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const rand = Math.floor(100000 + Math.random() * 900000);
+  return `${datePart}-${rand}`;
+};
+
+/**
+ * Format a date string for display in proposals (dd/MM/yyyy).
+ * Accepts ISO strings or plain date strings; returns empty string on invalid input.
+ */
+export const formatDateForProposal = (dateStr?: string | null): string => {
+  if (!dateStr) return "";
+  try {
+    // try parseISO first; fallback to Date constructor
+    const dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr);
+    return format(dt, "dd/MM/yyyy");
+  } catch {
+    return String(dateStr).slice(0, 10);
+  }
+};
 
 /**
  * Generate a PPTX proposal as a Blob using the template and the provided data.
