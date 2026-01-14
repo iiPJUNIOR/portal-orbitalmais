@@ -43,6 +43,7 @@ export default function Settings() {
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [stage, setStage] = useState<"idle" | "sheetsLoaded" | "headersLoaded" | "mapped">("idle");
   const [range, setRange] = useState<string>("A1:Z1000");
+  const [apiErrorInfo, setApiErrorInfo] = useState<{ activationUrl?: string; serviceTitle?: string; message?: string } | null>(null);
 
   const isGoogleConfigured = !!GOOGLE_CLIENT_ID;
 
@@ -99,6 +100,7 @@ export default function Settings() {
     }
 
     setLoading(true);
+    setApiErrorInfo(null);
     try {
       await googleClient.init();
       const tokenResp = await googleClient.requestAccessToken();
@@ -125,6 +127,7 @@ export default function Settings() {
       }
     } catch (err: any) {
       console.error(err);
+      // Show clear message to user
       toast.error("Erro ao conectar com Google: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -148,6 +151,7 @@ export default function Settings() {
     setHeaders([]);
     setMappings({});
     setStage("idle");
+    setApiErrorInfo(null);
     // clear persisted session data
     localStorage.removeItem("google_access_token");
     localStorage.removeItem("google_drive_files");
@@ -160,6 +164,7 @@ export default function Settings() {
       return;
     }
     setLoading(true);
+    setApiErrorInfo(null);
     try {
       const driveFiles = await googleClient.listDriveSpreadsheets(accessToken);
       const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
@@ -190,6 +195,7 @@ export default function Settings() {
     }
 
     setLoading(true);
+    setApiErrorInfo(null);
     try {
       const titles = await googleClient.getSpreadsheetSheets(accessToken, id);
       setSpreadsheetId(id);
@@ -198,7 +204,31 @@ export default function Settings() {
       setStage("sheetsLoaded");
       toast.success(`Encontradas ${titles.length} abas`);
     } catch (err: any) {
-      console.error(err);
+      console.error("Erro ao obter abas:", err);
+      // Try to parse activation URL from error message body (some Google errors include details.metadata.activationUrl)
+      try {
+        const message = String(err?.message || "");
+        const jsonMatch = message.match(/\{[\s\S]*\}$/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          // search details array for activationUrl
+          const details = parsed?.error?.details;
+          if (Array.isArray(details)) {
+            for (const d of details) {
+              if (d?.metadata?.activationUrl) {
+                setApiErrorInfo({
+                  activationUrl: d.metadata.activationUrl,
+                  serviceTitle: d.metadata.serviceTitle || "Google Sheets API",
+                  message: parsed?.error?.message || message,
+                });
+                break;
+              }
+            }
+          }
+        }
+      } catch (parseErr) {
+        // ignore parse error
+      }
       toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -211,6 +241,7 @@ export default function Settings() {
       return;
     }
     setLoading(true);
+    setApiErrorInfo(null);
     try {
       // fetch first row headers
       const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${selectedSheet}!1:1`);
@@ -244,13 +275,14 @@ export default function Settings() {
       return;
     }
 
-    // Validate that at least description and partnumber and price are mapped
+    // Validate that at least description and price are mapped
     if (!mappings.description || (!mappings.value_12m && !mappings.value_24m)) {
       toast.error("Mapeie pelo menos Descrição e um dos valores (12 meses ou 24 meses).");
       return;
     }
 
     setLoading(true);
+    setApiErrorInfo(null);
     try {
       // Fetch full range from selected sheet using provided range columns (A1:Z...) but relative to sheet
       const fullRange = `${selectedSheet}!${range}`;
@@ -405,6 +437,7 @@ export default function Settings() {
                       setHeaders([]);
                       setMappings({});
                       setStage("idle");
+                      setApiErrorInfo(null);
                     }} variant="outline">
                       Limpar
                     </Button>
@@ -441,7 +474,7 @@ export default function Settings() {
                                 <Button
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`)}
+                                  onClick={() => handleUseFileLink(f.id)}
                                 >
                                   Usar link
                                 </Button>
@@ -453,6 +486,34 @@ export default function Settings() {
                     </div>
                   )}
                 </div>
+
+                {apiErrorInfo && (
+                  <div className="p-4 border-l-4 border-red-500 bg-red-50 text-red-900 rounded">
+                    <div className="font-semibold">Permissão/API necessária</div>
+                    <div className="mt-1 text-sm">
+                      O Google retornou um erro indicando que a API necessária está desabilitada ou não foi ativada para o projeto.
+                      {apiErrorInfo.message && <div className="mt-2 text-sm">{apiErrorInfo.message}</div>}
+                      {apiErrorInfo.activationUrl && (
+                        <div className="mt-2">
+                          <div className="text-sm">Clique no link abaixo para ativar a API no Google Cloud Console (faça login com a mesma conta ou verifique o projeto associado ao Client ID):</div>
+                          <div className="mt-2">
+                            <a
+                              href={apiErrorInfo.activationUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-blue-600 underline"
+                            >
+                              Abrir página de ativação da API
+                            </a>
+                          </div>
+                          <div className="mt-2 text-sm">
+                            Após ativar, aguarde alguns minutos e tente novamente.
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {stage === "sheetsLoaded" && (
                   <div className="space-y-2 pt-4 border-t">
@@ -476,7 +537,7 @@ export default function Settings() {
                   <div className="space-y-4 pt-4 border-t">
                     <Label>Range de importação dentro da aba</Label>
                     <Input value={range} onChange={(e) => setRange(e.target.value)} />
-                    <p className="text-sm text-muted-foreground">Exemplo: A1:Z1000 (será prefixado com a aba)</p>
+                    <p className="text-sm text-muted-foreground">Exemplo: A1:Z1000 (será prefixado com a aba ao buscar)</p>
 
                     <div>
                       <h3 className="font-semibold mb-2">Mapeie as colunas</h3>
