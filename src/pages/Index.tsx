@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
 import { ProductTable } from "@/components/ProductTable";
 import { QuoteBuilder } from "@/components/QuoteBuilder";
