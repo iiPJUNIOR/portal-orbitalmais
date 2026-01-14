@@ -95,6 +95,8 @@ export default function Index() {
           const rows = JSON.parse(raw) as any[];
           const imported = rows.map((r, idx) => normalizeImportedRow(r, idx));
           setProducts(imported.filter(p => p.status === "Ativo"));
+          // ensure loading is cleared when using localStorage data
+          setLoading(false);
           return;
         } catch (err) {
           console.warn("Failed to parse importedProducts from localStorage:", err);
