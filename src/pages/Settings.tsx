@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,7 @@ export default function Settings() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
+  const [fileSearch, setFileSearch] = useState<string>("");
   const [spreadsheetLink, setSpreadsheetLink] = useState<string>("");
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
@@ -321,6 +322,14 @@ export default function Settings() {
     setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${id}`);
   };
 
+  const filteredFiles = useMemo(() => {
+    const q = fileSearch.trim().toLowerCase();
+    if (!q) return files;
+    return files.filter(f => {
+      return f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
+    });
+  }, [files, fileSearch]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -404,21 +413,42 @@ export default function Settings() {
                   {files.length > 0 && (
                     <div className="mt-4">
                       <p className="text-sm text-muted-foreground">Ou escolha uma planilha encontrada no seu Drive:</p>
+
+                      <div className="flex items-center gap-2 mt-2">
+                        <Input
+                          placeholder="Pesquisar por nome ou ID do arquivo"
+                          value={fileSearch}
+                          onChange={(e) => setFileSearch(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setFileSearch("")}
+                        >
+                          Limpar
+                        </Button>
+                      </div>
+
                       <div className="space-y-2 mt-2 max-h-40 overflow-auto">
-                        {files.map((f) => (
-                          <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
-                            <div className="truncate pr-4">{f.name}</div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleUseFileLink(f.id)}
-                              >
-                                Usar link
-                              </Button>
+                        {filteredFiles.length === 0 ? (
+                          <div className="text-sm text-muted-foreground p-2">Nenhum arquivo encontrado.</div>
+                        ) : (
+                          filteredFiles.map((f) => (
+                            <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
+                              <div className="truncate pr-4">{f.name}</div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`)}
+                                >
+                                  Usar link
+                                </Button>
+                              </div>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   )}
