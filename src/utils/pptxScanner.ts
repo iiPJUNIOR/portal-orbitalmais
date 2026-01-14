@@ -1,13 +1,15 @@
 "use client";
 
 import JSZip from "jszip";
+import PptxGenJS from "pptxgenjs";
 
 /**
  * Scans the PPTX template and returns a list of unique text fragments found in slide <a:t> nodes,
  * along with occurrence counts. This helps mapping template text to replacement keys.
  *
- * This version tries both the src-relative template and a public root fallback (/proposal-template.pptx)
- * and provides clearer error messages when the file is missing or not a ZIP.
+ * This version tries both the src-relative template and a public root fallback (/proposal-template.pptx).
+ * If fetching a binary PPTX fails or returns a non-ZIP resource, the function will generate a small
+ * fallback PPTX in-memory (using pptxgenjs) and scan that so the UI doesn't break during development.
  */
 
 async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
@@ -34,19 +36,25 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
       }
 
       const ct = resp.headers.get("content-type") || "";
-      const isHtml = ct.includes("text/html") || ct.includes("application/xhtml+xml");
-
       const buffer = await resp.arrayBuffer();
 
       // Validate start bytes for ZIP: 'PK' (0x50 0x4B)
       const view = new Uint8Array(buffer.slice(0, 4));
       const startsWithPK = view[0] === 0x50 && view[1] === 0x4b;
 
-      if (isHtml || !startsWithPK) {
+      if (ct && (ct.includes("text/html") || ct.includes("application/xhtml+xml"))) {
         lastErr = new Error(
-          `Fetched resource at ${url} does not look like a PPTX/ZIP (content-type: ${ct}, startsWithPK: ${startsWithPK}).`
+          `Fetched resource at ${url} does not look like a PPTX/ZIP (content-type: ${ct}).`
         );
-        console.warn("pptx-scanner: invalid file fetched", { url, contentType: ct, startsWithPK });
+        console.warn("pptx-scanner: invalid file fetched (content-type suggests HTML)", { url, contentType: ct });
+        continue;
+      }
+
+      if (!startsWithPK) {
+        lastErr = new Error(
+          `Fetched resource at ${url} does not look like a PPTX/ZIP (startsWithPK: ${startsWithPK}).`
+        );
+        console.warn("pptx-scanner: invalid file fetched (does not start with PK)", { url, contentType: ct, startsWithPK });
         continue;
       }
 
@@ -58,11 +66,36 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
     }
   }
 
-  throw new Error(
-    `Unable to load PPTX template. Tried: ${candidateUrls.join(", ")}. Last error: ${String(
-      lastErr?.message || lastErr
-    )}. Ensure the file exists as a binary PPTX at src/templates/proposal-template.pptx (and you rebuilt), or place it in public/proposal-template.pptx.`
+  // If we reach here, no valid PPTX was fetched. Instead of throwing, generate a small fallback PPTX in-memory.
+  console.warn(
+    "pptx-scanner: Unable to load a real PPTX template. Generating an in-memory fallback PPTX for scanning. Last error:",
+    lastErr?.message || lastErr
   );
+
+  try {
+    const pptx = new PptxGenJS();
+    const slide = pptx.addSlide();
+    slide.addText("Fallback Proposal Template", { x: 0.5, y: 0.6, fontSize: 20, bold: true });
+    slide.addText("{{companyName}}", { x: 0.5, y: 1.4, fontSize: 14 });
+    slide.addText("{{contactName}}", { x: 0.5, y: 1.8, fontSize: 12 });
+    slide.addText("{{items_list}}", { x: 0.5, y: 2.4, fontSize: 11, w: "90%" });
+
+    // create a Blob and convert to ArrayBuffer
+    // @ts-ignore - pptxgenjs typing may not include 'write' signature consistently
+    const blob: Blob = await pptx.write("blob");
+    const arrayBuffer = await blob.arrayBuffer();
+    return arrayBuffer;
+  } catch (genErr) {
+    console.error("pptx-scanner: failed to generate fallback PPTX:", genErr);
+    // As a final fallback, throw a helpful error so callers can handle it
+    throw new Error(
+      `Unable to load or synthesize a PPTX template. Tried: ${candidateUrls.join(
+        ", "
+      )}. Last error: ${String(lastErr?.message || lastErr)}. Also failed to create fallback PPTX: ${String(
+        genErr?.message || genErr
+      )}`
+    );
+  }
 }
 
 export async function scanTemplateTexts(): Promise<Array<{ text: string; count: number }>> {
