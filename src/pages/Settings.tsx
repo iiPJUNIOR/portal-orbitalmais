@@ -17,13 +17,35 @@ export default function Settings() {
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
-  const [selectedFileId, setSelectedFileId] = useState<string>("");
+  const [spreadsheetLink, setSpreadsheetLink] = useState<string>("");
   const [range, setRange] = useState<string>("Sheet1!A1:Z1000");
 
   const isGoogleConfigured = !!GOOGLE_CLIENT_ID;
 
   useEffect(() => {
-    // nothing to init on mount beyond client script lazy load
+    // Try to restore token and files from localStorage on mount
+    const storedToken = localStorage.getItem("google_access_token");
+    if (storedToken) {
+      setAccessToken(storedToken);
+      setConnected(true);
+      // try to list files to validate token
+      (async () => {
+        setLoading(true);
+        try {
+          const driveFiles = await googleClient.listDriveSpreadsheets(storedToken);
+          setFiles(driveFiles.map((f: any) => ({ id: f.id, name: f.name })));
+        } catch (err: any) {
+          console.error("Failed to restore Google session:", err);
+          // token may be invalid/expired - clear it
+          localStorage.removeItem("google_access_token");
+          setAccessToken(null);
+          setConnected(false);
+          toast.error("Sessão do Google expirada. Conecte novamente.");
+        } finally {
+          setLoading(false);
+        }
+      })();
+    }
   }, []);
 
   const handleConnect = async () => {
@@ -37,11 +59,23 @@ export default function Settings() {
       await googleClient.init();
       const tokenResp = await googleClient.requestAccessToken();
       if (tokenResp && tokenResp.access_token) {
-        setAccessToken(tokenResp.access_token);
+        const token = tokenResp.access_token;
+        setAccessToken(token);
         setConnected(true);
+        // persist token so connection survives reloads (developer note: consider more secure storage for production)
+        localStorage.setItem("google_access_token", token);
+
         toast.success("Conectado ao Google com sucesso");
-        const driveFiles = await googleClient.listDriveSpreadsheets(tokenResp.access_token);
-        setFiles(driveFiles.map((f: any) => ({ id: f.id, name: f.name })));
+
+        // load files and persist a small cache
+        const driveFiles = await googleClient.listDriveSpreadsheets(token);
+        const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
+        setFiles(mapped);
+        try {
+          localStorage.setItem("google_drive_files", JSON.stringify(mapped));
+        } catch (e) {
+          // ignore storage errors
+        }
       } else {
         toast.error("Não foi possível obter token");
       }
@@ -64,15 +98,27 @@ export default function Settings() {
     setAccessToken(null);
     setConnected(false);
     setFiles([]);
+    // clear persisted session data
+    localStorage.removeItem("google_access_token");
+    localStorage.removeItem("google_drive_files");
     toast.success("Desconectado do Google");
   };
 
   const handleRefreshFiles = async () => {
-    if (!accessToken) return;
+    if (!accessToken) {
+      toast.error("Você precisa conectar ao Google primeiro.");
+      return;
+    }
     setLoading(true);
     try {
       const driveFiles = await googleClient.listDriveSpreadsheets(accessToken);
-      setFiles(driveFiles.map((f: any) => ({ id: f.id, name: f.name })));
+      const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
+      setFiles(mapped);
+      try {
+        localStorage.setItem("google_drive_files", JSON.stringify(mapped));
+      } catch (e) {
+        // ignore
+      }
       toast.success("Arquivos atualizados");
     } catch (err: any) {
       console.error(err);
@@ -82,18 +128,36 @@ export default function Settings() {
     }
   };
 
+  function extractSpreadsheetId(input: string): string | null {
+    if (!input) return null;
+    const trimmed = input.trim();
+    // Match standard URL pattern /spreadsheets/d/<id>
+    const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+    if (match && match[1]) return match[1];
+    // If a raw id was provided (alphanumeric of reasonable length)
+    const rawMatch = trimmed.match(/[a-zA-Z0-9-_]{20,}/);
+    if (rawMatch) return rawMatch[0];
+    return null;
+  }
+
   const handleImport = async () => {
-    if (!accessToken) {
-      toast.error("Conecte sua conta Google primeiro");
+    if (!spreadsheetLink) {
+      toast.error("Cole o link da planilha ou insira o ID da planilha.");
       return;
     }
-    if (!selectedFileId) {
-      toast.error("Selecione um arquivo para importar");
+    if (!accessToken) {
+      toast.error("Você precisa conectar ao Google primeiro.");
       return;
     }
     setLoading(true);
     try {
-      const sheet = await googleClient.getSpreadsheetValues(accessToken, selectedFileId, range);
+      const spreadsheetId = extractSpreadsheetId(spreadsheetLink);
+      if (!spreadsheetId) {
+        toast.error("Não foi possível extrair o ID da planilha. Verifique o link/ID.");
+        setLoading(false);
+        return;
+      }
+      const sheet = await googleClient.getSpreadsheetValues(accessToken as string, spreadsheetId, range);
       const values: string[][] = sheet.values || [];
       if (values.length === 0) {
         toast.error("Planilha vazia");
@@ -148,7 +212,7 @@ export default function Settings() {
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
           <Card>
             <CardHeader>
               <CardTitle>Integração Google</CardTitle>
@@ -176,81 +240,49 @@ export default function Settings() {
                 </div>
 
                 <div className="pt-4">
-                  <Label>Arquivos (Planilhas) no Drive</Label>
-                  {connected ? (
-                    files.length > 0 ? (
-                      <div className="space-y-2 mt-2">
-                        <select
-                          className="w-full border rounded px-3 py-2"
-                          value={selectedFileId}
-                          onChange={(e) => setSelectedFileId(e.target.value)}
-                        >
-                          <option value="">-- selecione uma planilha --</option>
-                          {files.map((f) => (
-                            <option key={f.id} value={f.id}>
-                              {f.name}
-                            </option>
-                          ))}
-                        </select>
+                  <Label>Link da planilha (Sheets)</Label>
+                  <Input
+                    placeholder="Cole o link da planilha (https://docs.google.com/spreadsheets/d/ID/...) ou cole o ID"
+                    value={spreadsheetLink}
+                    onChange={(e) => setSpreadsheetLink(e.target.value)}
+                    className="mt-2"
+                  />
+                  <p className="text-sm text-muted-foreground mt-2">
+                    Exemplo: https://docs.google.com/spreadsheets/d/1aBcD_EfGhIjKlMnOpQrStUvWxYz/edit
+                  </p>
+
+                  {files.length > 0 && (
+                    <div className="mt-4">
+                      <p className="text-sm text-muted-foreground">Ou escolha uma planilha encontrada no seu Drive:</p>
+                      <div className="space-y-2 mt-2 max-h-40 overflow-auto">
+                        {files.map((f) => (
+                          <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
+                            <div className="truncate pr-4">{f.name}</div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`)}
+                              >
+                                Usar link
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
                       </div>
-                    ) : (
-                      <p className="text-sm text-muted-foreground mt-2">Nenhuma planilha encontrada.</p>
-                    )
-                  ) : (
-                    <p className="text-sm text-muted-foreground mt-2">Você não está conectado.</p>
+                    </div>
                   )}
                 </div>
 
-                <div className="space-y-2">
+                <div className="space-y-2 mt-4">
                   <Label>Range (Sheets API)</Label>
                   <Input value={range} onChange={(e) => setRange(e.target.value)} />
                   <p className="text-sm text-muted-foreground">Exemplo: Sheet1!A1:Z1000</p>
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={handleImport} disabled={!connected || !selectedFileId || loading}>
+                  <Button onClick={handleImport} disabled={!connected || loading}>
                     {loading ? "Importando..." : "Importar Planilha para Produtos"}
-                  </Button>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Import Preview / Ações</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Após a importação, os dados são salvos temporariamente no localStorage sob a chave <code>importedProducts</code>.
-                  Você pode usar essa lista para popular o catálogo local ou sincronizar com o banco.
-                </p>
-
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => {
-                      const raw = localStorage.getItem("importedProducts");
-                      if (!raw) {
-                        toast.error("Nenhum arquivo importado encontrado em localStorage");
-                        return;
-                      }
-                      const rows = JSON.parse(raw);
-                      toast.success(`Preview: ${rows.length} linhas (veja console)`);
-                      console.log("Imported products (full):", rows);
-                    }}
-                  >
-                    Ver preview (console)
-                  </Button>
-
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      localStorage.removeItem("importedProducts");
-                      toast.success("Import removido do localStorage");
-                    }}
-                  >
-                    Remover importações locais
                   </Button>
                 </div>
               </div>

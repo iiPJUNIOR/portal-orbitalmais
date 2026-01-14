@@ -36,6 +36,44 @@ interface ProposalFormData {
   priceModel: '12m' | '24m';
 }
 
+function normalizeImportedRow(row: any, idx: number): Product {
+  // Attempt to map common headers; fall back to reasonable defaults
+  const id = row.id || row.ID || row.sku || row.SKU || `imported-${idx}-${Date.now()}`;
+  const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
+  const description = row.description || row.Description || row.Descrição || row["Product"] || sku;
+  const model = row.model || row.Modelo || row.Model || "Importado";
+  const category = row.category || row.Categoria || "Controladores Porta";
+  const colorsRaw = row.colors || row.Colors || row.Cor || "";
+  const colors = typeof colorsRaw === "string" ? colorsRaw.split(",").map((c: string) => c.trim()).filter(Boolean) : Array.isArray(colorsRaw) ? colorsRaw : [];
+  const biometrics = (String(row.biometrics || row.Biometria || row.biometric) || "").toLowerCase() === "true";
+  const facial = (row.facial || row.Facial || "None").toString();
+  const proximity = (row.proximity || row.Proximity || "None").toString();
+  const urn = (String(row.urn || row.Urna || row.urna) || "").toLowerCase() === "true";
+  const qr = (String(row.qr || row.QR || row.qrcode) || "").toLowerCase() === "true";
+  const value_12m = parseFloat(row.value_12m || row["value_12m"] || row["Valor12m"] || row["12m"] || 0) || 0;
+  const value_24m = parseFloat(row.value_24m || row["value_24m"] || row["Valor24m"] || row["24m"] || 0) || 0;
+  const part_number = row.part_number || row["Part Number"] || sku;
+  const status = (row.status || row.Status || "Ativo").toString() as 'Ativo' | 'Inativo';
+
+  return {
+    id: String(id),
+    sku: String(sku),
+    category: category as Product["category"],
+    model: String(model),
+    colors,
+    biometrics,
+    facial: (facial === "None" || facial === "none" || facial === "") ? "None" : (facial as any),
+    proximity: (proximity === "None" || proximity === "none" || proximity === "") ? "None" : (proximity as any),
+    urn,
+    qr,
+    description: String(description),
+    value_12m,
+    value_24m,
+    part_number: String(part_number),
+    status,
+  };
+}
+
 export default function Index() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +88,20 @@ export default function Index() {
   const loadProducts = useCallback(async (filters: ProductFilters = {}) => {
     setLoading(true);
     try {
+      // If there's an importedProducts list in localStorage, use it as the catalog
+      const raw = localStorage.getItem("importedProducts");
+      if (raw) {
+        try {
+          const rows = JSON.parse(raw) as any[];
+          const imported = rows.map((r, idx) => normalizeImportedRow(r, idx));
+          setProducts(imported.filter(p => p.status === "Ativo"));
+          return;
+        } catch (err) {
+          console.warn("Failed to parse importedProducts from localStorage:", err);
+          // fallback to fetchProducts
+        }
+      }
+
       const data = await fetchProducts(filters);
       setProducts(data);
     } catch (error) {
