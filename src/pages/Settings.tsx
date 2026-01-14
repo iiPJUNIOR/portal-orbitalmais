@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as googleClient from "@/integrations/google/client";
 
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
+
 export default function Settings() {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
@@ -18,11 +20,18 @@ export default function Settings() {
   const [selectedFileId, setSelectedFileId] = useState<string>("");
   const [range, setRange] = useState<string>("Sheet1!A1:Z1000");
 
+  const isGoogleConfigured = !!GOOGLE_CLIENT_ID;
+
   useEffect(() => {
     // nothing to init on mount beyond client script lazy load
   }, []);
 
   const handleConnect = async () => {
+    if (!isGoogleConfigured) {
+      toast.error("VITE_GOOGLE_CLIENT_ID não está definido. Verifique as variáveis de ambiente.");
+      return;
+    }
+
     setLoading(true);
     try {
       await googleClient.init();
@@ -127,6 +136,18 @@ export default function Settings() {
           </div>
         </div>
 
+        {!isGoogleConfigured && (
+          <div className="mb-6 p-4 border rounded bg-yellow-50 text-yellow-900">
+            <strong>Variável ausente:</strong> VITE_GOOGLE_CLIENT_ID não está definida.
+            <div className="text-sm mt-2">
+              Para conectar ao Google, defina a variável de ambiente VITE_GOOGLE_CLIENT_ID com o Client ID da sua aplicação.
+              Exemplo local: crie um arquivo <code className="bg-white rounded px-1 py-0.5">.env</code> na raiz com:
+              <div className="mt-1 font-mono text-sm">VITE_GOOGLE_CLIENT_ID=seu_client_id_aqui</div>
+              Ou defina a variável no painel de variáveis de ambiente do seu serviço de hospedagem.
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
@@ -140,7 +161,7 @@ export default function Settings() {
 
                 <div className="flex gap-2">
                   {!connected ? (
-                    <Button onClick={handleConnect} disabled={loading}>
+                    <Button onClick={handleConnect} disabled={loading || !isGoogleConfigured}>
                       {loading ? "Conectando..." : "Conectar ao Google"}
                     </Button>
                   ) : (
