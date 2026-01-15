@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as googleClient from "@/integrations/google/client";
+import { parseSpreadsheetNumber } from "@/lib/formatters";
 
 const ENV_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const LOCAL_STORAGE_KEY = "google_client_id_override";
@@ -397,8 +398,8 @@ export default function Settings() {
         out.qr = mappings.qr ? String(obj[mappings.qr] || "").toLowerCase() === "true" || String(obj[mappings.qr] || "").toLowerCase() === "sim" : false;
         out.part_number = mappings.part_number ? String(obj[mappings.part_number] || "") : "";
         out.description = mappings.description ? String(obj[mappings.description] || "") : "";
-        out.value_12m = mappings.value_12m ? parseFloat(String(obj[mappings.value_12m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
-        out.value_24m = mappings.value_24m ? parseFloat(String(obj[mappings.value_24m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
+        out.value_12m = mappings.value_12m ? parseSpreadsheetNumber(obj[mappings.value_12m] || "0") : 0;
+        out.value_24m = mappings.value_24m ? parseSpreadsheetNumber(obj[mappings.value_24m] || "0") : 0;
         out.sku = out.part_number || out.description || `imported-${Math.random().toString(36).slice(2, 9)}`;
         out.status = "Ativo";
         return out;

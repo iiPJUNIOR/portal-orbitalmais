@@ -16,6 +16,7 @@ import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
 import { formatModelLabel } from "@/lib/formatters";
+import { parseSpreadsheetNumber } from "@/lib/formatters";
 
 type QuoteItem = {
   id: string;
@@ -56,10 +57,8 @@ function normalizeImportedRow(row: any, idx: number): Product {
   const qr = String(row.qr || row.QR || row.qrcode || "").toLowerCase() === "true";
 
   const parseNumber = (v: any) => {
-    if (v == null) return 0;
-    const s = String(v).replace(/[^\d,.\-]/g, "");
-    if (!s) return 0;
-    return parseFloat(s.replace(",", ".")) || 0;
+    // Use the shared parser which handles both "1.368,81" and "1368,81" etc.
+    return parseSpreadsheetNumber(v);
   };
 
   const value_12m = parseNumber(row.value_12m || row["value_12m"] || row["Valor12m"] || row["12m"]);
