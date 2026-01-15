@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -95,7 +95,7 @@ export default function Settings() {
   const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
   const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
 
-  // --- Complement import states ---
+  // --- Complement import states (used for catalog/values bases) ---
   const [complementSheet, setComplementSheet] = useState<string | null>(() => {
     try {
       return localStorage.getItem(LS_COMPLEMENT_SHEET) || null;
@@ -122,7 +122,7 @@ export default function Settings() {
   const [complementImporting, setComplementImporting] = useState(false);
   const [complementRowsCount, setComplementRowsCount] = useState<number | null>(null);
 
-  // New: allow creating missing products from complement rows and choose price columns
+  // Complement import options
   const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
   const [complementPrice12Column, setComplementPrice12Column] = useState<string>(() => {
     try {
@@ -138,7 +138,6 @@ export default function Settings() {
       return "";
     }
   });
-  // New columns for Com iDSecure / Sem iDSecure
   const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>(() => {
     try {
       return localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "";
@@ -153,7 +152,6 @@ export default function Settings() {
       return "";
     }
   });
-  // ---------------------------------
 
   // Bases stored in localStorage (multiple)
   const [bases, setBases] = useState<StoredBase[]>(() => {
@@ -174,6 +172,7 @@ export default function Settings() {
     }
   }, [bases]);
 
+  // Initialize Google cached state
   useEffect(() => {
     const storedToken = localStorage.getItem("google_access_token");
     if (storedToken) {
@@ -204,7 +203,7 @@ export default function Settings() {
     }
   }, []);
 
-  // Persist mappings automatically when they change (per-spreadsheet if available, else global)
+  // Persist mappings and small preferences
   useEffect(() => {
     try {
       if (spreadsheetId) {
@@ -217,7 +216,6 @@ export default function Settings() {
     }
   }, [mappings, spreadsheetId]);
 
-  // Persist spreadsheet link to localStorage whenever it changes
   useEffect(() => {
     try {
       if (spreadsheetLink) {
@@ -230,7 +228,6 @@ export default function Settings() {
     }
   }, [spreadsheetLink]);
 
-  // Persist complement settings to localStorage when they change
   useEffect(() => {
     try {
       localStorage.setItem(LS_COMPLEMENT_RANGE, complementRange || "");
@@ -247,7 +244,6 @@ export default function Settings() {
     }
   }, [complementRange, complementSheet, complementKeyColumn, complementPrice12Column, complementPrice24Column, complementComIdsColumn, complementSemIdsColumn]);
 
-  // Auto-save seller fields as the user types (also keep Save button for manual control)
   useEffect(() => {
     try {
       localStorage.setItem("seller_name", sellerName);
@@ -260,7 +256,6 @@ export default function Settings() {
   }, [sellerName, sellerRole, sellerEmail, sellerPhone]);
 
   useEffect(() => {
-    // If sheetTitles change and complementSheet not set, default it
     if (sheetTitles.length > 0 && !complementSheet) {
       setComplementSheet(sheetTitles[0]);
     }
@@ -276,7 +271,6 @@ export default function Settings() {
     return null;
   }
 
-  // Normalize header/field names for robust matching
   function normalizeForMatch(s?: string) {
     if (!s) return "";
     return String(s)
@@ -429,7 +423,6 @@ export default function Settings() {
       const headerNorms = headerStrings.map((h) => normalizeForMatch(h));
 
       for (const f of MAPPING_FIELDS) {
-        // If saved explicit and header exists, use it
         if (saved && saved[f.key]) {
           const candidate = String(saved[f.key]);
           if (headerStrings.includes(candidate)) {
@@ -438,14 +431,12 @@ export default function Settings() {
           }
         }
 
-        // Auto-match heuristics:
         const targetNorms = [
           normalizeForMatch(f.label),
           normalizeForMatch(f.key),
           normalizeForMatch(f.key.replace(/_/g, "")),
         ];
 
-        // direct header with same normalized string
         let foundHeader: string | undefined;
         for (let i = 0; i < headerStrings.length; i++) {
           const hnorm = headerNorms[i];
@@ -455,7 +446,6 @@ export default function Settings() {
           }
         }
 
-        // substring heuristics (header includes label words)
         if (!foundHeader) {
           for (let i = 0; i < headerStrings.length; i++) {
             const hnorm = headerNorms[i];
@@ -470,7 +460,6 @@ export default function Settings() {
           }
         }
 
-        // Some helpful synonyms
         if (!foundHeader) {
           if (f.key === "description") {
             const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("descr") || normalizeForMatch(h).includes("description") || normalizeForMatch(h).includes("product"));
@@ -486,19 +475,14 @@ export default function Settings() {
           }
         }
 
-        if (foundHeader) {
-          initial[f.key] = foundHeader;
-        } else {
-          initial[f.key] = saved && saved[f.key] ? saved[f.key] : "";
-        }
+        if (foundHeader) initial[f.key] = foundHeader;
+        else initial[f.key] = saved && saved[f.key] ? saved[f.key] : "";
       }
 
       setMappings(initial);
 
-      // Auto-detect reasonable default price columns for complement import
       const detectPriceCol = (candidates: string[], prefer12 = true) => {
         if (!candidates || candidates.length === 0) return "";
-        // prefer header names that include '12' or '12m' / '24' or '24m' or 'valor'
         const norm = candidates.map((h) => h.toLowerCase());
         if (prefer12) {
           const idx12 = norm.findIndex((h) => h.includes("12") || h.includes("12m") || (h.includes("valor") && h.includes("12")));
@@ -519,7 +503,6 @@ export default function Settings() {
       setComplementPrice12Column((prev) => prev || default12);
       setComplementPrice24Column((prev) => prev || default24);
 
-      // Try to auto-detect "Com iDSecure" / "Sem iDSecure" columns (common naming variations)
       const lower = headerStrings.map((h) => h.toLowerCase());
       const findByCandidates = (cands: string[]) => {
         for (const cand of cands) {
@@ -536,7 +519,7 @@ export default function Settings() {
       setComplementSemIdsColumn((prev) => prev || foundSem);
 
       setStage("headersLoaded");
-      toast.success("Cabeçalhos carregados e mapeamento inicial aplicado (pode ser ajustado).");
+      toast.success("Cabeçalhos carregados — ajuste mapeamentos se desejar.");
     } catch (err: any) {
       console.error(err);
       toast.error("Erro ao carregar cabeçalhos: " + (err?.message || err));
@@ -545,10 +528,10 @@ export default function Settings() {
     }
   };
 
-  // New: read the actual range (sheet!range) and populate complementHeaders + preview rows.
+  // Read range preview (used for catalog/values base preview)
   const handleReadRange = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
-      toast.error("Selecione planilha e aba complementar antes de ler o intervalo.");
+      toast.error("Selecione planilha e aba antes de ler o intervalo.");
       return;
     }
 
@@ -570,7 +553,6 @@ export default function Settings() {
       setComplementPreviewRows(dataRows.slice(0, 5));
       setComplementRowsCount(dataRows.length);
 
-      // Do not alter mapping state (mappings) here — this action is only a preview of the selected range.
       toast.success(`Intervalo carregado: ${dataRows.length} linhas (pré-visualizando até 5).`);
     } catch (err: any) {
       console.error("Erro ao ler intervalo:", err);
@@ -584,10 +566,6 @@ export default function Settings() {
     setMappings(prev => ({ ...prev, [fieldKey]: headerName }));
   };
 
-  /**
-   * Complement import changed: no merging.
-   * Behavior identical to previous import: create new items in importedProducts.
-   */
   const handleImportComplement = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
       toast.error("Selecione planilha e aba complementar antes de importar.");
@@ -624,7 +602,6 @@ export default function Settings() {
 
       let createdCount = 0;
 
-      // helper to get column value by header name
       const getColValue = (row: any[], colName: string) => {
         if (!colName) return "";
         const idx = headerRow.findIndex(h => h === colName);
@@ -637,10 +614,8 @@ export default function Settings() {
         const keyRaw = keyIndex >= 0 ? row[keyIndex] : undefined;
         const keyVal = keyRaw ? String(keyRaw ?? "").trim() : "";
 
-        // If not creating missing, skip (user opted out)
         if (!complementCreateMissing) continue;
 
-        // Build description from several non-empty columns (excluding key)
         const descParts: string[] = [];
         for (let c = 0; c < headerRow.length; c++) {
           if (c === keyIndex) continue;
@@ -653,7 +628,6 @@ export default function Settings() {
         }
         const description = descParts.join(" · ") || (keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
 
-        // Determine prices using selected complement price columns, falling back to auto-detection
         const findPriceFromColumn = (colName: string) => {
           if (!colName) return 0;
           const v = getColValue(row, colName);
@@ -663,7 +637,6 @@ export default function Settings() {
         let value12 = findPriceFromColumn(complementPrice12Column);
         let value24 = findPriceFromColumn(complementPrice24Column);
 
-        // If not provided, try auto-detect: look for any numeric-looking column in the row
         if ((!value12 || value12 === 0) && (!value24 || value24 === 0)) {
           for (let c = 0; c < headerRow.length; c++) {
             if (c === keyIndex) continue;
@@ -675,13 +648,11 @@ export default function Settings() {
           }
         }
 
-        // Extract Com/Sem iDSecure values if columns selected
         const comIdsRaw = complementComIdsColumn ? getColValue(row, complementComIdsColumn) : "";
         const semIdsRaw = complementSemIdsColumn ? getColValue(row, complementSemIdsColumn) : "";
         const priceComIds = parseSpreadsheetNumber(comIdsRaw);
         const priceSemIds = parseSpreadsheetNumber(semIdsRaw);
 
-        // If no key provided or not found, generate a unique SKU/part_number
         const generatedKey = keyVal || `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString().slice(-6)}`;
 
         const newProd: any = {
@@ -700,10 +671,8 @@ export default function Settings() {
           value_24m: Number(value24 || 0),
           part_number: String(generatedKey),
           status: "Ativo",
-          // Keep complement-specific pricing fields
           price_com_iDSecure: priceComIds > 0 ? priceComIds : undefined,
           price_sem_iDSecure: priceSemIds > 0 ? priceSemIds : undefined,
-          // store raw complement fields for later usage
           complementMeta: headerRow.reduce((acc: any, h, idx) => {
             acc[h] = row[idx] ?? "";
             return acc;
@@ -715,7 +684,6 @@ export default function Settings() {
         createdCount++;
       }
 
-      // Save appended importedProducts back to localStorage
       try {
         localStorage.setItem("importedProducts", JSON.stringify(imported));
       } catch (e) {
@@ -733,9 +701,7 @@ export default function Settings() {
     }
   };
 
-  // ----------------- New: Bases management ---------------------
-
-  // Read full range and return parsed header + rows
+  // Read full range and return parsed header + rows (used when saving base)
   const fetchFullRange = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
       throw new Error("Selecione planilha e aba antes de salvar como base");
@@ -783,282 +749,170 @@ export default function Settings() {
     toast.success("Base removida");
   };
 
-  // ------------------------------------------------------------
-
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
-            <p className="text-gray-600">Conecte sua conta Google para importar uma tabela de produtos (Drive / Sheets)</p>
+            <p className="text-gray-600">Gerencie conexões e suas bases — planilha de produtos e bases de valores para orçamentos.</p>
           </div>
+
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/")}>
-              Voltar ao Orçamento
-            </Button>
+            <Button variant="outline" onClick={() => navigate("/")}>Voltar ao Orçamento</Button>
           </div>
         </div>
 
-        {!isGoogleConfigured && (
-          <div className="mb-6 p-4 border rounded bg-yellow-50 text-yellow-900">
-            <strong>Variável ausente:</strong> VITE_GOOGLE_CLIENT_ID não está definida.
-            <div className="text-sm mt-2">
-              Você pode definir a variável de ambiente VITE_GOOGLE_CLIENT_ID na sua máquina/host, ou colar um Client ID abaixo para uso local (salvo em localStorage).
-              <div className="mt-2">
-                <Label>Client ID (opcional, para desenvolvimento)</Label>
-                <div className="flex gap-2 mt-2">
-                  <Input
-                    placeholder="Cole aqui o Client ID do Google (ex: 1234-abcdefg.apps.googleusercontent.com)"
-                    value={overrideClientId}
-                    onChange={(e) => setOverrideClientId(e.target.value)}
-                  />
-                  <Button onClick={() => { try { localStorage.setItem(LOCAL_STORAGE_KEY, overrideClientId); toast.success("Client ID salvo"); } catch {} }}>Salvar</Button>
-                  <Button variant="outline" onClick={() => { localStorage.removeItem(LOCAL_STORAGE_KEY); setOverrideClientId(""); toast.success("Client ID removido"); }}>Limpar</Button>
-                </div>
-                <div className="mt-2 text-sm">
-                  Depois de salvar, tente clicar em "Conectar ao Google". O Client ID será lido do armazenamento local.
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-1 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Integração Google</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Para conectar, clique em "Conectar ao Google" e conceda permissão de leitura ao Google Drive / Sheets.
+        {/* Top section: two-column layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Left column: Product Base (sheet link + discovered files + product bases list) */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Planilha de Produtos (base de produtos)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Conecte a planilha que contém a lista mestre de produtos (SKU / partnumber). Essas bases serão usadas pela aba "Pesquisar Código".
                 </p>
 
-                <div className="flex gap-2">
-                  {!connected ? (
-                    <Button onClick={handleConnect} disabled={loading || !isGoogleConfigured}>
-                      {loading ? "Conectando..." : "Conectar ao Google"}
-                    </Button>
-                  ) : (
-                    <Button variant="destructive" onClick={handleDisconnect} disabled={loading}>
-                      Desconectar
-                    </Button>
-                  )}
-
-                  <Button onClick={handleRefreshFiles} disabled={!connected || loading}>
-                    Atualizar arquivos
-                  </Button>
-                </div>
-
-                <div className="pt-4">
-                  <Label>Link da planilha (Sheets)</Label>
-                  <Input
-                    placeholder="Cole o link da planilha (https://docs.google.com/spreadsheets/d/ID/...) ou cole o ID"
-                    value={spreadsheetLink}
-                    onChange={(e) => setSpreadsheetLink(e.target.value)}
-                    className="mt-2"
-                  />
-                  <div className="flex gap-2 mt-2">
-                    <Button onClick={handleLoadSheets} disabled={!connected || loading || !spreadsheetLink}>
-                      Carregar Abas da Planilha
-                    </Button>
-                    <Button onClick={() => {
-                      setSpreadsheetLink("");
-                      setSpreadsheetId(null);
-                      setSheetTitles([]);
-                      setSelectedSheet(null);
-                      setHeaders([]);
-                      setMappings({});
-                      setStage("idle");
-                      try {
-                        localStorage.removeItem("spreadsheet_link");
-                      } catch {}
-                    }} variant="outline">
-                      Limpar
-                    </Button>
-                  </div>
-
-                  {files.length > 0 && (
-                    <div className="mt-4">
-                      <p className="text-sm text-muted-foreground">Ou escolha uma planilha encontrada no seu Drive:</p>
-
-                      <div className="flex items-center gap-2 mt-2">
-                        <Input
-                          placeholder="Pesquisar por nome ou ID do arquivo"
-                          value={fileSearch}
-                          onChange={(e) => setFileSearch(e.target.value)}
-                          className="flex-1"
-                        />
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setFileSearch("")}
-                        >
-                          Limpar
-                        </Button>
-                      </div>
-
-                      <div className="space-y-2 mt-2 max-h-40 overflow-auto">
-                        {files.filter(f => {
-                          const q = fileSearch.trim().toLowerCase();
-                          return !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
-                        }).map((f) => (
-                          <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
-                            <div className="truncate pr-4">{f.name}</div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => { setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`); toast.success("Link preenchido"); }}
-                              >
-                                Usar link
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {stage === "sheetsLoaded" && (
-                  <div className="space-y-2 pt-4 border-t">
-                    <Label>Selecione a aba (sheet)</Label>
-                    <div className="flex gap-2 items-center">
-                      <select
-                        className="border rounded px-2 py-1"
-                        value={selectedSheet ?? ""}
-                        onChange={(e) => setSelectedSheet(e.target.value)}
-                      >
-                        {sheetTitles.map(s => <option key={s} value={s}>{s}</option>)}
-                      </select>
-                      <Button onClick={handleLoadHeaders} disabled={!selectedSheet || loading}>
-                        Carregar Cabeçalhos (1ª linha)
+                <div className="space-y-3">
+                  <div>
+                    <Label>Link da planilha (Sheets) — base de produtos</Label>
+                    <Input
+                      placeholder="Cole o link da planilha de produtos (https://docs.google.com/spreadsheets/d/ID/...) ou cole o ID"
+                      value={spreadsheetLink}
+                      onChange={(e) => setSpreadsheetLink(e.target.value)}
+                      className="mt-2"
+                    />
+                    <div className="flex gap-2 mt-2">
+                      <Button onClick={handleLoadSheets} disabled={!connected || loading || !spreadsheetLink}>
+                        {loading ? "Carregando..." : "Carregar abas"}
                       </Button>
                       <Button variant="outline" onClick={() => {
-                        if (spreadsheetId) {
-                          localStorage.removeItem(`import_column_map_${spreadsheetId}`);
-                        }
-                        localStorage.removeItem("import_column_map");
+                        setSpreadsheetLink("");
+                        setSpreadsheetId(null);
+                        setSheetTitles([]);
+                        setSelectedSheet(null);
+                        setHeaders([]);
                         setMappings({});
-                        toast.success("Mapeamento salvo removido");
-                      }}>Limpar Mapeamento Salvo</Button>
+                        setStage("idle");
+                        try {
+                          localStorage.removeItem("spreadsheet_link");
+                        } catch {}
+                      }}>Limpar</Button>
                     </div>
                   </div>
-                )}
 
-                {stage === "headersLoaded" && (
-                  <div className="space-y-4 pt-4 border-t">
-                    <Label>Range de importação dentro da aba</Label>
-                    <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} />
-                    <p className="text-sm text-muted-foreground">Exemplo: A1:Z1000 (será prefixado com a aba ao buscar)</p>
+                  <div>
+                    <div className="flex gap-2 items-center">
+                      {!connected ? (
+                        <Button onClick={handleConnect} disabled={loading || !isGoogleConfigured}>
+                          {loading ? "Conectando..." : "Conectar ao Google"}
+                        </Button>
+                      ) : (
+                        <Button variant="destructive" onClick={handleDisconnect} disabled={loading}>
+                          Desconectar Google
+                        </Button>
+                      )}
 
-                    <div>
-                      <h3 className="font-semibold mb-2">Mapeie as colunas</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        {MAPPING_FIELDS.map((field) => (
-                          <div key={field.key} className="space-y-1">
-                            <Label>{field.label}</Label>
-                            <select
-                              className="border rounded w-full px-2 py-1"
-                              value={mappings[field.key] ?? ""}
-                              onChange={(e) => handleSetMapping(field.key, e.target.value)}
-                            >
-                              <option value="">-- selecionar coluna --</option>
-                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-
-                      <div className="flex justify-between items-center mt-4 gap-2">
-                        <div className="flex items-center gap-3">
-                          <Button onClick={() => {
-                            const initial: Record<string,string> = {};
-                            MAPPING_FIELDS.forEach(f => initial[f.key] = "");
-                            setMappings(initial);
-                          }} variant="outline">
-                            Resetar Mapeamento
-                          </Button>
-
-                          <div className="flex items-center space-x-2">
-                            <input type="checkbox" id="createMissing" checked={complementCreateMissing} onChange={(e) => setComplementCreateMissing(e.target.checked)} />
-                            <label htmlFor="createMissing" className="text-sm">Criar produtos a partir do intervalo complementar</label>
-                          </div>
-                        </div>
-
-                        <div className="flex gap-2 items-center">
-                          <div className="flex items-center">
-                            <Label className="mr-2">Coluna preço 12m</Label>
-                            <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1">
-                              <option value="">(auto)</option>
-                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
-                          </div>
-
-                          <div className="flex items-center">
-                            <Label className="mr-2">Coluna preço 24m</Label>
-                            <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1">
-                              <option value="">(auto)</option>
-                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
-                            </select>
-                          </div>
-
-                          <Button onClick={handleImportComplement} disabled={loading}>
-                            Importar com Mapeamento
-                          </Button>
-                        </div>
-                      </div>
+                      <Button onClick={handleRefreshFiles} disabled={!connected || loading}>Atualizar lista do Drive</Button>
                     </div>
+
+                    {files.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm text-muted-foreground">Arquivos encontrados no seu Drive:</p>
+                        <div className="mt-2 space-y-2 max-h-40 overflow-auto">
+                          {files.filter(f => {
+                            const q = fileSearch.trim().toLowerCase();
+                            return !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
+                          }).map((f) => (
+                            <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
+                              <div className="truncate pr-4">{f.name}</div>
+                              <div className="flex gap-2">
+                                <Button size="sm" variant="outline" onClick={() => { setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`); toast.success("Link preenchido"); }}>
+                                  Usar link
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Bases de Produtos Salvas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">Bases do tipo "product" (procura por código/SKU).</p>
+                {bases.filter(b => b.type === "product").length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">Nenhuma base de produtos salva.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {bases.filter(b => b.type === "product").map((b) => (
+                      <div key={b.id} className="flex items-center justify-between border rounded p-3">
+                        <div>
+                          <div className="font-medium">{b.name}</div>
+                          <div className="text-sm text-muted-foreground">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleDateString()}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${b.name.replace(/\s+/g, "-") || b.id}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast.success("Base exportada");
+                          }}>Exportar</Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteBase(b.id)}>Remover</Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </div>
 
-                {stage === "mapped" && (
-                  <div className="p-3 bg-green-50 border rounded text-green-900">
-                    Importação concluída e salva em localStorage como <strong>importedProducts</strong>. Vá para a página inicial para ver o catálogo atualizado.
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Complement import card */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Importação Complementar (outra aba)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">
-                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e criar novos produtos (sem mesclar com os já importados). Se uma linha complementar não tiver correspondência, será criado um novo produto com base nas colunas da linha. A coluna chave (SKU/part_number) é opcional — se não informada, será gerado um identificador interno para cada linha.
+          {/* Right column: Base de Orçamentos (Valores) */}
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Base de Orçamentos (Valores)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Escolha a aba e o intervalo que contém preços e condições utilizados para gerar orçamentos (ex.: colunas com valores 12m/24m, composições, etc.). Use "Ler intervalo" para pré-visualizar antes de salvar/importar.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="space-y-1">
+                  <div>
                     <Label>Aba (sheet)</Label>
-                    <select
-                      className="border rounded w-full px-2 py-1"
-                      value={complementSheet ?? ""}
-                      onChange={(e) => setComplementSheet(e.target.value)}
-                    >
+                    <select className="border rounded w-full px-2 py-1 mt-2" value={complementSheet ?? ""} onChange={(e) => setComplementSheet(e.target.value)}>
                       <option value="">-- selecione a aba --</option>
                       {sheetTitles.map(s => <option key={s} value={s}>{s}</option>)}
                     </select>
                   </div>
 
-                  <div className="space-y-1">
+                  <div>
                     <Label>Intervalo (range)</Label>
-                    <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} />
-                    <div className="text-sm text-muted-foreground">Ex: A1:Z1000 (use a 1ª linha como cabeçalho)</div>
+                    <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} className="mt-2" />
+                    <div className="text-sm text-muted-foreground mt-1">Ex: A1:Z1000 — primeira linha será considerada cabeçalho</div>
                   </div>
                 </div>
 
-                <div className="flex gap-2">
-                  <Button onClick={async () => {
-                    await handleReadRange();
-                  }} disabled={!connected || !spreadsheetId || !complementSheet}>
-                    Ler intervalo (range)
+                <div className="flex gap-2 mt-4">
+                  <Button onClick={handleReadRange} disabled={!connected || !spreadsheetId || !complementSheet}>
+                    Ler intervalo (pré-visualizar)
                   </Button>
                   <Button onClick={() => {
                     setComplementHeaders([]);
@@ -1070,22 +924,17 @@ export default function Settings() {
                     setComplementComIdsColumn("");
                     setComplementSemIdsColumn("");
                     localStorage.removeItem(LS_COMPLEMENT_RANGE);
-                    localStorage.removeItem(LS_COMPLEMENT_KEY_COLUMN);
-                    localStorage.removeItem(LS_COMPLEMENT_PRICE_12);
-                    localStorage.removeItem(LS_COMPLEMENT_PRICE_24);
-                    localStorage.removeItem(LS_COMPLEMENT_COM_IDS);
-                    localStorage.removeItem(LS_COMPLEMENT_SEM_IDS);
-                  }} variant="outline">Limpar Prévia</Button>
+                  }} variant="outline">Limpar pré-visualização</Button>
                 </div>
 
                 {complementRowsCount !== null && (
-                  <div className="text-sm text-muted-foreground">
+                  <div className="text-sm text-muted-foreground mt-3">
                     Linhas no intervalo (excluindo cabeçalho): {complementRowsCount}
                   </div>
                 )}
 
                 {complementPreviewRows.length > 0 && (
-                  <div className="overflow-auto border rounded">
+                  <div className="overflow-auto border rounded mt-3">
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50">
                         <tr>
@@ -1108,17 +957,20 @@ export default function Settings() {
                 )}
 
                 {complementHeaders.length > 0 && (
-                  <div className="space-y-2">
-                    <Label>Coluna chave (SKU / part number) — opcional</Label>
-                    <select className="border rounded w-full px-2 py-1" value={complementKeyColumn} onChange={(e) => setComplementKeyColumn(e.target.value)}>
-                      <option value="">(gerar automaticamente)</option>
-                      {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                    </select>
+                  <div className="space-y-3 mt-4">
+                    <div>
+                      <Label>Coluna chave (SKU / part number) — opcional</Label>
+                      <select className="border rounded w-full px-2 py-1 mt-2" value={complementKeyColumn} onChange={(e) => setComplementKeyColumn(e.target.value)}>
+                        <option value="">(gerar automaticamente)</option>
+                        {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                      <div className="text-sm text-muted-foreground mt-1">Se não houver coluna chave, será gerado um identificador único para cada linha (sem mesclagem).</div>
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Coluna preço 12m (opcional)</Label>
-                        <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1 w-full">
+                        <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
                           <option value="">(auto)</option>
                           {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
@@ -1126,70 +978,55 @@ export default function Settings() {
 
                       <div>
                         <Label>Coluna preço 24m (opcional)</Label>
-                        <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1 w-full">
+                        <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
                           <option value="">(auto)</option>
                           {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
                         <Label>Coluna "Com iDSecure" (opcional)</Label>
-                        <select value={complementComIdsColumn} onChange={(e) => setComplementComIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full">
+                        <select value={complementComIdsColumn} onChange={(e) => setComplementComIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
                           <option value="">(nenhuma)</option>
                           {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
-                        <div className="text-sm text-muted-foreground mt-1">Selecione a coluna que contém o preço/composição para clientes com iDSecure.</div>
                       </div>
 
                       <div>
                         <Label>Coluna "Sem iDSecure" (opcional)</Label>
-                        <select value={complementSemIdsColumn} onChange={(e) => setComplementSemIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full">
+                        <select value={complementSemIdsColumn} onChange={(e) => setComplementSemIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
                           <option value="">(nenhuma)</option>
                           {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                         </select>
-                        <div className="text-sm text-muted-foreground mt-1">Selecione a coluna que contém o preço/composição para clientes sem iDSecure.</div>
                       </div>
                     </div>
 
-                    <div className="flex justify-between items-center gap-2 mt-3">
-                      <div className="flex gap-2 items-center">
-                        <Label>Salvar este intervalo como base:</Label>
-                        <Input id="new_base_name" placeholder="Nome da base (ex: Preços Maio 2025)" />
-                        <select id="new_base_type" defaultValue="catalog" className="border rounded px-2 py-1">
-                          <option value="catalog">Base de Orçamentos (aparece no Catálogo)</option>
-                          <option value="product">Base de Produtos (pesquisa por código)</option>
-                        </select>
-                        <Button onClick={() => {
-                          const nameInput = (document.getElementById("new_base_name") as HTMLInputElement | null)?.value || "";
-                          const type = (document.getElementById("new_base_type") as HTMLSelectElement | null)?.value as any;
-                          handleSaveBase(nameInput, type);
-                        }} disabled={!complementHeaders.length || !complementSheet || loading}>
-                          Salvar Base
-                        </Button>
-                      </div>
-
-                      <div>
-                        <Button onClick={handleImportComplement} disabled={complementImporting}>
-                          {complementImporting ? "Importando..." : "Importar e Criar Novos Itens"}
-                        </Button>
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Input id="new_base_name" placeholder="Nome da base (ex: Preços Maio 2025)" />
+                      <select id="new_base_type" defaultValue="catalog" className="border rounded px-2 py-1">
+                        <option value="catalog">Salvar como: Base de Orçamentos (exibe no Catálogo)</option>
+                        <option value="product">Salvar como: Base de Produtos (procura por código)</option>
+                      </select>
+                      <Button onClick={() => {
+                        const nameInput = (document.getElementById("new_base_name") as HTMLInputElement | null)?.value || "";
+                        const type = (document.getElementById("new_base_type") as HTMLSelectElement | null)?.value as any;
+                        handleSaveBase(nameInput, type);
+                      }} disabled={!complementHeaders.length || !complementSheet || loading}>Salvar base</Button>
+                      <Button onClick={handleImportComplement} disabled={complementImporting} variant="outline">Importar e Criar Itens</Button>
                     </div>
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          {/* Bases list */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Bases de Pesquisa</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <p className="text-sm text-muted-foreground">Gerencie bases salvas (catalog = preços; product = base para busca por código).</p>
+            <Card>
+              <CardHeader>
+                <CardTitle>Bases de Pesquisa (todas)</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground mb-3">Lista de todas as bases salvas (catalog = valores; product = produtos/consulta).</p>
 
                 {bases.length === 0 ? (
                   <div className="p-4 text-sm text-muted-foreground">Nenhuma base salva ainda.</div>
@@ -1198,13 +1035,11 @@ export default function Settings() {
                     {bases.map((b) => (
                       <div key={b.id} className="flex items-center justify-between border rounded p-3">
                         <div>
-                          <div className="font-medium">{b.name}</div>
-                          <div className="text-sm text-muted-foreground">{b.type === "catalog" ? "Base de Orçamentos (exibe no Catálogo)" : "Base de Produtos (pesquisa por código)"}</div>
-                          <div className="text-xs text-muted-foreground mt-1">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleString()}</div>
+                          <div className="font-medium">{b.name} <span className="text-xs text-muted-foreground ml-2">[{b.type}]</span></div>
+                          <div className="text-sm text-muted-foreground">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleString()}</div>
                         </div>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => {
-                            // export base as JSON
                             const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
                             const url = URL.createObjectURL(blob);
                             const a = document.createElement("a");
@@ -1222,42 +1057,58 @@ export default function Settings() {
                     ))}
                   </div>
                 )}
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
 
-          {/* Seller configuration card */}
+        {/* Seller configuration card */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
             <CardHeader>
-              <CardTitle>Dados do Vendedor (preenchidos no slide 4)</CardTitle>
+              <CardTitle>Dados do Vendedor (preenchidos no slide)</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
+                <div>
                   <Label>Nome do Vendedor</Label>
                   <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
                 </div>
 
-                <div className="space-y-2">
+                <div>
                   <Label>Cargo</Label>
                   <Input value={sellerRole} onChange={(e) => setSellerRole(e.target.value)} />
                 </div>
 
-                <div className="space-y-2">
+                <div>
                   <Label>E-mail</Label>
                   <Input value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
                 </div>
 
-                <div className="space-y-2">
+                <div>
                   <Label>Telefone</Label>
                   <Input value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
                 </div>
               </div>
 
               <div className="flex justify-end gap-2 mt-4">
-                <Button onClick={() => { localStorage.setItem("seller_name", sellerName); localStorage.setItem("seller_role", sellerRole); localStorage.setItem("seller_email", sellerEmail); localStorage.setItem("seller_phone", sellerPhone); toast.success("Dados do vendedor salvos."); }}>Salvar Dados do Vendedor</Button>
-                <Button variant="outline" onClick={() => { localStorage.removeItem("seller_name"); localStorage.removeItem("seller_role"); localStorage.removeItem("seller_email"); localStorage.removeItem("seller_phone"); setSellerName(""); setSellerRole(""); setSellerEmail(""); setSellerPhone(""); toast.success("Dados do vendedor removidos."); }}>Limpar Dados</Button>
+                <Button onClick={() => { localStorage.setItem("seller_name", sellerName); localStorage.setItem("seller_role", sellerRole); localStorage.setItem("seller_email", sellerEmail); localStorage.setItem("seller_phone", sellerPhone); toast.success("Dados do vendedor salvos."); }}>Salvar</Button>
+                <Button variant="outline" onClick={() => { localStorage.removeItem("seller_name"); localStorage.removeItem("seller_role"); localStorage.removeItem("seller_email"); localStorage.removeItem("seller_phone"); setSellerName(""); setSellerRole(""); setSellerEmail(""); setSellerPhone(""); toast.success("Dados do vendedor removidos."); }}>Limpar</Button>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Ajuda rápida</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
+                <li>Planilha de Produtos: conecte a planilha que contém SKUs e descrições (usada na busca por código).</li>
+                <li>Base de Orçamentos: selecione aba + intervalo com preços (usar para salvar bases de valores que aparecem no Catálogo).</li>
+                <li>Ao salvar uma base escolha o tipo: <strong>catalog</strong> (valores) ou <strong>product</strong> (busca por código).</li>
+                <li>Você pode exportar ou remover bases a qualquer momento.</li>
+              </ul>
             </CardContent>
           </Card>
         </div>
