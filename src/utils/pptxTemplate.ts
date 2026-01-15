@@ -9,10 +9,9 @@ import JSZip from "jszip";
  * - Also replaces exact source strings mapped in localStorage under 'pptx_token_map'.
  * - RETURNS a Blob (.pptx) ready for upload/download.
  *
- * Note: This version intentionally does NOT blank entire slides when they are considered 'not needed'.
- *       Keeping slides intact prevents unexpected blank pages and layout breakage when template slide
- *       numbering or structure differs from assumptions. If you want to remove unused slides later,
- *       we can introduce a safer selective removal mechanism.
+ * Important change:
+ * - Substituições agora são aplicadas por bloco <a:txBody> (cada caixa de texto/shape),
+ *   evitando concatenar runs de diferentes shapes (isso previne páginas em branco e perda de texto).
  */
 
 export interface PptxGenerateOptions {
@@ -62,10 +61,6 @@ const MODEL_TO_SLIDE: Array<{ key: string; slide: number }> = [
   { key: "idbio", slide: 45 },
 ];
 
-/**
- * Read mapping from localStorage.
- * Expected shape: { [replacementKey]: "Exact source text in PPTX to replace" }
- */
 function loadPlainMapping(): Record<string, string> {
   try {
     const raw = localStorage.getItem("pptx_token_map");
@@ -81,80 +76,82 @@ function loadPlainMapping(): Record<string, string> {
 }
 
 /**
- * Replace tokens in slide XML content.
- * - Handles tokens split across multiple <a:t> runs by concatenating runs, applying replacements,
- *   and writing the replaced string back into the first run while clearing subsequent runs.
- * - Also applies plain-text replacements from localStorage mapping.
- *
- * Note: This approach is conservative — it performs replacements but does not alter slide structure or remove runs entirely
- * except clearing text content of subsequent runs to avoid duplicating text. This helps ensure tokens are replaced even if the PPTX split them.
+ * Apply replacements (tokens and plain-text mapped sources) to a string.
  */
-function applyReplacementsToXml(xml: string, replacements: Record<string, string | number>) {
-  const debug = (typeof window !== "undefined" && localStorage.getItem("pptx_debug") === "1") || false;
+function applyReplacementsToString(input: string, replacements: Record<string, string | number>) {
+  let out = input;
 
-  const textNodeRegex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
+  for (const [key, val] of Object.entries(replacements || {})) {
+    const token = `{{${key}}}`;
+    out = out.split(token).join(String(val ?? ""));
+  }
+
+  const plainMap = loadPlainMapping();
+  for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
+    if (!sourceText) continue;
+    const replacementValue = String(replacements[replacementKey] ?? "");
+    out = out.split(sourceText).join(replacementValue);
+  }
+
+  return out;
+}
+
+/**
+ * Process a block of XML corresponding to a <a:txBody>...</a:txBody>.
+ * Reconstruct runs inside the block, replace tokens that might be split across runs,
+ * and then write replaced text into the first run while clearing others (preserving first-run formatting).
+ */
+function processTxBodyBlock(blockContent: string, replacements: Record<string, string | number>, debug = false) {
+  const textNodeRegex = /(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi;
   const runs: string[] = [];
   let match;
-  while ((match = textNodeRegex.exec(xml)) !== null) {
-    runs.push(match[1] ?? "");
+  // Collect runs
+  while ((match = textNodeRegex.exec(blockContent)) !== null) {
+    runs.push(match[2] ?? "");
   }
 
-  const applyReplacementsToString = (input: string) => {
-    let out = input;
-
-    // tokenized placeholders like {{companyName}}
-    for (const [key, val] of Object.entries(replacements || {})) {
-      const token = `{{${key}}}`;
-      out = out.split(token).join(String(val ?? ""));
-    }
-
-    // plain-text mapped sources (if any)
-    const plainMap = loadPlainMapping();
-    for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
-      if (!sourceText) continue;
-      const replacementValue = String(replacements[replacementKey] ?? "");
-      out = out.split(sourceText).join(replacementValue);
-    }
-
-    return out;
-  };
-
-  if (runs.length > 0) {
-    const joined = runs.join("");
-    if (debug) {
-      try {
-        console.debug("[pptx-template] slide-run-joined-snippet:", joined.slice(0, 300));
-      } catch {}
-    }
-
-    const replacedJoined = applyReplacementsToString(joined);
-
-    if (joined === replacedJoined) {
-      // No changes needed
-      return xml;
-    }
-
-    if (debug) {
-      try {
-        console.debug("[pptx-template] slide-run-replaced-snippet:", replacedJoined.slice(0, 300));
-      } catch {}
-    }
-
-    // Put the replaced text into the first run and clear the remaining runs' text nodes.
-    // This preserves run-level formatting of the first run and avoids duplicating fragments.
-    let i = 0;
-    const rebuilt = xml.replace(/(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi, (_full, openTag, inner, closeTag) => {
-      i += 1;
-      if (i === 1) {
-        return openTag + replacedJoined + closeTag;
-      }
-      return openTag + "" + closeTag;
-    });
-
-    return rebuilt;
+  if (runs.length === 0) {
+    return blockContent;
   }
 
-  // Fallback: simple replacements if no runs found
+  const joined = runs.join("");
+  if (debug) {
+    try {
+      console.debug("[pptx-template] txBody-joined-snippet:", joined.slice(0, 300));
+    } catch {}
+  }
+
+  const replacedJoined = applyReplacementsToString(joined, replacements);
+
+  if (joined === replacedJoined) {
+    // nothing changed in this block
+    return blockContent;
+  }
+
+  if (debug) {
+    try {
+      console.debug("[pptx-template] txBody-replaced-snippet:", replacedJoined.slice(0, 300));
+    } catch {}
+  }
+
+  // Replace first <a:t> content with replacedJoined and clear the rest within this block only.
+  let i = 0;
+  const rebuilt = blockContent.replace(textNodeRegex, (_full, openTag, inner, closeTag) => {
+    i += 1;
+    if (i === 1) {
+      return openTag + replacedJoined + closeTag;
+    }
+    return openTag + "" + closeTag;
+  });
+
+  return rebuilt;
+}
+
+/**
+ * As a final fallback: apply simple global replacements across XML (no run consolidation),
+ * so tokens outside <a:txBody> blocks are still handled.
+ */
+function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   for (const [key, val] of Object.entries(replacements || {})) {
     const token = `{{${key}}}`;
@@ -170,8 +167,8 @@ function applyReplacementsToXml(xml: string, replacements: Record<string, string
 }
 
 /**
- * Attempt to fetch a PPTX template from candidate URLs.
- * Validate the response looks like a zip (PK bytes).
+ * Attempt to fetch a PPTX template from a list of candidate URLs.
+ * Validates that fetched content looks like a ZIP/PPTX by checking PK header bytes.
  */
 async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
   let lastErr: any = null;
@@ -239,7 +236,6 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
 
   const zip = await JSZip.loadAsync(arrayBuffer);
 
-  // Process every slide: apply token replacements but DO NOT blank slides.
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
   if (debug) {
     try {
@@ -258,9 +254,28 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
       } catch {}
     }
 
-    // Apply replacements and always keep the slide (no blanking).
-    const replaced = applyReplacementsToXml(content, opts.replacements || {});
-    zip.file(path, replaced);
+    // Process per <a:txBody> block (each text box / shape)
+    const txBodyRegex = /(<a:txBody[^>]*>)([\s\S]*?)(<\/a:txBody>)/gi;
+    let modifiedContent = content;
+    let anyTxBodyMatched = false;
+
+    modifiedContent = modifiedContent.replace(txBodyRegex, (fullMatch, openTag, body, closeTag) => {
+      anyTxBodyMatched = true;
+      const processedBody = processTxBodyBlock(body, opts.replacements || {}, debug);
+      return openTag + processedBody + closeTag;
+    });
+
+    // If no <a:txBody> matched (rare), fall back to processing whole slide content with run consolidation
+    if (!anyTxBodyMatched) {
+      // process entire slide as a single block (preserve previous behavior)
+      const processed = processTxBodyBlock(modifiedContent, opts.replacements || {}, debug);
+      modifiedContent = processed;
+    }
+
+    // Finally, apply simple global replacements to catch tokens outside txBody blocks
+    modifiedContent = applyGlobalStringReplacements(modifiedContent, opts.replacements || {});
+
+    zip.file(path, modifiedContent);
   }
 
   const newZipBlob = await zip.generateAsync({ type: "blob" });
