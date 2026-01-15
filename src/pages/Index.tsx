@@ -84,8 +84,13 @@ function normalizeImportedRow(row: any, idx: number): Product {
   };
 }
 
+/**
+ * Apply filters to products. When a search term is provided, complementary items
+ * (those created from the complementary import — detected via _complementSource or complementMeta)
+ * are prioritized and placed first in the returned array. Duplicates are preserved.
+ */
 function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
-  return products.filter((product) => {
+  const filtered = products.filter((product) => {
     if (filters.category && product.category !== filters.category) return false;
     if (filters.tipo) {
       const t = String(filters.tipo).toLowerCase();
@@ -122,6 +127,19 @@ function applyFiltersToProducts(products: Product[], filters: Partial<Record<str
 
     return product.status === "Ativo";
   });
+
+  // If user is searching, ensure complementary items appear first.
+  const searchTerm = String(filters.search ?? "").trim();
+  if (searchTerm.length > 0) {
+    filtered.sort((a, b) => {
+      const aIsComplement = !!((a as any)._complementSource || (a as any).complementMeta);
+      const bIsComplement = !!((b as any)._complementSource || (b as any).complementMeta);
+      if (aIsComplement === bIsComplement) return 0;
+      return aIsComplement ? -1 : 1;
+    });
+  }
+
+  return filtered;
 }
 
 export default function Index() {
@@ -172,10 +190,10 @@ export default function Index() {
       // Prioritize rows that were created/updated by the complement import.
       // We detect either explicit _complementPriority flag or presence of complementMeta.
       const sorted = [...rows].sort((a, b) => {
-        const pa = !!(a && (a._complementPriority || a.complementMeta));
-        const pb = !!(b && (b._complementPriority || b.complementMeta));
+        const pa = !!(a && (a._complementPriority || a.complementMeta || a._complementSource));
+        const pb = !!(b && (b._complementPriority || b.complementMeta || b._complementSource));
         if (pa === pb) return 0;
-        return pa ? -1 : 1; // true first
+        return pa ? -1 : 1; // complement entries first
       });
 
       return sorted.map((r, idx) => normalizeImportedRow(r, idx));
