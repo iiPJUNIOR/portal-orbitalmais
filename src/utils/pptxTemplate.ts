@@ -4,7 +4,7 @@ import JSZip from "jszip";
 
 /**
  * PPTX template processor.
- * - Loads template PPTX (must be present at src/templates/proposal-template.pptx).
+ * - Loads template PPTX (prefer /proposal-template.pptx from public/).
  * - Replaces tokens in the form {{token}} across all slide XMLs.
  * - Also replaces exact source strings mapped in localStorage under 'pptx_token_map'.
  * - Blanks slides that are not in the keepSlides set.
@@ -213,22 +213,75 @@ function blankSlideXml(xml: string) {
   return xml.replace(/<a:t[\s\S]*?<\/a:t>/gi, "<a:t></a:t>");
 }
 
+/**
+ * Attempt to fetch a PPTX template from a list of candidate URLs.
+ * Validates that fetched content looks like a ZIP/PPTX by checking PK header bytes.
+ * Returns an ArrayBuffer for the first valid candidate.
+ */
+async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
+  let lastErr: any = null;
+
+  for (const url of candidateUrls) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) {
+        lastErr = new Error(`Template fetch failed (${resp.status} ${resp.statusText}) for ${url}`);
+        continue;
+      }
+
+      const ct = resp.headers.get("content-type") || "";
+      const buffer = await resp.arrayBuffer();
+
+      // Validate start bytes for ZIP: 'PK' (0x50 0x4B)
+      const view = new Uint8Array(buffer.slice(0, 4));
+      const startsWithPK = view[0] === 0x50 && view[1] === 0x4b;
+
+      if (ct && (ct.includes("text/html") || ct.includes("application/xhtml+xml"))) {
+        lastErr = new Error(
+          `Fetched resource at ${url} does not look like a PPTX/ZIP (content-type: ${ct}).`
+        );
+        continue;
+      }
+
+      if (!startsWithPK) {
+        lastErr = new Error(
+          `Fetched resource at ${url} does not look like a PPTX/ZIP (startsWithPK: ${startsWithPK}).`
+        );
+        continue;
+      }
+
+      return buffer;
+    } catch (err) {
+      lastErr = err;
+      continue;
+    }
+  }
+
+  throw lastErr ?? new Error("Unable to fetch a valid PPTX template from candidates.");
+}
+
 export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promise<Blob> {
   const debug = (typeof window !== "undefined" && localStorage.getItem("pptx_debug") === "1") || false;
 
-  const templateUrl = new URL("../templates/proposal-template.pptx", import.meta.url).href;
-  if (debug) console.debug("[pptx-template] fetching template from:", templateUrl);
-
-  const resp = await fetch(templateUrl);
-  if (!resp.ok) {
-    throw new Error("Failed to fetch PPTX template at " + templateUrl);
+  // Candidate URLs: try public path first (served at root), then bundled template path
+  const candidateUrls: string[] = ["/proposal-template.pptx"];
+  try {
+    const modUrl = new URL("../templates/proposal-template.pptx", import.meta.url).href;
+    candidateUrls.push(modUrl);
+  } catch {
+    // ignore
   }
 
-  const arrayBuffer = await resp.arrayBuffer();
-  if (debug) {
-    try {
-      console.debug("[pptx-template] fetched template size:", arrayBuffer.byteLength);
-    } catch {}
+  if (debug) console.debug("[pptx-template] template candidate urls:", candidateUrls);
+
+  let arrayBuffer: ArrayBuffer;
+  try {
+    arrayBuffer = await fetchTemplateArrayBufferFromCandidates(candidateUrls);
+    if (debug) console.debug("[pptx-template] fetched valid template arrayBuffer size:", arrayBuffer.byteLength);
+  } catch (fetchErr) {
+    // If we cannot fetch any valid candidate, throw so fallback in caller can handle (or upstream catches and uses pptxgenjs fallback)
+    console.error("[pptx-template] failed to fetch a valid template from candidates:", fetchErr);
+    throw fetchErr;
   }
 
   const zip = await JSZip.loadAsync(arrayBuffer);
