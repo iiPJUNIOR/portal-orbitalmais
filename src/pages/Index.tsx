@@ -251,7 +251,6 @@ export default function Index() {
   const handleUpdatePriceModel = (id: string, model: "12m" | "24m") => {
     setQuoteItems((prev) => prev.map((it) => {
       if (it.id === id) {
-        // If user hasn't set a custom unitPrice, update to the default for the new model
         const currentUnit = it.unitPrice;
         const defaultUnit = model === "12m" ? it.product.value_12m : it.product.value_24m;
         return { ...it, priceModel: model, unitPrice: currentUnit === undefined ? defaultUnit : currentUnit };
@@ -383,16 +382,20 @@ export default function Index() {
     setStep("catalog");
   };
 
+  // counts for sidebar CTA disabled state
+  const totalItemsCount = quoteItems.reduce((s, it) => s + it.quantity, 0);
+  const totalPrice = computeTotalPrice();
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
-        <header className="mb-8 flex items-start justify-between">
+        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Plataforma de Cotação Control iD</h1>
-            <p className="text-gray-600 mt-1">Use a planilha importada para montar orçamentos rapidamente.</p>
+            <p className="text-gray-600 mt-1">Monte orçamentos rapidamente a partir da sua planilha.</p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate("/settings")}>Importar Planilha</Button>
             <Button variant="outline" onClick={reloadFromImported}>Recarregar catálogo</Button>
             <Button onClick={openHistory}>Histórico</Button>
@@ -401,29 +404,31 @@ export default function Index() {
 
         {step === "catalog" && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <div className="lg:col-span-2 space-y-6">
-              <div className="bg-white p-6 rounded-lg shadow-sm">
+            {/* Left: catalog and filters */}
+            <main className="lg:col-span-2 space-y-6">
+              <section className="bg-white p-4 rounded-md shadow-sm">
+                <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
+              </section>
+
+              <section className="bg-white p-4 rounded-md shadow-sm">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-xl font-semibold">Catálogo de Produtos</h2>
-                  <div className="text-sm text-muted-foreground">
-                    {loading ? "Carregando..." : `${products.length} produtos`}
-                  </div>
+                  <h2 className="text-lg font-medium">Catálogo de Produtos</h2>
+                  <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${products.length} produtos`}</div>
                 </div>
 
-                <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
-
-                <div className="mt-6">
+                <div>
                   {loading ? (
                     <div className="p-8 text-center text-muted-foreground">Carregando produtos...</div>
                   ) : (
                     <ProductTable products={products} onAddToQuote={handleAddToQuote} />
                   )}
                 </div>
-              </div>
-            </div>
+              </section>
+            </main>
 
-            <aside className="space-y-6">
-              <div className="sticky top-8">
+            {/* Right: sticky sidebar with quote summary and actions */}
+            <aside className="lg:col-span-1">
+              <div className="sticky top-8 space-y-4">
                 <QuoteBuilder
                   items={quoteItems}
                   onRemoveItem={handleRemoveItem}
@@ -432,9 +437,34 @@ export default function Index() {
                   onUpdateUnitPrice={handleUpdateUnitPrice}
                   onGenerateProposal={() => setStep("review")}
                 />
-                <div className="mt-4 flex gap-2">
-                  <Button onClick={openProposalForm} disabled={quoteItems.length === 0}>Gerar Proposta</Button>
-                  <Button variant="outline" onClick={() => { setQuoteItems([]); toast.success("Orçamento limpo"); }}>Limpar</Button>
+
+                <div className="bg-white p-4 rounded-md shadow-sm">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">Itens</div>
+                      <div className="font-medium">{totalItemsCount}</div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">Total</div>
+                      <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button onClick={() => setQuoteItems([])} variant="outline" className="flex-1">Limpar</Button>
+                      <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
+                        Gerar Proposta
+                      </Button>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground text-center mt-1">
+                      A proposta será gerada com os valores editados nos itens.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
+                  Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
                 </div>
               </div>
             </aside>
@@ -447,7 +477,7 @@ export default function Index() {
               <h2 className="text-2xl font-semibold">Revisar Orçamento</h2>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
-                <Button onClick={openProposalForm}>Continuar para Dados da Empresa</Button>
+                <Button onClick={openProposalForm}>Continuar</Button>
               </div>
             </div>
 
