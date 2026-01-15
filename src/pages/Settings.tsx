@@ -402,6 +402,7 @@ export default function Settings() {
   };
 
   const handleLoadHeaders = async () => {
+    // This function is generic and will use `selectedSheet` + `spreadsheetId`
     if (!accessToken || !spreadsheetId || !selectedSheet) {
       toast.error("Selecione a planilha e a aba primeiro.");
       return;
@@ -480,44 +481,6 @@ export default function Settings() {
       }
 
       setMappings(initial);
-
-      const detectPriceCol = (candidates: string[], prefer12 = true) => {
-        if (!candidates || candidates.length === 0) return "";
-        const norm = candidates.map((h) => h.toLowerCase());
-        if (prefer12) {
-          const idx12 = norm.findIndex((h) => h.includes("12") || h.includes("12m") || (h.includes("valor") && h.includes("12")));
-          if (idx12 >= 0) return candidates[idx12];
-          const idxVal = norm.findIndex((h) => h.includes("valor") || h.includes("price") || h.includes("preco"));
-          if (idxVal >= 0) return candidates[idxVal];
-        } else {
-          const idx24 = norm.findIndex((h) => h.includes("24") || h.includes("24m"));
-          if (idx24 >= 0) return candidates[idx24];
-          const idxVal = norm.findIndex((h) => h.includes("valor") || h.includes("price") || h.includes("preco"));
-          if (idxVal >= 0) return candidates[idxVal];
-        }
-        return "";
-      };
-
-      const default12 = detectPriceCol(headerStrings, true);
-      const default24 = detectPriceCol(headerStrings, false);
-      setComplementPrice12Column((prev) => prev || default12);
-      setComplementPrice24Column((prev) => prev || default24);
-
-      const lower = headerStrings.map((h) => h.toLowerCase());
-      const findByCandidates = (cands: string[]) => {
-        for (const cand of cands) {
-          const idx = lower.findIndex((h) => h.includes(cand));
-          if (idx >= 0) return headerStrings[idx];
-        }
-        return "";
-      };
-      const comCandidates = ["com idsecure", "com id secure", "com ids", "com id", "com idsecure", "comids", "com_idsecure", "com", "com ids e", "comidsvalor"];
-      const semCandidates = ["sem idsecure", "sem id secure", "sem ids", "sem id", "semid", "sem", "semidsvalor"];
-      const foundCom = findByCandidates(comCandidates);
-      const foundSem = findByCandidates(semCandidates);
-      setComplementComIdsColumn((prev) => prev || foundCom);
-      setComplementSemIdsColumn((prev) => prev || foundSem);
-
       setStage("headersLoaded");
       toast.success("Cabeçalhos carregados — ajuste mapeamentos se desejar.");
     } catch (err: any) {
@@ -749,6 +712,45 @@ export default function Settings() {
     toast.success("Base removida");
   };
 
+  // New helper: save selectedSheet as a product base (reads A1:Z1000)
+  const handleSaveProductBase = async (name: string) => {
+    if (!selectedSheet || !spreadsheetId || !accessToken) {
+      toast.error("Selecione a planilha e a aba antes de salvar a base de produtos.");
+      return;
+    }
+    if (!name || name.trim() === "") {
+      toast.error("Informe um nome para a base de produtos.");
+      return;
+    }
+    setLoading(true);
+    try {
+      const rangeToFetch = `${selectedSheet}!A1:Z1000`;
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, rangeToFetch);
+      const values: any[][] = res.values || [];
+      if (values.length === 0) {
+        toast.error("A aba selecionada parece estar vazia.");
+        return;
+      }
+      const headerRow = (values[0] || []).map((h: any) => String(h).trim());
+      const dataRows = values.slice(1);
+      const base: StoredBase = {
+        id: `base-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`,
+        name: name.trim(),
+        type: "product",
+        headers: headerRow,
+        rows: dataRows,
+        createdAt: new Date().toISOString(),
+      };
+      setBases((prev) => [base, ...prev]);
+      toast.success(`Base de produtos "${base.name}" salva com ${dataRows.length} linhas.`);
+    } catch (err: any) {
+      console.error("save product base failed", err);
+      toast.error("Falha ao salvar a base de produtos: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -840,6 +842,46 @@ export default function Settings() {
                       </div>
                     )}
                   </div>
+
+                  {/* New: sheet selector and header preview for the Planilha de Produtos */}
+                  {sheetTitles.length > 0 && (
+                    <div className="mt-4 border rounded p-3 bg-gray-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Label className="mb-0">Aba para base de produtos</Label>
+                        <select
+                          className="ml-2 border rounded px-2 py-1"
+                          value={selectedSheet ?? ""}
+                          onChange={(e) => setSelectedSheet(e.target.value)}
+                        >
+                          <option value="">-- selecione a aba --</option>
+                          {sheetTitles.map((s) => <option key={s} value={s}>{s}</option>)}
+                        </select>
+
+                        <Button onClick={handleLoadHeaders} disabled={!selectedSheet || loading}>Carregar cabeçalhos</Button>
+                      </div>
+
+                      {headers.length > 0 && (
+                        <div className="mt-2">
+                          <div className="text-sm text-muted-foreground mb-1">Cabeçalhos detectados:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {headers.map((h, i) => (
+                              <div key={i} className="px-2 py-1 bg-white border rounded text-xs">{h || "(vazio)"}</div>
+                            ))}
+                          </div>
+
+                          <div className="mt-3 flex items-center gap-2">
+                            <Input id="new_product_base_name" placeholder="Nome da base de produtos (ex: Produtos Mestre 2025)" />
+                            <Button onClick={() => {
+                              const name = (document.getElementById("new_product_base_name") as HTMLInputElement | null)?.value || "";
+                              handleSaveProductBase(name);
+                            }} disabled={!headers.length || !selectedSheet || loading}>
+                              Salvar como base de produtos
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
