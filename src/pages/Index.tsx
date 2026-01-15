@@ -17,6 +17,7 @@ import { formatModelLabel } from "@/lib/formatters";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
 import ConfirmModal from "@/components/ConfirmModal";
 import { QuoteBuilder } from "@/components/QuoteBuilder";
+import ProductBasesTab from "@/components/ProductBasesTab";
 
 type QuoteItem = {
   id: string;
@@ -217,7 +218,7 @@ export default function Index() {
   const prevQuoteRef = useRef<QuoteItem[] | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
 
-  const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history" | "productLookup">("catalog");
+  const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history" | "productLookup" | "productBases">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
 
@@ -676,6 +677,7 @@ export default function Index() {
 
           <div className="flex gap-2">
             <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
+            <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Base de Produtos</Button>
             <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
             <Button variant="outline" onClick={() => navigate("/settings")}>Configurações / Bases</Button>
             <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
@@ -769,6 +771,12 @@ export default function Index() {
               </aside>
             </div>
           </>
+        )}
+
+        {step === "productBases" && (
+          <div className="bg-white p-6 rounded-md shadow-sm">
+            <ProductBasesTab onBack={() => setStep("catalog")} />
+          </div>
         )}
 
         {step === "productLookup" && (
