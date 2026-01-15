@@ -14,7 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Minus } from "lucide-react";
 import { Product } from "@/types/product";
-import { formatModelLabel } from "@/lib/formatters";
+import { formatModelLabel, formatCurrencyBRL } from "@/lib/formatters";
 
 interface ProductTableProps {
   products: Product[];
@@ -78,8 +78,8 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
               <TableCell>
                 <Badge variant="secondary">{getCharacteristics(product)}</Badge>
               </TableCell>
-              <TableCell>R$ {product.value_12m.toFixed(2)}</TableCell>
-              <TableCell>R$ {product.value_24m.toFixed(2)}</TableCell>
+              <TableCell>{formatCurrencyBRL(product.value_12m)}</TableCell>
+              <TableCell>{formatCurrencyBRL(product.value_24m)}</TableCell>
               <TableCell className="text-right">
                 <div className="flex items-center justify-end space-x-2">
                   <Button

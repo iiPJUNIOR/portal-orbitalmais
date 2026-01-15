@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { calculateProposalSummary, generateProposalNumber, formatDateForProposal } from "@/services/proposalService";
 import { QuoteItem } from "@/types/quote";
+import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface ProposalSummaryProps {
   items: QuoteItem[];
@@ -102,8 +103,8 @@ export function ProposalSummary({
                         {item.priceModel === '12m' ? '12 meses' : '24 meses'}
                       </TableCell>
                       <TableCell>{item.quantity}</TableCell>
-                      <TableCell className="text-right">R$ {unitPrice.toFixed(2)}</TableCell>
-                      <TableCell className="text-right">R$ {subtotal.toFixed(2)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyBRL(unitPrice)}</TableCell>
+                      <TableCell className="text-right">{formatCurrencyBRL(subtotal)}</TableCell>
                     </TableRow>
                   );
                 })}
@@ -129,7 +130,7 @@ export function ProposalSummary({
             <Card>
               <CardContent className="p-4">
                 <div className="text-sm text-muted-foreground">Valor Total</div>
-                <div className="text-2xl font-bold">R$ {totalPrice.toFixed(2)}</div>
+                <div className="text-2xl font-bold">{formatCurrencyBRL(totalPrice)}</div>
               </CardContent>
             </Card>
           </div>

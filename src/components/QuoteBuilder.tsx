@@ -15,6 +15,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Minus } from "lucide-react";
 import { Product } from "@/types/product";
+import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface QuoteItem {
   id: string;
@@ -137,7 +138,7 @@ export function QuoteBuilder({
                         className="w-20"
                       />
                     </TableCell>
-                    <TableCell>R$ {subtotal.toFixed(2)}</TableCell>
+                    <TableCell>{formatCurrencyBRL(subtotal)}</TableCell>
                     <TableCell className="text-right">
                       <Button
                         variant="outline"
@@ -171,12 +172,12 @@ export function QuoteBuilder({
             
             <div>
               <div className="text-sm text-muted-foreground">Valor Total 12m</div>
-              <div className="text-2xl font-bold">R$ {total12m.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrencyBRL(total12m)}</div>
             </div>
             
             <div>
               <div className="text-sm text-muted-foreground">Valor Total 24m</div>
-              <div className="text-2xl font-bold">R$ {total24m.toFixed(2)}</div>
+              <div className="text-2xl font-bold">{formatCurrencyBRL(total24m)}</div>
             </div>
             
             <div className="flex items-end justify-end">

@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Quote, QuoteItem } from "@/types/quote";
+import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface QuoteDetailsProps {
   quote: Quote;
@@ -76,7 +77,7 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate }: QuoteDetail
                 <p><strong>Data:</strong> {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}</p>
                 <p><strong>Status:</strong> {getStatusBadge(quote.status)}</p>
                 <p><strong>Modelo de Preço:</strong> {quote.priceModel === '12m' ? '12 meses' : '24 meses'}</p>
-                <p><strong>Valor Total:</strong> R$ {quote.totalPrice.toFixed(2)}</p>
+                <p><strong>Valor Total:</strong> {formatCurrencyBRL(quote.totalPrice)}</p>
                 <p><strong>Observações:</strong> {quote.observations || 'Nenhuma'}</p>
               </div>
             </div>
@@ -101,8 +102,8 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate }: QuoteDetail
                     <TableCell>{item.sku}</TableCell>
                     <TableCell>{item.priceModel === '12m' ? '12 meses' : '24 meses'}</TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>
-                    <TableCell className="text-right">R$ {item.unitPrice.toFixed(2)}</TableCell>
-                    <TableCell className="text-right">R$ {item.subtotal.toFixed(2)}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyBRL(item.unitPrice)}</TableCell>
+                    <TableCell className="text-right">{formatCurrencyBRL(item.subtotal)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

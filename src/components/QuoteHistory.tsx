@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Search } from "lucide-react";
 import { getQuotesByCnpj } from "@/services/supabaseService";
 import { Quote } from "@/types/quote";
+import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface QuoteHistoryProps {
   onQuoteSelect: (quote: Quote) => void;
@@ -105,7 +106,7 @@ export function QuoteHistory({ onQuoteSelect }: QuoteHistoryProps) {
                   <TableCell>
                     {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}
                   </TableCell>
-                  <TableCell>R$ {quote.totalPrice.toFixed(2)}</TableCell>
+                  <TableCell>{formatCurrencyBRL(quote.totalPrice)}</TableCell>
                   <TableCell>{getStatusBadge(quote.status)}</TableCell>
                   <TableCell className="text-right">
                     <Button 
