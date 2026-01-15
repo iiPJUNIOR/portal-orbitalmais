@@ -5,6 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
 import { ProductTable } from "@/components/ProductTable";
+import PriceBaseTable from "@/components/PriceBaseTable";
 import { ProposalForm } from "@/components/ProposalForm";
 import { ProposalSummary } from "@/components/ProposalSummary";
 import { QuoteHistory } from "@/components/QuoteHistory";
@@ -19,6 +20,8 @@ import ConfirmModal from "@/components/ConfirmModal";
 import { QuoteBuilder } from "@/components/QuoteBuilder";
 import ProductBasesTab from "@/components/ProductBasesTab";
 import { Input } from "@/components/ui/input";
+
+/* --- Types & helpers (kept local for this page) --- */
 
 type QuoteItem = {
   id: string;
@@ -47,7 +50,6 @@ type StoredBase = {
   headers: string[];
   rows: any[][];
   createdAt: string;
-  // optional metadata: key column and optional price columns for catalog bases
   keyColumn?: string | null;
   comIdsColumn?: string | null;
   semIdsColumn?: string | null;
@@ -100,9 +102,7 @@ function normalizeImportedRow(row: any, idx: number): Product {
   };
 }
 
-/**
- * Helper: convert a base row (headers + row array) into a Product object (best-effort).
- */
+/* --- Product-from-base helper (keeps complementMeta) --- */
 function productFromBaseRow(headers: string[], row: any[], idx: number): Product {
   const map: Record<string, any> = {};
   headers.forEach((h, i) => {
@@ -144,11 +144,7 @@ function productFromBaseRow(headers: string[], row: any[], idx: number): Product
   };
 }
 
-/**
- * Apply filters to products. When a search term is provided, complementary items
- * (those created from the complementary import — detected via _complementSource or complementMeta)
- * are prioritized and placed first in the returned array. Duplicates are preserved.
- */
+/* --- Filtering helper --- */
 function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
   const filtered = products.filter((product) => {
     if (filters.category && product.category !== filters.category) return false;
@@ -202,12 +198,13 @@ function applyFiltersToProducts(products: Product[], filters: Partial<Record<str
   return filtered;
 }
 
+/* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
-  // Load persisted quote items from localStorage on init
+  // persisted quote items
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
     try {
       const raw = localStorage.getItem("quote_items");
@@ -215,7 +212,7 @@ export default function Index() {
       const parsed = JSON.parse(raw) as QuoteItem[];
       if (Array.isArray(parsed)) return parsed;
       return [];
-    } catch (err) {
+    } catch {
       return [];
     }
   });
@@ -228,17 +225,12 @@ export default function Index() {
   const [saving, setSaving] = useState<boolean>(false);
 
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
-
   const debounceRef = useRef<number | null>(null);
 
-  // New: which subtab inside the catalog section is active: 'prices' or 'products'
   const [catalogTab, setCatalogTab] = useState<"prices" | "products">("prices");
-
-  // Track latest filters used by ProductFilter so we can compute counts for both tabs
   const [currentFilters, setCurrentFilters] = useState<Partial<Record<string, any>> | undefined>(undefined);
   const [productBasesCount, setProductBasesCount] = useState<number>(0);
 
-  // Persist quoteItems to localStorage on change
   useEffect(() => {
     try {
       localStorage.setItem("quote_items", JSON.stringify(quoteItems));
@@ -247,7 +239,6 @@ export default function Index() {
     }
   }, [quoteItems]);
 
-  // Load stored bases once
   const [bases, setBases] = useState<StoredBase[]>(() => {
     try {
       const raw = localStorage.getItem("product_bases");
@@ -266,11 +257,10 @@ export default function Index() {
     }
   }, [bases]);
 
-  // Helper: collect all products for Catalog from 'catalog' bases and legacy importedProducts
+  // Build catalog products from saved 'catalog' bases and legacy importedProducts
   const getCatalogProductsFromBases = (): Product[] => {
     const out: Product[] = [];
 
-    // first, legacy importedProducts (keep backwards compatibility)
     try {
       const raw = localStorage.getItem("importedProducts");
       if (raw) {
@@ -279,21 +269,18 @@ export default function Index() {
           parsed.forEach((p, idx) => {
             try {
               out.push(normalizeImportedRow(p, idx));
-            } catch {
-              // ignore individual failures
-            }
+            } catch {}
           });
         }
       }
     } catch {}
 
-    // then, bases of type 'catalog'
     bases.filter(b => b.type === "catalog").forEach((b) => {
       b.rows.forEach((r, idx) => {
         try {
           const prod = productFromBaseRow(b.headers, r, idx);
 
-          // Attach complement metadata (map of header -> raw cell value)
+          // Attach complement metadata exactly as headers -> raw cell (preserve header text)
           const complementMeta: Record<string, any> = {};
           b.headers.forEach((h, i) => {
             complementMeta[h] = r[i];
@@ -307,15 +294,14 @@ export default function Index() {
           (prod as any)._baseComIdsColumn = b.comIdsColumn ?? null;
           (prod as any)._baseSemIdsColumn = b.semIdsColumn ?? null;
 
-          // If the base specified columns for 'com' and 'sem' iDSecure prices, extract them
+          // If the base specified columns for 'com' and 'sem' iDSecure prices, extract them as numeric hints
           if (b.comIdsColumn) {
             const i = b.headers.indexOf(b.comIdsColumn);
             if (i >= 0) {
-              const raw = r[i];
-              const parsed = parseSpreadsheetNumber(raw);
+              const rawVal = r[i];
+              const parsed = parseSpreadsheetNumber(rawVal);
               if (parsed > 0) {
                 (prod as any).price_com_iDSecure = parsed;
-                // if product has no explicit monthly values, use parsed as value_12m
                 if (!prod.value_12m || prod.value_12m === 0) prod.value_12m = parsed;
               }
             }
@@ -324,8 +310,8 @@ export default function Index() {
           if (b.semIdsColumn) {
             const i = b.headers.indexOf(b.semIdsColumn);
             if (i >= 0) {
-              const raw = r[i];
-              const parsed = parseSpreadsheetNumber(raw);
+              const rawVal = r[i];
+              const parsed = parseSpreadsheetNumber(rawVal);
               if (parsed > 0) {
                 (prod as any).price_sem_iDSecure = parsed;
                 if (!prod.value_24m || prod.value_24m === 0) prod.value_24m = parsed;
@@ -333,7 +319,7 @@ export default function Index() {
             }
           }
 
-          // If the base included a keyColumn, try to set SKU/part_number accordingly (helps matching)
+          // If keyColumn provided, map sku/part_number
           if (b.keyColumn) {
             const i = b.headers.indexOf(b.keyColumn);
             if (i >= 0) {
@@ -347,16 +333,13 @@ export default function Index() {
           }
 
           out.push(prod);
-        } catch {
-          // ignore
-        }
+        } catch {}
       });
     });
 
     return out;
   };
 
-  // Helper: collect all products from product-type bases (for the "Base de Produtos" subtab)
   const getProductsFromProductBases = (): Product[] => {
     const out: Product[] = [];
     bases.filter(b => b.type === "product").forEach((b) => {
@@ -366,15 +349,12 @@ export default function Index() {
           (prod as any)._baseId = b.id;
           (prod as any)._baseName = b.name;
           out.push(prod);
-        } catch {
-          // ignore
-        }
+        } catch {}
       });
     });
     return out;
   };
 
-  // Recompute productBasesCount whenever bases or currentFilters change
   useEffect(() => {
     try {
       const all = getProductsFromProductBases();
@@ -385,7 +365,6 @@ export default function Index() {
     } catch {
       setProductBasesCount(0);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bases, currentFilters]);
 
   const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
@@ -421,13 +400,11 @@ export default function Index() {
     };
   }, []);
 
-  // Ensure we load products on mount and whenever bases change (so the prices tab is populated)
   useEffect(() => {
     loadProducts();
   }, [loadProducts, bases]);
 
   const debouncedLoad = (filters?: any, delay = 250) => {
-    // track filters used for counting across both subtabs
     setCurrentFilters(filters);
 
     if (debounceRef.current) {
@@ -438,7 +415,6 @@ export default function Index() {
     const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
     const imported = getCatalogProductsFromBases();
 
-    // If no filters/search: show full catalog (if available) instead of clearing it
     if (!search && !otherFiltersExist) {
       if (imported.length === 0) {
         setProducts([]);
@@ -476,14 +452,12 @@ export default function Index() {
     toast.success("Catálogo recarregado a partir das bases");
   };
 
-  // Accept optional unitPrice so clicks on Com/Sem iDSecure can pass the chosen price
   const handleAddToQuote = (product: Product, quantity: number, unitPrice?: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
     const defaultUnit = product.value_12m;
     const chosenUnit = unitPrice ?? defaultUnit;
 
     if (existing) {
-      // Move updated/existing item to top by reordering array and update unitPrice if provided
       setQuoteItems((prev) =>
         [
           { ...existing, quantity: existing.quantity + quantity, unitPrice: unitPrice ?? existing.unitPrice },
@@ -492,17 +466,13 @@ export default function Index() {
       );
     } else {
       const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: chosenUnit };
-      // new items appear on top
       setQuoteItems((prev) => [newItem, ...prev]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
   };
 
-  // When adding from a product base row, try to find price from catalog bases
-  // Now accepts a quantity parameter (defaults to 1)
   const handleAddFromLookupRow = (headers: string[], row: any[], quantity = 1) => {
     const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
-    // try to find a matching price in catalog bases by SKU/part_number
     const skuCandidates = [prod.sku, prod.part_number].filter(Boolean).map(String);
     let foundPrice: number | undefined = undefined;
 
@@ -510,7 +480,6 @@ export default function Index() {
     for (const candidate of skuCandidates) {
       const found = catalogProducts.find(p => String(p.sku) === candidate || String(p.part_number) === candidate);
       if (found) {
-        // prefer 12m
         foundPrice = found.value_12m || found.value_24m;
         break;
       }
@@ -542,33 +511,22 @@ export default function Index() {
     setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, unitPrice: Number(isNaN(unitPrice) ? 0 : unitPrice) } : it)));
   };
 
-  const handleRequestClear = () => {
-    setConfirmClearOpen(true);
-  };
+  const handleRequestClear = () => setConfirmClearOpen(true);
 
   const handleConfirmClear = () => {
-    // Save previous items for undo
     prevQuoteRef.current = quoteItems.length > 0 ? [...quoteItems] : null;
-
     setQuoteItems([]);
-    try {
-      localStorage.removeItem("quote_items");
-    } catch {}
-
+    try { localStorage.removeItem("quote_items"); } catch {}
     setConfirmClearOpen(false);
 
-    // Show toast with undo action (Sonner)
     toast("Orçamento limpo", {
       action: {
         label: "Desfazer",
         onClick: () => {
           if (prevQuoteRef.current) {
             setQuoteItems(prevQuoteRef.current);
-            try {
-              localStorage.setItem("quote_items", JSON.stringify(prevQuoteRef.current));
-            } catch {}
+            try { localStorage.setItem("quote_items", JSON.stringify(prevQuoteRef.current)); } catch {}
             prevQuoteRef.current = null;
-            // clear any pending timeout
             if (undoTimeoutRef.current) {
               window.clearTimeout(undoTimeoutRef.current);
               undoTimeoutRef.current = null;
@@ -579,10 +537,8 @@ export default function Index() {
           }
         },
       },
-      // leave default duration; user can click action to restore
     });
 
-    // Invalidate stored prev after 10 seconds to avoid memory retention
     if (undoTimeoutRef.current) {
       window.clearTimeout(undoTimeoutRef.current);
       undoTimeoutRef.current = null;
@@ -593,9 +549,7 @@ export default function Index() {
     }, 10000) as unknown as number;
   };
 
-  const handleCancelClear = () => {
-    setConfirmClearOpen(false);
-  };
+  const handleCancelClear = () => setConfirmClearOpen(false);
 
   const openProposalForm = () => {
     if (quoteItems.length === 0) {
@@ -610,16 +564,12 @@ export default function Index() {
     setStep("summary");
   };
 
-  const onSummaryBack = () => {
-    setStep("form");
-  };
+  const onSummaryBack = () => setStep("form");
 
-  const computeTotalPrice = () => {
-    return quoteItems.reduce((sum, item) => {
-      const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
-      return sum + unit * item.quantity;
-    }, 0);
-  };
+  const computeTotalPrice = () => quoteItems.reduce((sum, item) => {
+    const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
+    return sum + unit * item.quantity;
+  }, 0);
 
   const onConfirmAndGenerate = async () => {
     if (!proposalData) return;
@@ -628,15 +578,10 @@ export default function Index() {
 
     const loadToastId = toast.loading("Gerando proposta...");
     try {
-      const proposalPayload = {
-        ...proposalData,
-        items: quoteItems,
-        proposalNumber,
-      } as any;
-
+      const proposalPayload = { ...proposalData, items: quoteItems, proposalNumber } as any;
       const blob = await generateProposalPPTX(proposalPayload);
-
       const totalPrice = computeTotalPrice();
+
       const quotePayload: any = {
         cnpj: proposalData.cnpj,
         companyName: proposalData.companyName,
@@ -670,7 +615,6 @@ export default function Index() {
         toast.dismiss(savingToastId);
         toast.success("Proposta salva com sucesso (ID: " + savedQuoteId + ")");
 
-        // Trigger download
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -681,16 +625,13 @@ export default function Index() {
         URL.revokeObjectURL(url);
 
         setQuoteItems([]);
-        try {
-          localStorage.removeItem("quote_items");
-        } catch {}
+        try { localStorage.removeItem("quote_items"); } catch {}
         setProposalData(null);
         setStep("catalog");
       } catch (err: any) {
         toast.dismiss(loadToastId);
         console.error("Erro ao salvar proposta:", err);
 
-        // Attempt to let user download local copy and inform with actionable toast
         try {
           const url = URL.createObjectURL((await generateProposalPPTX(proposalPayload)) as any);
           const a = document.createElement("a");
@@ -716,19 +657,12 @@ export default function Index() {
     }
   };
 
-  const openHistory = () => {
-    setStep("history");
-  };
+  const openHistory = () => setStep("history");
+  const backToCatalog = () => setStep("catalog");
 
-  const backToCatalog = () => {
-    setStep("catalog");
-  };
-
-  // counts for sidebar CTA disabled state
   const totalItemsCount = quoteItems.reduce((s, it) => s + it.quantity, 0);
   const totalPrice = computeTotalPrice();
 
-  // Product lookup state
   const [lookupQuery, setLookupQuery] = useState("");
   const [lookupResults, setLookupResults] = useState<Array<{ base: StoredBase; headers: string[]; row: any[] }>>([]);
   const [lookupLoading, setLookupLoading] = useState(false);
@@ -745,13 +679,11 @@ export default function Index() {
       const results: Array<{ base: StoredBase; headers: string[]; row: any[] }> = [];
       productBases.forEach((b) => {
         b.rows.forEach((r) => {
-          // try to match SKU/part columns or any cell
           const rowStr = r.map((c) => String(c ?? "").toLowerCase()).join(" ");
           const headersStr = b.headers.join(" ").toLowerCase();
           if (rowStr.includes(q) || headersStr.includes(q)) {
             results.push({ base: b, headers: b.headers, row: r });
           } else {
-            // also try specific sku-like columns
             const candidate = b.headers.find(h => /sku|part|code|id/i.test(h));
             if (candidate) {
               const idx = b.headers.indexOf(candidate);
@@ -763,7 +695,7 @@ export default function Index() {
           }
         });
       });
-      setLookupResults(results.slice(0, 200)); // cap results
+      setLookupResults(results.slice(0, 200));
     } catch (err) {
       console.error("lookup failed", err);
       toast.error("Erro na busca de código");
@@ -772,20 +704,16 @@ export default function Index() {
     }
   };
 
-  // Derived: product list for 'Base de Produtos' subtab, filtered according to currentFilters
   const productBasesProductsAll = getProductsFromProductBases();
   const productBasesProductsFiltered = currentFilters && Object.keys(currentFilters).length > 0
     ? applyFiltersToProducts(productBasesProductsAll, currentFilters)
     : productBasesProductsAll.filter(p => p.status === "Ativo");
 
-  // ----- New state for viewing a specific product base and row quantities -----
   const productBasesList = bases.filter(b => b.type === "product");
   const [selectedProductBaseId, setSelectedProductBaseId] = useState<string | null>(productBasesList[0]?.id ?? null);
-  // quantities keyed by row index for the selected base
   const [baseRowQuantities, setBaseRowQuantities] = useState<Record<number, number>>({});
 
   useEffect(() => {
-    // whenever bases list changes, ensure selected id is valid
     const list = bases.filter(b => b.type === "product");
     if (list.length === 0) {
       setSelectedProductBaseId(null);
@@ -794,21 +722,18 @@ export default function Index() {
         setSelectedProductBaseId(list[0].id);
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bases]);
 
-  useEffect(() => {
-    // reset per-row quantities when user switches base
-    setBaseRowQuantities({});
-  }, [selectedProductBaseId]);
+  useEffect(() => setBaseRowQuantities({}), [selectedProductBaseId]);
 
-  // Helper to change a quantity for a row in the currently selected base view
   const setQuantityForRow = (rowIndex: number, qty: number) => {
     setBaseRowQuantities((prev) => ({ ...prev, [rowIndex]: Math.max(1, Math.min(999, Number(isNaN(qty) ? 1 : qty))) }));
   };
 
-  // Get selected base object
   const selectedBase: StoredBase | undefined = selectedProductBaseId ? bases.find(b => b.id === selectedProductBaseId) : undefined;
+
+  // Determine first catalog base to display exactly as preview (most recent catalog)
+  const firstCatalogBase = bases.find((b) => b.type === "catalog");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -832,14 +757,12 @@ export default function Index() {
         {step === "catalog" && (
           <>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              {/* Left: catalog and filters */}
               <main className="lg:col-span-2 space-y-6">
                 <section className="bg-white p-4 rounded-md shadow-sm">
                   <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
                 </section>
 
                 <section className="bg-white p-4 rounded-md shadow-sm">
-                  {/* TAB HEADER: Preços / Base de Produtos with counts */}
                   <div className="flex items-center justify-between mb-4">
                     <div className="flex items-center gap-3">
                       <button
@@ -866,10 +789,17 @@ export default function Index() {
                     ) : (
                       <>
                         {catalogTab === "prices" ? (
-                          <ProductTable products={products} onAddToQuote={handleAddToQuote} />
+                          // If we have at least one catalog base, render it exactly as saved (preview fidelity).
+                          firstCatalogBase ? (
+                            <PriceBaseTable
+                              base={firstCatalogBase}
+                              onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
+                            />
+                          ) : (
+                            <ProductTable products={products} onAddToQuote={handleAddToQuote} />
+                          )
                         ) : (
                           <>
-                            {/* Products subtab: let user choose which product base to view */}
                             {productBasesList.length === 0 ? (
                               <div className="p-6 text-sm text-muted-foreground">
                                 Nenhuma base de produtos encontrada. Crie/importe uma base em <strong>Configurações</strong>.
@@ -891,7 +821,6 @@ export default function Index() {
                                   </select>
 
                                   <Button variant="outline" onClick={() => {
-                                    // refresh bases from localStorage (in case user changed them in Settings)
                                     try {
                                       const raw = localStorage.getItem("product_bases");
                                       if (!raw) {
@@ -909,7 +838,6 @@ export default function Index() {
                                   }}>Recarregar bases</Button>
                                 </div>
 
-                                {/* Render a table using the exact headers from the selected base */}
                                 {selectedBase ? (
                                   <div className="overflow-auto border rounded">
                                     <table className="w-full text-sm">
@@ -953,7 +881,6 @@ export default function Index() {
                                                   </Button>
 
                                                   <Button variant="outline" onClick={() => {
-                                                    // quick view/download of this row as JSON
                                                     try {
                                                       const payload = selectedBase.headers.reduce((acc: any, h, idx) => {
                                                         acc[h] = row[idx];
@@ -995,10 +922,8 @@ export default function Index() {
                 </section>
               </main>
 
-              {/* Right: sticky sidebar with compact added-items list + actions */}
               <aside className="lg:col-span-1">
                 <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
-                  {/* Compact list of added items (appears on top) */}
                   <div className="bg-white p-4 rounded-md shadow-sm">
                     <h3 className="font-semibold mb-3">Itens adicionados</h3>
                     <div className="space-y-2 max-h-56 overflow-auto">
@@ -1009,9 +934,7 @@ export default function Index() {
                           <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
                             <div className="text-left">
                               <div className="font-medium text-sm truncate">{it.product.description}</div>
-                              <div className="text-xs text-muted-foreground">
-                                Qtd: {it.quantity} · {it.product.part_number}
-                              </div>
+                              <div className="text-xs text-muted-foreground">Qtd: {it.quantity} · {it.product.part_number}</div>
                             </div>
                             <div className="flex items-center gap-2">
                               <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
@@ -1022,7 +945,6 @@ export default function Index() {
                     </div>
                   </div>
 
-                  {/* Compact actions / totals */}
                   <div className="bg-white p-4 rounded-md shadow-sm">
                     <div className="flex flex-col gap-3">
                       <div className="flex items-center justify-between">
@@ -1038,9 +960,7 @@ export default function Index() {
                       <div className="flex gap-2">
                         <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
                         <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
-                        <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
-                          Gerar Proposta
-                        </Button>
+                        <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>Gerar Proposta</Button>
                       </div>
 
                       <div className="text-xs text-muted-foreground text-center mt-1">
@@ -1078,11 +998,7 @@ export default function Index() {
             </div>
 
             <div className="flex gap-2 mb-4">
-              <Input
-                placeholder="Digite SKU / código / parte do nome..."
-                value={lookupQuery}
-                onChange={(e) => setLookupQuery(e.target.value)}
-              />
+              <Input placeholder="Digite SKU / código / parte do nome..." value={lookupQuery} onChange={(e) => setLookupQuery(e.target.value)} />
               <Button onClick={runLookup} disabled={lookupLoading || !lookupQuery}>Buscar</Button>
             </div>
 
@@ -1134,27 +1050,7 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              <QuoteBuilder
-                items={quoteItems.map(q => ({
-                  id: q.id,
-                  product: q.product,
-                  quantity: q.quantity,
-                  priceModel: q.priceModel,
-                  unitPrice: q.unitPrice,
-                }))}
-                onRemoveItem={(id) => handleRemoveItem(id)}
-                onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)}
-                onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)}
-                onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)}
-                onGenerateProposal={() => {
-                  // Continue to proposal form
-                  if (quoteItems.length === 0) {
-                    toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta");
-                    return;
-                  }
-                  setStep("form");
-                }}
-              />
+              <QuoteBuilder items={quoteItems.map(q => ({ id: q.id, product: q.product, quantity: q.quantity, priceModel: q.priceModel, unitPrice: q.unitPrice }))} onRemoveItem={(id) => handleRemoveItem(id)} onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)} onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)} onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)} onGenerateProposal={() => { if (quoteItems.length === 0) { toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta"); return; } setStep("form"); }} />
             </div>
           </div>
         )}
@@ -1172,10 +1068,7 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              <ProposalForm
-                onSubmit={(data) => onProposalSubmit(data)}
-                onCancel={() => setStep("catalog")}
-              />
+              <ProposalForm onSubmit={(data) => onProposalSubmit(data)} onCancel={() => setStep("catalog")} />
             </div>
           </div>
         )}
@@ -1190,16 +1083,9 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              <ProposalSummary
-                items={quoteItems}
-                proposalData={proposalData}
-                onConfirm={onConfirmAndGenerate}
-                onBack={onSummaryBack}
-              />
+              <ProposalSummary items={quoteItems} proposalData={proposalData} onConfirm={onConfirmAndGenerate} onBack={onSummaryBack} />
               <div className="mt-4">
-                <Button onClick={onConfirmAndGenerate} disabled={saving}>
-                  {saving ? "Gerando e Salvando..." : "Confirmar e Salvar"}
-                </Button>
+                <Button onClick={onConfirmAndGenerate} disabled={saving}>{saving ? "Gerando e Salvando..." : "Confirmar e Salvar"}</Button>
               </div>
             </div>
           </div>
@@ -1219,18 +1105,8 @@ export default function Index() {
         )}
       </div>
 
-      {/* Confirmation modal */}
-      <ConfirmModal
-        open={confirmClearOpen}
-        title="Limpar orçamento?"
-        description="Isso removerá todos os itens do orçamento atual. Deseja continuar?"
-        confirmLabel="Sim, limpar"
-        cancelLabel="Cancelar"
-        onConfirm={handleConfirmClear}
-        onCancel={handleCancelClear}
-      />
+      <ConfirmModal open={confirmClearOpen} title="Limpar orçamento?" description="Isso removerá todos os itens do orçamento atual. Deseja continuar?" confirmLabel="Sim, limpar" cancelLabel="Cancelar" onConfirm={handleConfirmClear} onCancel={handleCancelClear} />
 
-      {/* Sticky bottom action bar when there are items (mobile-friendly) */}
       {quoteItems.length > 0 && (
         <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none">
           <div className="w-full max-w-3xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
