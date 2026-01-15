@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import * as googleClient from "@/integrations/google/client";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
 import { fetchBases, saveBase, type StoredBase } from "@/services/productBaseService";
+import { getUserSettings, saveUserSettings } from "@/services/settingsService";
 
 const ENV_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const LOCAL_STORAGE_KEY = "google_client_id_override";
@@ -76,11 +77,11 @@ export default function Settings() {
   const effectiveClientId = ENV_GOOGLE_CLIENT_ID || (overrideClientId || undefined);
   const isGoogleConfigured = !!effectiveClientId;
 
-  // Seller fields (persisted to localStorage)
-  const [sellerName, setSellerName] = useState<string>(() => localStorage.getItem("seller_name") || "");
-  const [sellerRole, setSellerRole] = useState<string>(() => localStorage.getItem("seller_role") || "");
-  const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
-  const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
+  // Seller fields (persisted to Supabase now; localStorage kept as fallback)
+  const [sellerName, setSellerName] = useState<string>("");
+  const [sellerRole, setSellerRole] = useState<string>("");
+  const [sellerEmail, setSellerEmail] = useState<string>("");
+  const [sellerPhone, setSellerPhone] = useState<string>("");
 
   // --- Complement import states (used for catalog/values bases) ---
   const [complementSheet, setComplementSheet] = useState<string | null>(() => {
@@ -145,7 +146,52 @@ export default function Settings() {
     })();
   }, []);
 
-  // Persist small preferences used by UI
+  // Load user settings from Supabase on mount and populate fields (fallback to localStorage)
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      try {
+        const s = await getUserSettings();
+        if (s) {
+          setSellerName(s.seller_name ?? (localStorage.getItem("seller_name") || ""));
+          setSellerRole(s.seller_role ?? (localStorage.getItem("seller_role") || ""));
+          setSellerEmail(s.seller_email ?? (localStorage.getItem("seller_email") || ""));
+          setSellerPhone(s.seller_phone ?? (localStorage.getItem("seller_phone") || ""));
+
+          setSpreadsheetLink(s.spreadsheet_link ?? (localStorage.getItem("spreadsheet_link") || ""));
+          setComplementRange(s.complement_range ?? (localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000"));
+          setComplementSheet(s.complement_sheet ?? (localStorage.getItem(LS_COMPLEMENT_SHEET) || null));
+          setComplementKeyColumn(s.complement_key_column ?? (localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || ""));
+          setComplementComIdsColumn(s.complement_com_ids_column ?? (localStorage.getItem(LS_COMPLEMENT_COM_IDS) || ""));
+          setComplementSemIdsColumn(s.complement_sem_ids_column ?? (localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || ""));
+        } else {
+          // No saved settings in DB — fall back to localStorage values if present
+          setSellerName(localStorage.getItem("seller_name") || "");
+          setSellerRole(localStorage.getItem("seller_role") || "");
+          setSellerEmail(localStorage.getItem("seller_email") || "");
+          setSellerPhone(localStorage.getItem("seller_phone") || "");
+          setSpreadsheetLink(localStorage.getItem("spreadsheet_link") || "");
+          setComplementRange(localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000");
+          setComplementSheet(localStorage.getItem(LS_COMPLEMENT_SHEET) || null);
+          setComplementKeyColumn(localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || "");
+          setComplementComIdsColumn(localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "");
+          setComplementSemIdsColumn(localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || "");
+        }
+      } catch (err) {
+        console.warn("Failed to load user settings from Supabase:", err);
+        // fallback to localStorage if DB fetch fails
+        setSellerName(localStorage.getItem("seller_name") || "");
+        setSellerRole(localStorage.getItem("seller_role") || "");
+        setSellerEmail(localStorage.getItem("seller_email") || "");
+        setSellerPhone(localStorage.getItem("seller_phone") || "");
+      } finally {
+        setLoading(false);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist small preferences used by UI locally as well (keeps old behavior as backup)
   useEffect(() => {
     try {
       localStorage.setItem(LS_COMPLEMENT_RANGE, complementRange || "");
@@ -167,7 +213,7 @@ export default function Settings() {
       localStorage.setItem("seller_email", sellerEmail);
       localStorage.setItem("seller_phone", sellerPhone);
     } catch (e) {
-      console.warn("Failed to auto-save seller fields", e);
+      console.warn("Failed to auto-save seller fields to localStorage", e);
     }
   }, [sellerName, sellerRole, sellerEmail, sellerPhone]);
 
@@ -647,6 +693,53 @@ export default function Settings() {
     }
   };
 
+  // Save seller / UI settings to Supabase (and keep localStorage fallback)
+  const handleSaveSellerSettings = async () => {
+    setLoading(true);
+    try {
+      await saveUserSettings({
+        seller_name: sellerName || null,
+        seller_role: sellerRole || null,
+        seller_email: sellerEmail || null,
+        seller_phone: sellerPhone || null,
+        spreadsheet_link: spreadsheetLink || null,
+        complement_range: complementRange || null,
+        complement_sheet: complementSheet || null,
+        complement_key_column: complementKeyColumn || null,
+        complement_com_ids_column: complementComIdsColumn || null,
+        complement_sem_ids_column: complementSemIdsColumn || null,
+      });
+      toast.success("Configurações salvas no servidor.");
+    } catch (err) {
+      console.error("Failed to save user settings:", err);
+      toast.error("Falha ao salvar configurações no servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClearSellerSettings = async () => {
+    setLoading(true);
+    try {
+      await saveUserSettings({
+        seller_name: "",
+        seller_role: "",
+        seller_email: "",
+        seller_phone: "",
+      });
+      setSellerName("");
+      setSellerRole("");
+      setSellerEmail("");
+      setSellerPhone("");
+      toast.success("Dados do vendedor removidos do servidor.");
+    } catch (err) {
+      console.error("Failed to clear user settings:", err);
+      toast.error("Falha ao limpar configurações no servidor.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -662,7 +755,7 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* UI omitted for brevity — keep the rest unchanged (we only changed bases persistence) */}
+        {/* UI omitted for brevity — keep the rest unchanged (we only changed bases & settings persistence) */}
         <div className="mb-6">
           <Card>
             <CardHeader>
@@ -697,6 +790,57 @@ export default function Settings() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Seller card (UI preserved) */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Dados do Vendedor (preenchidos no slide)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome do Vendedor</Label>
+                  <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
+                </div>
+
+                <div>
+                  <Label>Cargo</Label>
+                  <Input value={sellerRole} onChange={(e) => setSellerRole(e.target.value)} />
+                </div>
+
+                <div>
+                  <Label>E-mail</Label>
+                  <Input value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
+                </div>
+
+                <div>
+                  <Label>Telefone</Label>
+                  <Input value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 mt-4">
+                <Button onClick={handleSaveSellerSettings} disabled={loading}>{loading ? "Salvando..." : "Salvar"}</Button>
+                <Button variant="outline" onClick={handleClearSellerSettings}>Limpar</Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Ajuda rápida</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
+                <li>Planilha de Produtos: conecte a planilha que contém SKUs e descrições (usada na busca por código).</li>
+                <li>Base de Orçamentos: selecione aba + intervalo com preços (usar para salvar bases de valores que aparecem no Catálogo).</li>
+                <li>Ao salvar uma base escolha o tipo: <strong>catalog</strong> (valores) ou <strong>product</strong> (busca por código).</li>
+                <li>Você pode exportar ou remover bases a qualquer momento.</li>
+              </ul>
             </CardContent>
           </Card>
         </div>
