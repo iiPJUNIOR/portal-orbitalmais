@@ -70,6 +70,10 @@ export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
     setBases(next);
     try {
       localStorage.setItem("product_bases", JSON.stringify(next));
+      // Notify other parts of the app that bases changed so they can reload
+      try {
+        window.dispatchEvent(new Event("product_bases_changed"));
+      } catch {}
       toast.success("Base removida");
     } catch (err) {
       console.warn("failed to persist bases after delete", err);

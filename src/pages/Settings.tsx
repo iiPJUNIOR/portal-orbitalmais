@@ -155,6 +155,10 @@ export default function Settings() {
   useEffect(() => {
     try {
       localStorage.setItem(LS_PRODUCT_BASES, JSON.stringify(bases));
+      // Notify other parts of the app that bases changed so they can reload
+      try {
+        window.dispatchEvent(new Event("product_bases_changed"));
+      } catch {}
     } catch (e) {
       console.warn("Failed to persist product_bases", e);
     }

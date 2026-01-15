@@ -404,6 +404,30 @@ export default function Index() {
     loadProducts();
   }, [loadProducts, bases]);
 
+  // Listen for external changes to product_bases (e.g. deletion/save in Settings or ProductBasesTab)
+  useEffect(() => {
+    const handler = () => {
+      try {
+        const raw = localStorage.getItem("product_bases");
+        const parsed = raw ? JSON.parse(raw) : [];
+        setBases(Array.isArray(parsed) ? parsed : []);
+        // refresh products using current filters
+        setTimeout(() => {
+          try {
+            loadProducts(currentFilters);
+          } catch {}
+        }, 0);
+      } catch (err) {
+        console.warn("Failed to reload product_bases from storage", err);
+      }
+    };
+
+    window.addEventListener("product_bases_changed", handler);
+    return () => {
+      window.removeEventListener("product_bases_changed", handler);
+    };
+  }, [loadProducts, currentFilters]);
+
   const debouncedLoad = (filters?: any, delay = 250) => {
     setCurrentFilters(filters);
 
@@ -844,7 +868,7 @@ export default function Index() {
                                       <thead className="bg-gray-50">
                                         <tr>
                                           {selectedBase.headers.map((h, hi) => (
-                                            <th key={hi} className="text-left px-2 py-2">{h || "(vazio)"}</th>
+                                            <th key={hi} className="text-left px-2 py-2 align-top">{h || "(vazio)"}</th>
                                           ))}
                                           <th className="text-left px-2 py-2">Quantidade</th>
                                           <th className="text-left px-2 py-2">Ações</th>
