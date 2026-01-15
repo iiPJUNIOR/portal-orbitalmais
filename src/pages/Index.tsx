@@ -226,6 +226,13 @@ export default function Index() {
 
   const debounceRef = useRef<number | null>(null);
 
+  // New: which subtab inside the catalog section is active: 'prices' or 'products'
+  const [catalogTab, setCatalogTab] = useState<"prices" | "products">("prices");
+
+  // Track latest filters used by ProductFilter so we can compute counts for both tabs
+  const [currentFilters, setCurrentFilters] = useState<Partial<Record<string, any>> | undefined>(undefined);
+  const [productBasesCount, setProductBasesCount] = useState<number>(0);
+
   // Persist quoteItems to localStorage on change
   useEffect(() => {
     try {
@@ -293,17 +300,42 @@ export default function Index() {
     return out;
   };
 
+  // Helper: collect all products from product-type bases (for the "Base de Produtos" subtab)
+  const getProductsFromProductBases = (): Product[] => {
+    const out: Product[] = [];
+    bases.filter(b => b.type === "product").forEach((b) => {
+      b.rows.forEach((r, idx) => {
+        try {
+          const prod = productFromBaseRow(b.headers, r, idx);
+          (prod as any)._baseId = b.id;
+          (prod as any)._baseName = b.name;
+          out.push(prod);
+        } catch {
+          // ignore
+        }
+      });
+    });
+    return out;
+  };
+
+  // Recompute productBasesCount whenever bases or currentFilters change
+  useEffect(() => {
+    try {
+      const all = getProductsFromProductBases();
+      const filtered = currentFilters && Object.keys(currentFilters).length > 0
+        ? applyFiltersToProducts(all, currentFilters)
+        : all.filter(p => p.status === "Ativo");
+      setProductBasesCount(filtered.length);
+    } catch {
+      setProductBasesCount(0);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bases, currentFilters]);
+
   const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
     setLoading(true);
     try {
       const imported = getCatalogProductsFromBases();
-
-      if (imported.length === 0) {
-        setProducts([]);
-        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
-        setLoading(false);
-        return;
-      }
 
       if (filters && Object.keys(filters).length > 0) {
         const filtered = applyFiltersToProducts(imported, filters);
@@ -334,6 +366,9 @@ export default function Index() {
   }, []);
 
   const debouncedLoad = (filters?: any, delay = 250) => {
+    // track filters used for counting across both subtabs
+    setCurrentFilters(filters);
+
     if (debounceRef.current) {
       window.clearTimeout(debounceRef.current);
     }
@@ -341,6 +376,7 @@ export default function Index() {
     const search = (filters?.search ?? "").toString().trim();
     const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
     if (!search && !otherFiltersExist) {
+      // no meaningful filters/search — clear displayed catalog results but still compute counts above
       setProducts([]);
       setLoading(false);
       return;
@@ -666,6 +702,12 @@ export default function Index() {
     }
   };
 
+  // Derived: product list for 'Base de Produtos' subtab, filtered according to currentFilters
+  const productBasesProductsAll = getProductsFromProductBases();
+  const productBasesProductsFiltered = currentFilters && Object.keys(currentFilters).length > 0
+    ? applyFiltersToProducts(productBasesProductsAll, currentFilters)
+    : productBasesProductsAll.filter(p => p.status === "Ativo");
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -695,16 +737,39 @@ export default function Index() {
                 </section>
 
                 <section className="bg-white p-4 rounded-md shadow-sm">
+                  {/* TAB HEADER: Preços / Base de Produtos with counts */}
                   <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-lg font-medium">Catálogo de Produtos</h2>
-                    <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${products.length} produtos`}</div>
+                    <div className="flex items-center gap-3">
+                      <button
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${catalogTab === "prices" ? "bg-gray-100" : "hover:bg-gray-50"}`}
+                        onClick={() => setCatalogTab("prices")}
+                      >
+                        Preços {loading ? "" : <span className="text-muted-foreground text-sm">({products.length})</span>}
+                      </button>
+
+                      <button
+                        className={`px-3 py-1 rounded-md text-sm font-medium ${catalogTab === "products" ? "bg-gray-100" : "hover:bg-gray-50"}`}
+                        onClick={() => setCatalogTab("products")}
+                      >
+                        Base de Produtos {<span className="text-muted-foreground text-sm">({productBasesCount})</span>}
+                      </button>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${catalogTab === "prices" ? `${products.length} produtos` : `${productBasesProductsFiltered.length} produtos`}`}</div>
                   </div>
 
                   <div>
-                    {loading ? (
+                    {loading && catalogTab === "prices" ? (
                       <div className="p-8 text-center text-muted-foreground">Carregando produtos...</div>
                     ) : (
-                      <ProductTable products={products} onAddToQuote={handleAddToQuote} />
+                      <>
+                        {catalogTab === "prices" ? (
+                          <ProductTable products={products} onAddToQuote={handleAddToQuote} />
+                        ) : (
+                          // Show products coming from "product" bases
+                          <ProductTable products={productBasesProductsFiltered} onAddToQuote={handleAddToQuote} />
+                        )}
+                      </>
                     )}
                   </div>
                 </section>
