@@ -796,7 +796,9 @@ export default function Settings() {
               complementMeta: headerRow.reduce((acc: any, h, idx) => {
                 acc[normalizeHeaderToKey(h)] = row[idx] ?? "";
                 return acc;
-              }, {} as Record<string, any>)
+              }, {} as Record<string, any>),
+              // mark as complement-sourced so UI can prioritize it
+              _complementPriority: true
             };
 
             imported.push(newProd);
@@ -840,7 +842,30 @@ export default function Settings() {
               }
             }
           }
-          if (anyChanged) updatedCount++;
+          // If price columns exist in complement, ensure they are applied to product fields
+          // (so product shows the complementary price)
+          const idxPrice12 = complementPrice12Column ? headerRow.findIndex(h => h === complementPrice12Column) : -1;
+          if (idxPrice12 >= 0) {
+            const parsed = parseSpreadsheetNumber(row[idxPrice12]);
+            if (parsed > 0 && prod.value_12m !== parsed) {
+              prod.value_12m = parsed;
+              anyChanged = true;
+            }
+          }
+          const idxPrice24 = complementPrice24Column ? headerRow.findIndex(h => h === complementPrice24Column) : -1;
+          if (idxPrice24 >= 0) {
+            const parsed = parseSpreadsheetNumber(row[idxPrice24]);
+            if (parsed > 0 && prod.value_24m !== parsed) {
+              prod.value_24m = parsed;
+              anyChanged = true;
+            }
+          }
+
+          if (anyChanged) {
+            // mark as complement-enriched so UI knows to prioritize it
+            prod._complementPriority = true;
+            updatedCount++;
+          }
         }
       }
 

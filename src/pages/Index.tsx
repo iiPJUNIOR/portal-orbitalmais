@@ -61,8 +61,8 @@ function normalizeImportedRow(row: any, idx: number): Product {
     return parseSpreadsheetNumber(v);
   };
 
-  const value_12m = parseNumber(row.value_12m || row["value_12m"] || row["Valor12m"] || row["12m"]);
-  const value_24m = parseNumber(row.value_24m || row["value_24m"] || row["Valor24m"] || row["24m"]);
+  const value_12m = parseNumber(row.value_12m || row["value_12m"] || row["Valor12m"] || row["12m"] || row.value_12m);
+  const value_24m = parseNumber(row.value_24m || row["value_24m"] || row["Valor24m"] || row["24m"] || row.value_24m);
   const part_number = row.part_number || row["Part Number"] || sku;
   const status = (row.status || row.Status || "Ativo") as "Ativo" | "Inativo";
 
@@ -169,7 +169,17 @@ export default function Index() {
       if (!raw) return [];
       const rows = JSON.parse(raw) as any[];
       if (!Array.isArray(rows) || rows.length === 0) return [];
-      return rows.map((r, idx) => normalizeImportedRow(r, idx));
+
+      // Prioritize rows that were created/updated by the complement import.
+      // We detect either explicit _complementPriority flag or presence of complementMeta.
+      const sorted = [...rows].sort((a, b) => {
+        const pa = !!(a && (a._complementPriority || a.complementMeta));
+        const pb = !!(b && (b._complementPriority || b.complementMeta));
+        if (pa === pb) return 0;
+        return pa ? -1 : 1; // true first
+      });
+
+      return sorted.map((r, idx) => normalizeImportedRow(r, idx));
     } catch (err) {
       console.warn("Failed to parse importedProducts", err);
       return [];
