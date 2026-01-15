@@ -121,8 +121,9 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-2">
+      {/* Single responsive row: Search (wider) + Category + Model + Facial + Proximity */}
+      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="space-y-2 md:col-span-2">
           <Label htmlFor="search">Buscar</Label>
           <div className="relative">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -153,7 +154,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             </SelectContent>
           </Select>
         </div>
-        
+
         <div className="space-y-2">
           <Label htmlFor="model">Modelo</Label>
           <Select 
@@ -171,10 +172,46 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             </SelectContent>
           </Select>
         </div>
-        
+
+        <div className="space-y-2">
+          <Label htmlFor="facial">Facial</Label>
+          <Select 
+            value={filters.facial ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("facial", value === "ALL" ? undefined : value)}
+          >
+            <SelectTrigger id="facial">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas</SelectItem>
+              <SelectItem value="1">1</SelectItem>
+              <SelectItem value="2">2</SelectItem>
+              <SelectItem value="Lite">Lite</SelectItem>
+              <SelectItem value="Max">Max</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="proximity">Proximidade</Label>
+          <Select 
+            value={filters.proximity ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("proximity", value === "ALL" ? undefined : value)}
+          >
+            <SelectTrigger id="proximity">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas</SelectItem>
+              <SelectItem value="ASK">ASK</SelectItem>
+              <SelectItem value="Mifare">Mifare</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
       
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      {/* Secondary row: checkboxes (Biometria, Urna, QR) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="flex items-center space-x-2">
           <Checkbox 
             id="biometrics" 
@@ -206,42 +243,6 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             }
           />
           <Label htmlFor="qr">QR Code</Label>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="facial">Facial</Label>
-          <Select 
-            value={filters.facial ?? "ALL"} 
-            onValueChange={(value) => handleInputChange("facial", value === "ALL" ? undefined : value)}
-          >
-            <SelectTrigger id="facial">
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas</SelectItem>
-              <SelectItem value="1">1</SelectItem>
-              <SelectItem value="2">2</SelectItem>
-              <SelectItem value="Lite">Lite</SelectItem>
-              <SelectItem value="Max">Max</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label htmlFor="proximity">Proximidade</Label>
-          <Select 
-            value={filters.proximity ?? "ALL"} 
-            onValueChange={(value) => handleInputChange("proximity", value === "ALL" ? undefined : value)}
-          >
-            <SelectTrigger id="proximity">
-              <SelectValue placeholder="Selecione" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Todas</SelectItem>
-              <SelectItem value="ASK">ASK</SelectItem>
-              <SelectItem value="Mifare">Mifare</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
       
