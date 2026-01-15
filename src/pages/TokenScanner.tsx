@@ -58,18 +58,22 @@ export default function TokenScannerPage() {
 
   const autoMappedRef = useRef(false);
 
+  const runScan = async () => {
+    setLoading(true);
+    try {
+      const texts = await scanTemplateTexts();
+      setFound(texts);
+    } catch (err: any) {
+      console.error("scan failed", err);
+      toast.error("Falha ao escanear template: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     (async () => {
-      setLoading(true);
-      try {
-        const texts = await scanTemplateTexts();
-        setFound(texts);
-      } catch (err: any) {
-        console.error("scan failed", err);
-        toast.error("Falha ao escanear template: " + (err?.message || err));
-      } finally {
-        setLoading(false);
-      }
+      await runScan();
     })();
   }, []);
 
@@ -265,6 +269,23 @@ export default function TokenScannerPage() {
     }
   };
 
+  const handleClearScannerCache = async () => {
+    try {
+      // Remove the saved mapping used by the scanner
+      localStorage.removeItem("pptx_token_map");
+      setMapping({});
+      autoMappedRef.current = false;
+      setFound([]);
+      toast.success("Cache do scanner limpo (pptx_token_map removido). Reescaneando...");
+
+      // Re-run scan to refresh the page view
+      await runScan();
+    } catch (err) {
+      console.error("failed to clear scanner cache", err);
+      toast.error("Falha ao limpar cache do scanner");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -272,6 +293,16 @@ export default function TokenScannerPage() {
           <div>
             <h1 className="text-2xl font-bold">Scanner de Tokens do Template</h1>
             <p className="text-sm text-muted-foreground">Mapeie textos do template para os campos que o gerador usa e execute uma geração de teste.</p>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={() => { setFound([]); autoMappedRef.current = false; runScan(); }}>
+              Reescanear template
+            </Button>
+
+            <Button variant="outline" onClick={handleClearScannerCache}>
+              Limpar cache do scanner
+            </Button>
           </div>
         </div>
 
