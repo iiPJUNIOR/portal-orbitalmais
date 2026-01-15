@@ -44,9 +44,6 @@ export default function Settings() {
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [stage, setStage] = useState<"idle" | "sheetsLoaded" | "headersLoaded" | "mapped">("idle");
   const [range, setRange] = useState<string>("A1:Z1000");
-  const [apiErrorInfo, setApiErrorInfo] = useState<{ activationUrl?: string; serviceTitle?: string; message?: string } | null>(null);
-
-  // runtime override for client id (so devs can paste an id without env var)
   const [overrideClientId, setOverrideClientId] = useState<string>(() => {
     try {
       return (localStorage.getItem(LOCAL_STORAGE_KEY) || "");
@@ -58,13 +55,17 @@ export default function Settings() {
   const effectiveClientId = ENV_GOOGLE_CLIENT_ID || (overrideClientId || undefined);
   const isGoogleConfigured = !!effectiveClientId;
 
+  // Seller fields (persisted to localStorage)
+  const [sellerName, setSellerName] = useState<string>(() => localStorage.getItem("seller_name") || "");
+  const [sellerRole, setSellerRole] = useState<string>(() => localStorage.getItem("seller_role") || "");
+  const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
+  const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
+
   useEffect(() => {
-    // Try to restore token and files from localStorage on mount
     const storedToken = localStorage.getItem("google_access_token");
     if (storedToken) {
       setAccessToken(storedToken);
       setConnected(true);
-      // try to list files to validate token
       (async () => {
         setLoading(true);
         try {
@@ -72,7 +73,6 @@ export default function Settings() {
           setFiles(driveFiles.map((f: any) => ({ id: f.id, name: f.name })));
         } catch (err: any) {
           console.error("Failed to restore Google session:", err);
-          // token may be invalid/expired - clear it
           localStorage.removeItem("google_access_token");
           setAccessToken(null);
           setConnected(false);
@@ -82,7 +82,6 @@ export default function Settings() {
         }
       })();
     } else {
-      // restore cached files if any (non-sensitive)
       const cached = localStorage.getItem("google_drive_files");
       if (cached) {
         try {
@@ -92,21 +91,51 @@ export default function Settings() {
     }
   }, []);
 
-  // Seller fields (persisted to localStorage)
-  const [sellerName, setSellerName] = useState<string>(() => localStorage.getItem("seller_name") || "");
-  const [sellerRole, setSellerRole] = useState<string>(() => localStorage.getItem("seller_role") || "");
-  const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
-  const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
+  // Persist mappings automatically when they change (per-spreadsheet if available, else global)
+  useEffect(() => {
+    try {
+      if (spreadsheetId) {
+        localStorage.setItem(`import_column_map_${spreadsheetId}`, JSON.stringify(mappings));
+      } else {
+        localStorage.setItem(`import_column_map`, JSON.stringify(mappings));
+      }
+    } catch (e) {
+      console.warn("Failed to persist import mapping", e);
+    }
+  }, [mappings, spreadsheetId]);
 
   function extractSpreadsheetId(input: string): string | null {
     if (!input) return null;
     const trimmed = input.trim();
-    // Match standard URL pattern /spreadsheets/d/<id>
     const match = trimmed.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
     if (match && match[1]) return match[1];
-    // If a raw id was provided (alphanumeric of reasonable length)
     const rawMatch = trimmed.match(/[a-zA-Z0-9-_]{20,}/);
     if (rawMatch) return rawMatch[0];
+    return null;
+  }
+
+  // Normalize header/field names for robust matching
+  function normalizeForMatch(s?: string) {
+    if (!s) return "";
+    return String(s)
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]/g, "")
+      .trim();
+  }
+
+  function loadSavedMappingForSpreadsheet(id?: string) {
+    try {
+      if (id) {
+        const raw = localStorage.getItem(`import_column_map_${id}`);
+        if (raw) return JSON.parse(raw);
+      }
+      const rawGlobal = localStorage.getItem("import_column_map");
+      if (rawGlobal) return JSON.parse(rawGlobal);
+    } catch (e) {
+      console.warn("Failed to load saved mapping", e);
+    }
     return null;
   }
 
@@ -117,7 +146,6 @@ export default function Settings() {
     }
 
     setLoading(true);
-    setApiErrorInfo(null);
     try {
       await googleClient.init();
       const tokenResp = await googleClient.requestAccessToken();
@@ -125,26 +153,21 @@ export default function Settings() {
         const token = tokenResp.access_token;
         setAccessToken(token);
         setConnected(true);
-        // persist token so connection survives reloads (developer note: consider more secure storage for production)
         localStorage.setItem("google_access_token", token);
 
         toast.success("Conectado ao Google com sucesso");
 
-        // load files and persist a small cache
         const driveFiles = await googleClient.listDriveSpreadsheets(token);
         const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
         setFiles(mapped);
         try {
           localStorage.setItem("google_drive_files", JSON.stringify(mapped));
-        } catch (e) {
-          // ignore storage errors
-        }
+        } catch (e) {}
       } else {
         toast.error("Não foi possível obter token");
       }
     } catch (err: any) {
       console.error(err);
-      // Show clear message to user
       toast.error("Erro ao conectar com Google: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -168,8 +191,6 @@ export default function Settings() {
     setHeaders([]);
     setMappings({});
     setStage("idle");
-    setApiErrorInfo(null);
-    // clear persisted session data
     localStorage.removeItem("google_access_token");
     localStorage.removeItem("google_drive_files");
     toast.success("Desconectado do Google");
@@ -181,16 +202,13 @@ export default function Settings() {
       return;
     }
     setLoading(true);
-    setApiErrorInfo(null);
     try {
       const driveFiles = await googleClient.listDriveSpreadsheets(accessToken);
       const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
       setFiles(mapped);
       try {
         localStorage.setItem("google_drive_files", JSON.stringify(mapped));
-      } catch (e) {
-        // ignore
-      }
+      } catch (e) {}
       toast.success("Arquivos atualizados");
     } catch (err: any) {
       console.error(err);
@@ -212,7 +230,6 @@ export default function Settings() {
     }
 
     setLoading(true);
-    setApiErrorInfo(null);
     try {
       const titles = await googleClient.getSpreadsheetSheets(accessToken, id);
       setSpreadsheetId(id);
@@ -220,32 +237,15 @@ export default function Settings() {
       setSelectedSheet(titles[0] ?? null);
       setStage("sheetsLoaded");
       toast.success(`Encontradas ${titles.length} abas`);
+
+      // If there's a saved mapping for this spreadsheet, automatically attempt to load headers and apply it.
+      const saved = loadSavedMappingForSpreadsheet(id);
+      if (saved) {
+        // Auto-load headers which will apply saved mapping when headers are available
+        await handleLoadHeaders(); // handleLoadHeaders will read saved mapping from storage
+      }
     } catch (err: any) {
       console.error("Erro ao obter abas:", err);
-      // Try to parse activation URL from error message body (some Google errors include details.metadata.activationUrl)
-      try {
-        const message = String(err?.message || "");
-        const jsonMatch = message.match(/\{[\s\S]*\}$/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          // search details array for activationUrl
-          const details = parsed?.error?.details;
-          if (Array.isArray(details)) {
-            for (const d of details) {
-              if (d?.metadata?.activationUrl) {
-                setApiErrorInfo({
-                  activationUrl: d.metadata.activationUrl,
-                  serviceTitle: d.metadata.serviceTitle || "Google Sheets API",
-                  message: parsed?.error?.message || message,
-                });
-                break;
-              }
-            }
-          }
-        }
-      } catch (parseErr) {
-        // ignore parse error
-      }
       toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -258,22 +258,89 @@ export default function Settings() {
       return;
     }
     setLoading(true);
-    setApiErrorInfo(null);
     try {
-      // fetch first row headers
       const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${selectedSheet}!1:1`);
       const values: any[] = res.values || [];
       const row = values[0] || [];
       const headerStrings = row.map((h: any) => String(h).trim());
       setHeaders(headerStrings);
-      // create initial empty mapping
+
+      // Attempt to load saved mapping for this spreadsheet or global
+      const saved = loadSavedMappingForSpreadsheet(spreadsheetId) || {};
+
+      // Build an initial mapping: prefer saved values that exist in headers,
+      // else try to auto-match by normalizing header vs field labels/keys.
       const initial: Record<string, string> = {};
-      MAPPING_FIELDS.forEach(f => {
-        initial[f.key] = "";
-      });
+      const headerNorms = headerStrings.map((h) => normalizeForMatch(h));
+
+      for (const f of MAPPING_FIELDS) {
+        // If saved explicit and header exists, use it
+        if (saved && saved[f.key]) {
+          const candidate = String(saved[f.key]);
+          if (headerStrings.includes(candidate)) {
+            initial[f.key] = candidate;
+            continue;
+          }
+        }
+
+        // Auto-match heuristics:
+        const targetNorms = [
+          normalizeForMatch(f.label),
+          normalizeForMatch(f.key),
+          normalizeForMatch(f.key.replace(/_/g, "")),
+        ];
+
+        // direct header with same normalized string
+        let foundHeader: string | undefined;
+        for (let i = 0; i < headerStrings.length; i++) {
+          const hnorm = headerNorms[i];
+          if (targetNorms.includes(hnorm)) {
+            foundHeader = headerStrings[i];
+            break;
+          }
+        }
+
+        // substring heuristics (header includes label words)
+        if (!foundHeader) {
+          for (let i = 0; i < headerStrings.length; i++) {
+            const hnorm = headerNorms[i];
+            for (const t of targetNorms) {
+              if (!t) continue;
+              if (hnorm.includes(t) || t.includes(hnorm)) {
+                foundHeader = headerStrings[i];
+                break;
+              }
+            }
+            if (foundHeader) break;
+          }
+        }
+
+        // Some helpful synonyms
+        if (!foundHeader) {
+          if (f.key === "description") {
+            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("descr") || normalizeForMatch(h).includes("description") || normalizeForMatch(h).includes("product"));
+            if (idx >= 0) foundHeader = headerStrings[idx];
+          }
+          if (f.key === "part_number") {
+            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("part") || normalizeForMatch(h).includes("partnumber") || normalizeForMatch(h).includes("part_number"));
+            if (idx >= 0) foundHeader = headerStrings[idx];
+          }
+          if (f.key === "value_12m" || f.key === "value_24m") {
+            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("valor") || normalizeForMatch(h).includes("12") || normalizeForMatch(h).includes("24"));
+            if (idx >= 0) foundHeader = headerStrings[idx];
+          }
+        }
+
+        if (foundHeader) {
+          initial[f.key] = foundHeader;
+        } else {
+          initial[f.key] = saved && saved[f.key] ? saved[f.key] : "";
+        }
+      }
+
       setMappings(initial);
       setStage("headersLoaded");
-      toast.success("Cabeçalhos carregados. Faça o mapeamento das colunas.");
+      toast.success("Cabeçalhos carregados e mapeamento inicial aplicado (pode ser ajustado).");
     } catch (err: any) {
       console.error(err);
       toast.error("Erro ao carregar cabeçalhos: " + (err?.message || err));
@@ -299,9 +366,7 @@ export default function Settings() {
     }
 
     setLoading(true);
-    setApiErrorInfo(null);
     try {
-      // Fetch full range from selected sheet using provided range columns (A1:Z...) but relative to sheet
       const fullRange = `${selectedSheet}!${range}`;
       const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
       const values: any[][] = res.values || [];
@@ -321,43 +386,34 @@ export default function Settings() {
 
         // Build output object using mappings
         const out: any = {};
-        // category
         if (mappings.category) out.category = obj[mappings.category];
-        // tipo/model handling: prefer model mapping, fall back to tipo
         const modelVal = mappings.model ? obj[mappings.model] : (mappings.tipo ? obj[mappings.tipo] : "");
         out.model = modelVal || "";
-        // colors
         out.colors = mappings.colors ? String(obj[mappings.colors] || "").split(",").map((c: string) => c.trim()).filter(Boolean) : [];
-        // biometrics
         out.biometrics = mappings.biometrics ? String(obj[mappings.biometrics] || "").toLowerCase() === "true" || String(obj[mappings.biometrics] || "").toLowerCase() === "sim" : false;
-        // facial
         out.facial = mappings.facial ? String(obj[mappings.facial] || "None") : "None";
-        // proximity
         out.proximity = mappings.proximity ? String(obj[mappings.proximity] || "None") : "None";
-        // urn
         out.urn = mappings.urn ? String(obj[mappings.urn] || "").toLowerCase() === "true" || String(obj[mappings.urn] || "").toLowerCase() === "sim" : false;
-        // qr
         out.qr = mappings.qr ? String(obj[mappings.qr] || "").toLowerCase() === "true" || String(obj[mappings.qr] || "").toLowerCase() === "sim" : false;
-        // part_number
         out.part_number = mappings.part_number ? String(obj[mappings.part_number] || "") : "";
-        // description
         out.description = mappings.description ? String(obj[mappings.description] || "") : "";
-        // values
         out.value_12m = mappings.value_12m ? parseFloat(String(obj[mappings.value_12m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
         out.value_24m = mappings.value_24m ? parseFloat(String(obj[mappings.value_24m] || "0").replace(/[^\d,.]/g, "").replace(",", ".")) || 0 : 0;
-        // sku/id fallback
         out.sku = out.part_number || out.description || `imported-${Math.random().toString(36).slice(2, 9)}`;
-
-        // status default
         out.status = "Ativo";
-
         return out;
       });
 
-      // Save mappedRows to localStorage as importedProducts
       localStorage.setItem("importedProducts", JSON.stringify(mappedRows));
+      // persist mapping per spreadsheet (already saved in effect), but also ensure it's stored explicitly
+      try {
+        if (spreadsheetId) {
+          localStorage.setItem(`import_column_map_${spreadsheetId}`, JSON.stringify(mappings));
+        } else {
+          localStorage.setItem("import_column_map", JSON.stringify(mappings));
+        }
+      } catch {}
       toast.success(`Importado ${mappedRows.length} linhas e salvo em localStorage (importedProducts)`);
-      console.log("Imported mapped rows preview:", mappedRows.slice(0, 20));
       setStage("mapped");
     } catch (err: any) {
       console.error(err);
@@ -379,7 +435,6 @@ export default function Settings() {
     });
   }, [files, fileSearch]);
 
-  // Save override client id to localStorage
   const saveOverrideClientId = () => {
     try {
       if (!overrideClientId) {
@@ -388,8 +443,6 @@ export default function Settings() {
       }
       localStorage.setItem(LOCAL_STORAGE_KEY, overrideClientId);
       toast.success("Client ID salvo para esta sessão (localStorage).");
-      // reload page to ensure other modules pick it up if necessary
-      // but our google client reads localStorage at runtime so immediate usage should work
     } catch (err) {
       console.error("Erro ao salvar override client id:", err);
       toast.error("Não foi possível salvar o Client ID.");
@@ -435,6 +488,21 @@ export default function Settings() {
     } catch (err) {
       console.error("Erro ao limpar dados do vendedor:", err);
       toast.error("Não foi possível limpar os dados do vendedor.");
+    }
+  };
+
+  // Allow manual reset of saved import mapping for this spreadsheet
+  const clearSavedImportMapping = () => {
+    try {
+      if (spreadsheetId) {
+        localStorage.removeItem(`import_column_map_${spreadsheetId}`);
+      }
+      localStorage.removeItem("import_column_map");
+      setMappings({});
+      toast.success("Mapeamento salvo removido.");
+    } catch (err) {
+      console.error("Erro ao limpar mapeamento salvo", err);
+      toast.error("Não foi possível limpar o mapeamento salvo.");
     }
   };
 
@@ -517,7 +585,6 @@ export default function Settings() {
                       Carregar Abas da Planilha
                     </Button>
                     <Button onClick={() => {
-                      // quick clear
                       setSpreadsheetLink("");
                       setSpreadsheetId(null);
                       setSheetTitles([]);
@@ -525,7 +592,6 @@ export default function Settings() {
                       setHeaders([]);
                       setMappings({});
                       setStage("idle");
-                      setApiErrorInfo(null);
                     }} variant="outline">
                       Limpar
                     </Button>
@@ -575,34 +641,6 @@ export default function Settings() {
                   )}
                 </div>
 
-                {apiErrorInfo && (
-                  <div className="p-4 border-l-4 border-red-500 bg-red-50 text-red-900 rounded">
-                    <div className="font-semibold">Permissão/API necessária</div>
-                    <div className="mt-1 text-sm">
-                      O Google retornou um erro indicando que a API necessária está desabilitada ou não foi ativada para o projeto.
-                      {apiErrorInfo.message && <div className="mt-2 text-sm">{apiErrorInfo.message}</div>}
-                      {apiErrorInfo.activationUrl && (
-                        <div className="mt-2">
-                          <div className="text-sm">Clique no link abaixo para ativar a API no Google Cloud Console (faça login com a mesma conta ou verifique o projeto associado ao Client ID):</div>
-                          <div className="mt-2">
-                            <a
-                              href={apiErrorInfo.activationUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="text-blue-600 underline"
-                            >
-                              Abrir página de ativação da API
-                            </a>
-                          </div>
-                          <div className="mt-2 text-sm">
-                            Após ativar, aguarde alguns minutos e tente novamente.
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
                 {stage === "sheetsLoaded" && (
                   <div className="space-y-2 pt-4 border-t">
                     <Label>Selecione a aba (sheet)</Label>
@@ -617,6 +655,7 @@ export default function Settings() {
                       <Button onClick={handleLoadHeaders} disabled={!selectedSheet || loading}>
                         Carregar Cabeçalhos (1ª linha)
                       </Button>
+                      <Button variant="outline" onClick={clearSavedImportMapping}>Limpar Mapeamento Salvo</Button>
                     </div>
                   </div>
                 )}
@@ -647,7 +686,6 @@ export default function Settings() {
 
                       <div className="flex justify-end mt-4 gap-2">
                         <Button onClick={() => {
-                          // Reset mappings
                           const initial: Record<string,string> = {};
                           MAPPING_FIELDS.forEach(f => initial[f.key] = "");
                           setMappings(initial);
