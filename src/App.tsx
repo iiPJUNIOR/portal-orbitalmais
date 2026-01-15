@@ -9,6 +9,7 @@ import Settings from "./pages/Settings";
 import TokenScanner from "./pages/TokenScanner";
 import Login from "./pages/Login";
 import { SessionProvider } from "@/contexts/SessionProvider";
+import UserMenu from "@/components/UserMenu";
 
 const queryClient = new QueryClient();
 
@@ -19,6 +20,11 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <SessionProvider>
+          {/* Global user menu fixed in the top-right corner */}
+          <div className="fixed top-4 right-4 z-50">
+            <UserMenu />
+          </div>
+
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/" element={<Index />} />

@@ -45,12 +45,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         setSession(s);
         setUser(s?.user ?? null);
 
-        // Redirects on explicit sign events only
-        if (event === "SIGNED_IN") {
-          try {
-            navigate("/");
-          } catch {}
-        } else if (event === "SIGNED_OUT") {
+        // Only auto-redirect on explicit sign-out events.
+        // Avoid forcing navigation to "/" on SIGNED_IN (lets user stay on pages like /settings).
+        if (event === "SIGNED_OUT") {
           try {
             navigate("/login");
           } catch {}
@@ -68,15 +65,17 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Only perform route redirects after initial session check finishes to avoid flicker
+  // After initial check finishes, redirect unauthenticated users to /login (but don't force authenticated users to /)
   useEffect(() => {
     if (initializing) return;
 
     try {
+      if (!session && location.pathname !== "/login") {
+        navigate("/login");
+      }
+      // If there is a session and the user is on /login, send them to root
       if (session && location.pathname === "/login") {
         navigate("/");
-      } else if (!session && location.pathname !== "/login") {
-        navigate("/login");
       }
     } catch (err) {
       // navigation can fail during SSR or early mount; ignore
