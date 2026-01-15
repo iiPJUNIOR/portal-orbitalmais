@@ -163,7 +163,7 @@ export function QuoteBuilder({
       </Card>
       
       <Card className="bg-muted">
-        <CardContent className="p-6">
+        <CardContent>
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <div className="text-sm text-muted-foreground">Total de Itens</div>
