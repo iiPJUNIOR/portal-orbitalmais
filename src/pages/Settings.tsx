@@ -72,8 +72,10 @@ export default function Settings() {
   const [complementSheet, setComplementSheet] = useState<string | null>(null);
   const [complementRange, setComplementRange] = useState<string>("A1:Z1000");
   const [complementHeaders, setComplementHeaders] = useState<string[]>([]);
+  const [complementPreviewRows, setComplementPreviewRows] = useState<any[][]>([]);
   const [complementKeyColumn, setComplementKeyColumn] = useState<string>("");
   const [complementImporting, setComplementImporting] = useState(false);
+  const [complementRowsCount, setComplementRowsCount] = useState<number | null>(null);
   // ---------------------------------
 
   useEffect(() => {
@@ -561,25 +563,41 @@ export default function Settings() {
 
   // ------------------ Complement import helpers ------------------
 
-  async function handleLoadComplementHeaders() {
+  // Read the full range specified by the user (sheet + range), extract headers and sample rows
+  async function handleReadComplementRange() {
     if (!accessToken || !spreadsheetId || !complementSheet) {
       toast.error("É necessário conectar ao Google e selecionar uma planilha/aba.");
       return;
     }
 
     setComplementHeaders([]);
+    setComplementPreviewRows([]);
+    setComplementRowsCount(null);
+
     try {
-      const resp = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${complementSheet}!1:1`);
-      const row = (resp.values && resp.values[0]) || [];
-      const headerStrings = row.map((h: any) => String(h).trim());
-      setComplementHeaders(headerStrings);
-      // If we can auto-detect a key column (sku/part) prefer it
-      const tryFind = headerStrings.find(h => /sku/i.test(h) || /part/i.test(h) || /codigo/i.test(h) || /part_number/i.test(h));
+      const fullRange = `${complementSheet}!${complementRange}`;
+      const resp = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+      const values: any[][] = resp.values || [];
+
+      if (values.length === 0) {
+        toast.error("Intervalo vazio ou inválido.");
+        return;
+      }
+
+      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
+      const dataRows = values.slice(1);
+      setComplementHeaders(headerRow);
+      setComplementPreviewRows(dataRows.slice(0, 5)); // preview up to 5 rows
+      setComplementRowsCount(dataRows.length);
+
+      // Auto-detect key column if possible
+      const tryFind = headerRow.find(h => /sku/i.test(h) || /part/i.test(h) || /codigo/i.test(h) || /part_number/i.test(h));
       if (tryFind) setComplementKeyColumn(tryFind);
-      toast.success("Cabeçalhos carregados para importação complementar.");
+
+      toast.success(`Intervalo lido: ${dataRows.length} linhas (pré-visualizando até 5).`);
     } catch (err: any) {
-      console.error("Erro ao carregar cabeçalhos complementares:", err);
-      toast.error("Falha ao carregar cabeçalhos da aba complementar: " + (err?.message || err));
+      console.error("Erro ao ler intervalo complementar:", err);
+      toast.error("Falha ao ler o intervalo complementar: " + (err?.message || err));
     }
   }
 
@@ -964,14 +982,45 @@ export default function Settings() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={handleLoadComplementHeaders} disabled={!connected || !spreadsheetId || !complementSheet}>
-                    Carregar Cabeçalhos da Aba
+                  <Button onClick={handleReadComplementRange} disabled={!connected || !spreadsheetId || !complementSheet}>
+                    Ler intervalo (range)
                   </Button>
                   <Button onClick={() => {
                     setComplementHeaders([]);
+                    setComplementPreviewRows([]);
                     setComplementKeyColumn("");
-                  }} variant="outline">Limpar Cabeçalhos</Button>
+                    setComplementRowsCount(null);
+                  }} variant="outline">Limpar Prévia</Button>
                 </div>
+
+                {complementRowsCount !== null && (
+                  <div className="text-sm text-muted-foreground">
+                    Linhas no intervalo (excluindo cabeçalho): {complementRowsCount}
+                  </div>
+                )}
+
+                {complementPreviewRows.length > 0 && (
+                  <div className="overflow-auto border rounded">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          {complementHeaders.map((h, i) => (
+                            <th key={i} className="text-left px-2 py-1">{h}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {complementPreviewRows.map((r, ri) => (
+                          <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                            {complementHeaders.map((_, ci) => (
+                              <td key={ci} className="px-2 py-1">{String(r[ci] ?? "")}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
                 {complementHeaders.length > 0 && (
                   <div className="space-y-2">
