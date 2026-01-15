@@ -521,6 +521,41 @@ export default function Settings() {
     }
   };
 
+  // New: read the actual range (sheet!range) and populate complementHeaders + preview rows.
+  const handleReadRange = async () => {
+    if (!accessToken || !spreadsheetId || !complementSheet) {
+      toast.error("Selecione planilha e aba complementar antes de ler o intervalo.");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const fullRange = `${complementSheet}!${complementRange}`;
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+      const values: any[][] = res.values || [];
+      if (values.length === 0) {
+        toast.error("Intervalo vazio ou inválido.");
+        setLoading(false);
+        return;
+      }
+
+      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
+      const dataRows = values.slice(1);
+
+      setComplementHeaders(headerRow);
+      setComplementPreviewRows(dataRows.slice(0, 5));
+      setComplementRowsCount(dataRows.length);
+
+      // Do not alter mapping state (mappings) here — this action is only a preview of the selected range.
+      toast.success(`Intervalo carregado: ${dataRows.length} linhas (pré-visualizando até 5).`);
+    } catch (err: any) {
+      console.error("Erro ao ler intervalo:", err);
+      toast.error("Falha ao ler intervalo: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSetMapping = (fieldKey: string, headerName: string) => {
     setMappings(prev => ({ ...prev, [fieldKey]: headerName }));
   };
@@ -954,9 +989,7 @@ export default function Settings() {
 
                 <div className="flex gap-2">
                   <Button onClick={async () => {
-                    await handleLoadHeaders();
-                    // After reading headers, ensure the selects for Com/Sem iDSecure are updated if headers exist
-                    toast.success("Cabeçalhos (primeira linha) recarregados. Ajuste as colunas se necessário.");
+                    await handleReadRange();
                   }} disabled={!connected || !spreadsheetId || !complementSheet}>
                     Ler intervalo (range)
                   </Button>
