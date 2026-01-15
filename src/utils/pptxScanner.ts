@@ -11,8 +11,44 @@ import PptxGenJS from "pptxgenjs";
  * - First tries to fetch /proposal-template.pptx (public) then the src-relative template.
  * - If fetching a valid PPTX fails, generates a fallback in-memory PPTX that includes common tokens.
  * - Extracts tokens like {{companyName}} and returns an array [{ text: "{{companyName}}", count: n }, ...]
- * - If no tokens are found, falls back to returning generic text fragments found in <a:t> nodes (legacy behavior).
+ * - IMPORTANT: This function now RETURNS ONLY tokens that match the allowed key list (normalized for accents/case).
+ *   If none of the allowed tokens are present, it returns an empty array.
  */
+
+const ALLOWED_KEYS = [
+  "companyName",
+  "contactName",
+  "date",
+  "proposalNumber",
+  "items_list",
+  "items_list1",
+  "items_list2",
+  "sellerName",
+  "sellerRole",
+  "sellerEmail",
+  "sellerPhone",
+  "totalPrice",
+  "qtd",
+  "qtd1",
+  "qtd2",
+  "users",
+  "devices",
+  "CNPJ",
+  "endereço",
+];
+
+// Build normalized map: normalized -> canonical original
+function normalizeKey(k: string) {
+  return String(k)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+const ALLOWED_NORMALIZED_MAP: Record<string, string> = {};
+for (const k of ALLOWED_KEYS) {
+  ALLOWED_NORMALIZED_MAP[normalizeKey(k)] = k;
+}
 
 async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
   const candidateUrls: string[] = [];
@@ -129,16 +165,16 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
 
 /**
  * scanTemplateTexts
- * - returns tokens in the form {{token}} with occurrence counts.
- * - if no tokens are found, falls back to returning generic text fragments (legacy).
+ * - returns ONLY tokens in the form {{token}} that match the allowed keys (accent & case-insensitive)
+ * - handles tokens split across multiple <a:t> runs by concatenating runs before scanning
+ * - IMPORTANT: If no allowed tokens are found, this returns an empty array (no fallback)
  */
 export async function scanTemplateTexts(): Promise<Array<{ text: string; count: number }>> {
   const arrayBuffer = await fetchTemplateArrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
-  const tokenCounts: Record<string, number> = {};
-  const textCounts: Record<string, number> = {};
+  const allowedTokenCounts: Record<string, number> = {};
 
   const tokenRegex = /\{\{\s*([^}]+?)\s*\}\}/g;
   const textNodeRegex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
@@ -146,32 +182,31 @@ export async function scanTemplateTexts(): Promise<Array<{ text: string; count: 
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
 
-    // 1) Extract tokens like {{tokenName}} from the slide XML
+    // Extract all <a:t> nodes in order and join them so tokens split across runs are reconstructed
+    const runs: string[] = [];
+    let runMatch;
+    while ((runMatch = textNodeRegex.exec(content)) !== null) {
+      const txt = (runMatch[1] || "").trim();
+      runs.push(txt);
+    }
+    const joined = runs.join(""); // no separator to re-create tokens split across runs
+
+    // Scan joined text for tokens {{...}}
     let m;
-    while ((m = tokenRegex.exec(content)) !== null) {
-      const raw = m[0]; // keep braces to make selection explicit (e.g. "{{companyName}}")
-      const key = raw.trim();
-      tokenCounts[key] = (tokenCounts[key] || 0) + 1;
-    }
+    while ((m = tokenRegex.exec(joined)) !== null) {
+      const inner = String(m[1] || "").trim();
+      const normalized = normalizeKey(inner);
 
-    // 2) Also collect plain text nodes in case we need fallback (do not mix with tokenCounts)
-    let t;
-    while ((t = textNodeRegex.exec(content)) !== null) {
-      const txt = (t[1] || "").trim();
-      if (!txt) continue;
-      textCounts[txt] = (textCounts[txt] || 0) + 1;
+      const allowedCanonical = ALLOWED_NORMALIZED_MAP[normalized];
+      if (allowedCanonical) {
+        const display = `{{${allowedCanonical}}}`;
+        allowedTokenCounts[display] = (allowedTokenCounts[display] || 0) + 1;
+      }
     }
   }
 
-  // If we found any tokens, return them (preferred)
-  const tokenEntries = Object.entries(tokenCounts).map(([text, count]) => ({ text, count }));
-  if (tokenEntries.length > 0) {
-    tokenEntries.sort((a, b) => b.count - a.count || a.text.length - b.text.length);
-    return tokenEntries;
-  }
-
-  // Fallback: return generic text fragments (legacy behavior)
-  const textEntries = Object.entries(textCounts).map(([text, count]) => ({ text, count }));
-  textEntries.sort((a, b) => b.count - a.count || a.text.length - b.text.length);
-  return textEntries;
+  // Return allowed tokens only (sorted)
+  const allowedEntries = Object.entries(allowedTokenCounts).map(([text, count]) => ({ text, count }));
+  allowedEntries.sort((a, b) => b.count - a.count || a.text.length - b.text.length);
+  return allowedEntries;
 }

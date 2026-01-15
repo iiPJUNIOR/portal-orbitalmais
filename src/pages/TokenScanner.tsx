@@ -77,7 +77,7 @@ export default function TokenScannerPage() {
     })();
   }, []);
 
-  // Attempt automatic mapping once after we have the 'found' texts and if not already auto-mapped
+  // Automatic mapping (runs once) -- unchanged behavior but now 'found' contains only allowed tokens
   useEffect(() => {
     if (found.length === 0) return;
     if (autoMappedRef.current) return;
@@ -103,7 +103,7 @@ export default function TokenScannerPage() {
 
       // special heuristics for common synonyms / Portuguese words
       if (keyNorm.startsWith("items") || keyNorm.includes("descri") || keyNorm.includes("item")) {
-        match = foundByNormalized.find((f) => f.normalized.includes("item") || f.normalized.includes("descri") || f.normalized.includes("descrição") || f.normalized.includes("descr"));
+        match = foundByNormalized.find((f) => f.normalized.includes("item") || f.normalized.includes("descri") || f.normalized.includes("descr"));
         if (match) return match.raw;
       }
 
@@ -286,6 +286,10 @@ export default function TokenScannerPage() {
     }
   };
 
+  // Derived counts: number of distinct allowed tokens and total occurrences
+  const distinctCount = found.length;
+  const totalOccurrences = found.reduce((s, f) => s + (f.count || 0), 0);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -309,7 +313,15 @@ export default function TokenScannerPage() {
         <div className="grid md:grid-cols-3 gap-6">
           <div className="md:col-span-2 space-y-4">
             <div className="bg-white p-4 rounded border">
-              <h3 className="font-semibold mb-2">Textos encontrados no template ({found.length})</h3>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="font-semibold">Tokens permitidos encontrados</h3>
+                  <div className="text-sm text-muted-foreground">
+                    Tokens distintos: {distinctCount} — Ocorrências totais: {totalOccurrences}
+                  </div>
+                </div>
+              </div>
+
               {loading ? (
                 <div>Escaneando template...</div>
               ) : (
@@ -317,7 +329,7 @@ export default function TokenScannerPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="text-left">
-                        <th className="py-1">Texto</th>
+                        <th className="py-1">Token</th>
                         <th className="py-1">Ocorrências</th>
                       </tr>
                     </thead>
@@ -328,6 +340,14 @@ export default function TokenScannerPage() {
                           <td className="py-1">{f.count}</td>
                         </tr>
                       ))}
+
+                      {found.length === 0 && (
+                        <tr>
+                          <td colSpan={2} className="py-4 text-sm text-muted-foreground text-center">
+                            Nenhum token permitido encontrado no template.
+                          </td>
+                        </tr>
+                      )}
                     </tbody>
                   </table>
                 </div>
