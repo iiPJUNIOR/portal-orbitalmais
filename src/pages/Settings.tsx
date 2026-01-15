@@ -17,8 +17,6 @@ const LOCAL_STORAGE_KEY = "google_client_id_override";
 const LS_COMPLEMENT_RANGE = "complement_range";
 const LS_COMPLEMENT_SHEET = "complement_sheet";
 const LS_COMPLEMENT_KEY_COLUMN = "complement_key_column";
-const LS_COMPLEMENT_PRICE_12 = "complement_price_12_column";
-const LS_COMPLEMENT_PRICE_24 = "complement_price_24_column";
 const LS_COMPLEMENT_COM_IDS = "complement_com_ids_column";
 const LS_COMPLEMENT_SEM_IDS = "complement_sem_ids_column";
 
@@ -124,20 +122,6 @@ export default function Settings() {
 
   // Complement import options
   const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
-  const [complementPrice12Column, setComplementPrice12Column] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_PRICE_12) || "";
-    } catch {
-      return "";
-    }
-  });
-  const [complementPrice24Column, setComplementPrice24Column] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_PRICE_24) || "";
-    } catch {
-      return "";
-    }
-  });
   const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>(() => {
     try {
       return localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "";
@@ -235,14 +219,12 @@ export default function Settings() {
       else localStorage.removeItem(LS_COMPLEMENT_SHEET);
 
       localStorage.setItem(LS_COMPLEMENT_KEY_COLUMN, complementKeyColumn || "");
-      localStorage.setItem(LS_COMPLEMENT_PRICE_12, complementPrice12Column || "");
-      localStorage.setItem(LS_COMPLEMENT_PRICE_24, complementPrice24Column || "");
       localStorage.setItem(LS_COMPLEMENT_COM_IDS, complementComIdsColumn || "");
       localStorage.setItem(LS_COMPLEMENT_SEM_IDS, complementSemIdsColumn || "");
     } catch (e) {
       console.warn("Failed to persist complement settings", e);
     }
-  }, [complementRange, complementSheet, complementKeyColumn, complementPrice12Column, complementPrice24Column, complementComIdsColumn, complementSemIdsColumn]);
+  }, [complementRange, complementSheet, complementKeyColumn, complementComIdsColumn, complementSemIdsColumn]);
 
   useEffect(() => {
     try {
@@ -591,23 +573,16 @@ export default function Settings() {
         }
         const description = descParts.join(" · ") || (keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
 
-        const findPriceFromColumn = (colName: string) => {
-          if (!colName) return 0;
-          const v = getColValue(row, colName);
-          return parseSpreadsheetNumber(v ?? 0);
-        };
-
-        let value12 = findPriceFromColumn(complementPrice12Column);
-        let value24 = findPriceFromColumn(complementPrice24Column);
-
-        if ((!value12 || value12 === 0) && (!value24 || value24 === 0)) {
-          for (let c = 0; c < headerRow.length; c++) {
-            if (c === keyIndex) continue;
-            const n = parseSpreadsheetNumber(row[c]);
-            if (n > 0) {
-              if (!value12 || value12 === 0) value12 = n;
-              else if (!value24 || value24 === 0) value24 = n;
-            }
+        // Try to detect numeric values in the row to pick prices (fallback)
+        let value12 = 0;
+        let value24 = 0;
+        for (let c = 0; c < headerRow.length; c++) {
+          if (c === keyIndex) continue;
+          const parsed = parseSpreadsheetNumber(row[c]);
+          if (parsed > 0) {
+            if (!value12) value12 = parsed;
+            else if (!value24) value24 = parsed;
+            // keep scanning to find 1-2 numeric candidates
           }
         }
 
@@ -892,15 +867,15 @@ export default function Settings() {
                 <CardTitle>Bases de Produtos Salvas</CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">Bases do tipo "product" (procura por código/SKU).</p>
-                {bases.filter(b => b.type === "product").length === 0 ? (
-                  <div className="p-3 text-sm text-muted-foreground">Nenhuma base de produtos salva.</div>
+                <p className="text-sm text-muted-foreground mb-3">Bases salvas (lista única para gerenciamento e exportação).</p>
+                {bases.length === 0 ? (
+                  <div className="p-3 text-sm text-muted-foreground">Nenhuma base salva.</div>
                 ) : (
                   <div className="space-y-2">
-                    {bases.filter(b => b.type === "product").map((b) => (
+                    {bases.map((b) => (
                       <div key={b.id} className="flex items-center justify-between border rounded p-3">
                         <div>
-                          <div className="font-medium">{b.name}</div>
+                          <div className="font-medium">{b.name} <span className="text-xs text-muted-foreground ml-2">[{b.type}]</span></div>
                           <div className="text-sm text-muted-foreground">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleDateString()}</div>
                         </div>
                         <div className="flex items-center gap-2">
@@ -962,8 +937,6 @@ export default function Settings() {
                     setComplementPreviewRows([]);
                     setComplementKeyColumn("");
                     setComplementRowsCount(null);
-                    setComplementPrice12Column("");
-                    setComplementPrice24Column("");
                     setComplementComIdsColumn("");
                     setComplementSemIdsColumn("");
                     localStorage.removeItem(LS_COMPLEMENT_RANGE);
@@ -1012,24 +985,6 @@ export default function Settings() {
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       <div>
-                        <Label>Coluna preço 12m (opcional)</Label>
-                        <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
-                          <option value="">(auto)</option>
-                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                      </div>
-
-                      <div>
-                        <Label>Coluna preço 24m (opcional)</Label>
-                        <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
-                          <option value="">(auto)</option>
-                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
-                        </select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      <div>
                         <Label>Coluna "Com iDSecure" (opcional)</Label>
                         <select value={complementComIdsColumn} onChange={(e) => setComplementComIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full mt-2">
                           <option value="">(nenhuma)</option>
@@ -1059,45 +1014,6 @@ export default function Settings() {
                       }} disabled={!complementHeaders.length || !complementSheet || loading}>Salvar base</Button>
                       <Button onClick={handleImportComplement} disabled={complementImporting} variant="outline">Importar e Criar Itens</Button>
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Bases de Pesquisa (todas)</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm text-muted-foreground mb-3">Lista de todas as bases salvas (catalog = valores; product = produtos/consulta).</p>
-
-                {bases.length === 0 ? (
-                  <div className="p-4 text-sm text-muted-foreground">Nenhuma base salva ainda.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {bases.map((b) => (
-                      <div key={b.id} className="flex items-center justify-between border rounded p-3">
-                        <div>
-                          <div className="font-medium">{b.name} <span className="text-xs text-muted-foreground ml-2">[{b.type}]</span></div>
-                          <div className="text-sm text-muted-foreground">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleString()}</div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => {
-                            const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
-                            const url = URL.createObjectURL(blob);
-                            const a = document.createElement("a");
-                            a.href = url;
-                            a.download = `${b.name.replace(/\s+/g, "-") || b.id}.json`;
-                            document.body.appendChild(a);
-                            a.click();
-                            document.body.removeChild(a);
-                            URL.revokeObjectURL(url);
-                            toast.success("Base exportada");
-                          }}>Exportar</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDeleteBase(b.id)}>Remover</Button>
-                        </div>
-                      </div>
-                    ))}
                   </div>
                 )}
               </CardContent>
