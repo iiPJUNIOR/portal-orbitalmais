@@ -18,6 +18,7 @@ import { parseSpreadsheetNumber } from "@/lib/formatters";
 import ConfirmModal from "@/components/ConfirmModal";
 import { QuoteBuilder } from "@/components/QuoteBuilder";
 import ProductBasesTab from "@/components/ProductBasesTab";
+import { Input } from "@/components/ui/input";
 
 type QuoteItem = {
   id: string;
@@ -430,7 +431,8 @@ export default function Index() {
   };
 
   // When adding from a product base row, try to find price from catalog bases
-  const handleAddFromLookupRow = (headers: string[], row: any[]) => {
+  // Now accepts a quantity parameter (defaults to 1)
+  const handleAddFromLookupRow = (headers: string[], row: any[], quantity = 1) => {
     const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
     // try to find a matching price in catalog bases by SKU/part_number
     const skuCandidates = [prod.sku, prod.part_number].filter(Boolean).map(String);
@@ -446,7 +448,7 @@ export default function Index() {
       }
     }
 
-    handleAddToQuote(prod, 1, foundPrice);
+    handleAddToQuote(prod, quantity, foundPrice);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -708,6 +710,38 @@ export default function Index() {
     ? applyFiltersToProducts(productBasesProductsAll, currentFilters)
     : productBasesProductsAll.filter(p => p.status === "Ativo");
 
+  // ----- New state for viewing a specific product base and row quantities -----
+  const productBasesList = bases.filter(b => b.type === "product");
+  const [selectedProductBaseId, setSelectedProductBaseId] = useState<string | null>(productBasesList[0]?.id ?? null);
+  // quantities keyed by row index for the selected base
+  const [baseRowQuantities, setBaseRowQuantities] = useState<Record<number, number>>({});
+
+  useEffect(() => {
+    // whenever bases list changes, ensure selected id is valid
+    const list = bases.filter(b => b.type === "product");
+    if (list.length === 0) {
+      setSelectedProductBaseId(null);
+    } else {
+      if (!selectedProductBaseId || !list.find((b) => b.id === selectedProductBaseId)) {
+        setSelectedProductBaseId(list[0].id);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bases]);
+
+  useEffect(() => {
+    // reset per-row quantities when user switches base
+    setBaseRowQuantities({});
+  }, [selectedProductBaseId]);
+
+  // Helper to change a quantity for a row in the currently selected base view
+  const setQuantityForRow = (rowIndex: number, qty: number) => {
+    setBaseRowQuantities((prev) => ({ ...prev, [rowIndex]: Math.max(1, Math.min(999, Number(isNaN(qty) ? 1 : qty))) }));
+  };
+
+  // Get selected base object
+  const selectedBase: StoredBase | undefined = selectedProductBaseId ? bases.find(b => b.id === selectedProductBaseId) : undefined;
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -766,8 +800,126 @@ export default function Index() {
                         {catalogTab === "prices" ? (
                           <ProductTable products={products} onAddToQuote={handleAddToQuote} />
                         ) : (
-                          // Show products coming from "product" bases
-                          <ProductTable products={productBasesProductsFiltered} onAddToQuote={handleAddToQuote} />
+                          <>
+                            {/* Products subtab: let user choose which product base to view */}
+                            {productBasesList.length === 0 ? (
+                              <div className="p-6 text-sm text-muted-foreground">
+                                Nenhuma base de produtos encontrada. Crie/importe uma base em <strong>Configurações</strong>.
+                              </div>
+                            ) : (
+                              <div>
+                                <div className="mb-4 flex items-center gap-3">
+                                  <label className="text-sm text-muted-foreground">Base:</label>
+                                  <select
+                                    className="border rounded px-2 py-1"
+                                    value={selectedProductBaseId ?? ""}
+                                    onChange={(e) => setSelectedProductBaseId(e.target.value || null)}
+                                  >
+                                    {productBasesList.map((b) => (
+                                      <option key={b.id} value={b.id}>
+                                        {b.name} ({b.rows.length})
+                                      </option>
+                                    ))}
+                                  </select>
+
+                                  <Button variant="outline" onClick={() => {
+                                    // refresh bases from localStorage (in case user changed them in Settings)
+                                    try {
+                                      const raw = localStorage.getItem("product_bases");
+                                      if (!raw) {
+                                        setBases([]);
+                                        toast.info("Bases recarregadas (nenhuma encontrada)");
+                                        return;
+                                      }
+                                      const parsed = JSON.parse(raw) as StoredBase[];
+                                      setBases(Array.isArray(parsed) ? parsed : []);
+                                      toast.success("Bases recarregadas");
+                                    } catch (err) {
+                                      console.warn("failed reload bases", err);
+                                      toast.error("Falha ao recarregar bases");
+                                    }
+                                  }}>Recarregar bases</Button>
+                                </div>
+
+                                {/* Render a table using the exact headers from the selected base */}
+                                {selectedBase ? (
+                                  <div className="overflow-auto border rounded">
+                                    <table className="w-full text-sm">
+                                      <thead className="bg-gray-50">
+                                        <tr>
+                                          {selectedBase.headers.map((h, hi) => (
+                                            <th key={hi} className="text-left px-2 py-2">{h || "(vazio)"}</th>
+                                          ))}
+                                          <th className="text-left px-2 py-2">Quantidade</th>
+                                          <th className="text-left px-2 py-2">Ações</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {selectedBase.rows.length === 0 ? (
+                                          <tr>
+                                            <td colSpan={selectedBase.headers.length + 2} className="py-8 text-center text-muted-foreground">
+                                              Esta base não contém linhas.
+                                            </td>
+                                          </tr>
+                                        ) : (
+                                          selectedBase.rows.map((row, ri) => (
+                                            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                              {selectedBase.headers.map((_, ci) => (
+                                                <td key={ci} className="px-2 py-2 align-top break-words">{String(row[ci] ?? "")}</td>
+                                              ))}
+
+                                              <td className="px-2 py-2">
+                                                <Input
+                                                  type="number"
+                                                  min={1}
+                                                  value={baseRowQuantities[ri] ?? 1}
+                                                  onChange={(e) => setQuantityForRow(ri, parseInt(e.target.value || "1", 10))}
+                                                  className="w-24"
+                                                />
+                                              </td>
+
+                                              <td className="px-2 py-2">
+                                                <div className="flex gap-2">
+                                                  <Button onClick={() => handleAddFromLookupRow(selectedBase.headers, row, baseRowQuantities[ri] ?? 1)}>
+                                                    Adicionar
+                                                  </Button>
+
+                                                  <Button variant="outline" onClick={() => {
+                                                    // quick view/download of this row as JSON
+                                                    try {
+                                                      const payload = selectedBase.headers.reduce((acc: any, h, idx) => {
+                                                        acc[h] = row[idx];
+                                                        return acc;
+                                                      }, {});
+                                                      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+                                                      const url = URL.createObjectURL(blob);
+                                                      const a = document.createElement("a");
+                                                      a.href = url;
+                                                      a.download = `row-${selectedBase.name.replace(/\s+/g, "-") || selectedBase.id}-${ri}.json`;
+                                                      document.body.appendChild(a);
+                                                      a.click();
+                                                      document.body.removeChild(a);
+                                                      URL.revokeObjectURL(url);
+                                                      toast.success("Linha exportada");
+                                                    } catch (err) {
+                                                      console.error("export row failed", err);
+                                                      toast.error("Falha ao exportar linha");
+                                                    }
+                                                  }}>Exportar</Button>
+                                                </div>
+                                              </td>
+                                            </tr>
+                                          ))
+                                        )}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ) : (
+                                  <div className="p-6 text-sm text-muted-foreground">Selecione uma base para visualizar as colunas e linhas.</div>
+                                )}
+                              </div>
+                            )}
+                          </>
                         )}
                       </>
                     )}
