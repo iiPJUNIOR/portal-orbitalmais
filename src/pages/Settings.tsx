@@ -76,6 +76,11 @@ export default function Settings() {
   const [complementKeyColumn, setComplementKeyColumn] = useState<string>("");
   const [complementImporting, setComplementImporting] = useState(false);
   const [complementRowsCount, setComplementRowsCount] = useState<number | null>(null);
+
+  // New: allow creating missing products from complement rows and choose price columns
+  const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
+  const [complementPrice12Column, setComplementPrice12Column] = useState<string>("");
+  const [complementPrice24Column, setComplementPrice24Column] = useState<string>("");
   // ---------------------------------
 
   useEffect(() => {
@@ -388,6 +393,31 @@ export default function Settings() {
       }
 
       setMappings(initial);
+
+      // Auto-detect reasonable default price columns for complement import
+      const detectPriceCol = (candidates: string[], prefer12 = true) => {
+        if (!candidates || candidates.length === 0) return "";
+        // prefer header names that include '12' or '12m' / '24' or '24m' or 'valor'
+        const norm = candidates.map((h) => h.toLowerCase());
+        if (prefer12) {
+          const idx12 = norm.findIndex((h) => h.includes("12") || h.includes("12m") || h.includes("valor") && h.includes("12"));
+          if (idx12 >= 0) return candidates[idx12];
+          const idxVal = norm.findIndex((h) => h.includes("valor") || h.includes("price") || h.includes("preco"));
+          if (idxVal >= 0) return candidates[idxVal];
+        } else {
+          const idx24 = norm.findIndex((h) => h.includes("24") || h.includes("24m"));
+          if (idx24 >= 0) return candidates[idx24];
+          const idxVal = norm.findIndex((h) => h.includes("valor") || h.includes("price") || h.includes("preco"));
+          if (idxVal >= 0) return candidates[idxVal];
+        }
+        return "";
+      };
+
+      const default12 = detectPriceCol(headerStrings, true);
+      const default24 = detectPriceCol(headerStrings, false);
+      setComplementPrice12Column(default12);
+      setComplementPrice24Column(default24);
+
       setStage("headersLoaded");
       toast.success("Cabeçalhos carregados e mapeamento inicial aplicado (pode ser ajustado).");
     } catch (err: any) {
@@ -594,6 +624,19 @@ export default function Settings() {
       const tryFind = headerRow.find(h => /sku/i.test(h) || /part/i.test(h) || /codigo/i.test(h) || /part_number/i.test(h));
       if (tryFind) setComplementKeyColumn(tryFind);
 
+      // Auto-detect price columns if headers detected
+      if (headerRow.length > 0) {
+        const lower = headerRow.map(h => h.toLowerCase());
+        if (!complementPrice12Column) {
+          const idx12 = lower.findIndex(h => h.includes("12") || h.includes("12m") || (h.includes("valor") && h.includes("12")));
+          if (idx12 >= 0) setComplementPrice12Column(headerRow[idx12]);
+        }
+        if (!complementPrice24Column) {
+          const idx24 = lower.findIndex(h => h.includes("24") || h.includes("24m") || (h.includes("valor") && h.includes("24")));
+          if (idx24 >= 0) setComplementPrice24Column(headerRow[idx24]);
+        }
+      }
+
       toast.success(`Intervalo lido: ${dataRows.length} linhas (pré-visualizando até 5).`);
     } catch (err: any) {
       console.error("Erro ao ler intervalo complementar:", err);
@@ -654,11 +697,7 @@ export default function Settings() {
         }
       }
 
-      if (!Array.isArray(imported) || imported.length === 0) {
-        toast.error("Nenhum produto importado encontrado (importedProducts). Importe a planilha principal primeiro.");
-        setComplementImporting(false);
-        return;
-      }
+      if (!Array.isArray(imported)) imported = [];
 
       // Build a lookup map by sku and part_number for fast matching (normalize)
       const normalizeMatchKey = (s?: any) => (s ? String(s).trim().toLowerCase() : "");
@@ -673,13 +712,15 @@ export default function Settings() {
 
       let updatedCount = 0;
       let matchedRows = 0;
+      let createdCount = 0;
 
       for (const row of dataRows) {
         const keyRaw = row[keyIndex];
         const keyVal = normalizeMatchKey(keyRaw);
         if (!keyVal) continue;
 
-        const matchedIdxs = lookupBySku[keyVal] || [];
+        const matchedIdxs = lookupBySku[keyVal] ? [...lookupBySku[keyVal]] : [];
+
         if (matchedIdxs.length === 0) {
           // try fuzzy: match by part_number containing keyVal or sku containing keyVal
           const fallbackIdxs = imported
@@ -695,10 +736,88 @@ export default function Settings() {
           }
         }
 
-        if (matchedIdxs.length === 0) continue;
+        if (matchedIdxs.length === 0) {
+          // No match found. If configured, create a new product entry from this complement row.
+          if (complementCreateMissing) {
+            // Build a sensible description from a few non-empty columns (excluding the key)
+            const descParts: string[] = [];
+            for (let c = 0; c < headerRow.length; c++) {
+              if (c === keyIndex) continue;
+              const val = row[c];
+              if (val !== undefined && val !== null && String(val).trim() !== "") {
+                const header = headerRow[c];
+                descParts.push(`${header}: ${String(val).trim()}`);
+                if (descParts.length >= 4) break; // limit length
+              }
+            }
+            const description = descParts.join(" · ") || String(keyRaw || keyVal);
 
-        matchedRows += 1;
+            // Determine prices using selected complement price columns, falling back to auto-detection
+            const findPriceFromColumn = (colName: string) => {
+              if (!colName) return 0;
+              const idx = headerRow.findIndex(h => h === colName);
+              if (idx === -1) return 0;
+              return parseSpreadsheetNumber(row[idx] ?? 0);
+            };
 
+            let value12 = findPriceFromColumn(complementPrice12Column);
+            let value24 = findPriceFromColumn(complementPrice24Column);
+
+            // If not provided, try auto-detect: look for any numeric-looking column in the row
+            if ((!value12 || value12 === 0) && (!value24 || value24 === 0)) {
+              for (let c = 0; c < headerRow.length; c++) {
+                if (c === keyIndex) continue;
+                const n = parseSpreadsheetNumber(row[c]);
+                if (n > 0) {
+                  // prefer assigning to 12m if complementPrice12Column not set
+                  if (!value12 || value12 === 0) value12 = n;
+                  else if (!value24 || value24 === 0) value24 = n;
+                }
+              }
+            }
+
+            const newProd: any = {
+              id: `imported-${Math.random().toString(36).slice(2, 9)}`,
+              sku: String(keyRaw || keyVal),
+              category: "Controladores Porta",
+              model: String(keyRaw || keyVal),
+              colors: [],
+              biometrics: false,
+              facial: "None",
+              proximity: "None",
+              urn: false,
+              qr: false,
+              description,
+              value_12m: Number(value12 || 0),
+              value_24m: Number(value24 || 0),
+              part_number: String(keyRaw || keyVal),
+              status: "Ativo",
+              // store raw complement fields for later pricing/selection logic
+              complementMeta: headerRow.reduce((acc: any, h, idx) => {
+                acc[normalizeHeaderToKey(h)] = row[idx] ?? "";
+                return acc;
+              }, {} as Record<string, any>)
+            };
+
+            imported.push(newProd);
+            // update lookup index map so subsequent rows can match newly created ones
+            const newIdx = imported.length - 1;
+            const skuKeyNew = normalizeMatchKey(newProd.sku);
+            if (skuKeyNew) {
+              lookupBySku[skuKeyNew] = lookupBySku[skuKeyNew] || [];
+              lookupBySku[skuKeyNew].push(newIdx);
+            }
+
+            createdCount++;
+            continue;
+          } else {
+            // not creating missing, skip
+            continue;
+          }
+        }
+
+        // Merge complementary columns into all matched products
+        matchedRows++;
         for (const mi of matchedIdxs) {
           const prod = imported[mi];
           let anyChanged = false;
@@ -732,7 +851,7 @@ export default function Settings() {
         console.warn("Failed to persist importedProducts after complement import", e);
       }
 
-      toast.success(`Importação complementar concluída: ${matchedRows} linhas encontradas, ${updatedCount} atualizações aplicadas.`);
+      toast.success(`Importação complementar concluída: ${matchedRows} linhas mescladas, ${updatedCount} atualizações aplicadas, ${createdCount} novos produtos criados.`);
     } catch (err: any) {
       console.error("Erro ao importar complemento:", err);
       toast.error("Falha na importação complementar: " + (err?.message || err));
@@ -924,18 +1043,43 @@ export default function Settings() {
                         ))}
                       </div>
 
-                      <div className="flex justify-end mt-4 gap-2">
-                        <Button onClick={() => {
-                          const initial: Record<string,string> = {};
-                          MAPPING_FIELDS.forEach(f => initial[f.key] = "");
-                          setMappings(initial);
-                        }} variant="outline">
-                          Resetar Mapeamento
-                        </Button>
+                      <div className="flex justify-between items-center mt-4 gap-2">
+                        <div className="flex items-center gap-3">
+                          <Button onClick={() => {
+                            const initial: Record<string,string> = {};
+                            MAPPING_FIELDS.forEach(f => initial[f.key] = "");
+                            setMappings(initial);
+                          }} variant="outline">
+                            Resetar Mapeamento
+                          </Button>
 
-                        <Button onClick={handleImportWithMapping} disabled={loading}>
-                          Importar com Mapeamento
-                        </Button>
+                          <div className="flex items-center space-x-2">
+                            <input type="checkbox" id="createMissing" checked={complementCreateMissing} onChange={(e) => setComplementCreateMissing(e.target.checked)} />
+                            <label htmlFor="createMissing" className="text-sm">Criar produtos ausentes a partir do intervalo complementar</label>
+                          </div>
+                        </div>
+
+                        <div className="flex gap-2">
+                          <div className="flex items-center">
+                            <Label className="mr-2">Coluna preço 12m</Label>
+                            <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1">
+                              <option value="">(auto)</option>
+                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
+
+                          <div className="flex items-center">
+                            <Label className="mr-2">Coluna preço 24m</Label>
+                            <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1">
+                              <option value="">(auto)</option>
+                              {headers.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                          </div>
+
+                          <Button onClick={handleImportWithMapping} disabled={loading}>
+                            Importar com Mapeamento
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -958,7 +1102,7 @@ export default function Settings() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e complementar os produtos já importados (match por SKU / part_number).
+                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e complementar os produtos já importados (match por SKU / part_number). Se uma linha complementar não tiver correspondência e a opção estiver ativada, será criado um novo produto com base nas colunas da linha (útil para configurações como 'Interna/Externa', 'Madeira/Metal', etc.).
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -990,6 +1134,8 @@ export default function Settings() {
                     setComplementPreviewRows([]);
                     setComplementKeyColumn("");
                     setComplementRowsCount(null);
+                    setComplementPrice12Column("");
+                    setComplementPrice24Column("");
                   }} variant="outline">Limpar Prévia</Button>
                 </div>
 
