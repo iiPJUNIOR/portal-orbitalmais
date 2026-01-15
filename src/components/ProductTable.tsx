@@ -11,13 +11,13 @@ import {
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
 import { Product } from "@/types/product";
 import { formatModelLabel, formatCurrencyBRL } from "@/lib/formatters";
 
 interface ProductTableProps {
   products: Product[];
-  onAddToQuote: (product: Product, quantity: number) => void;
+  // onAddToQuote accepts optional unitPrice to override product default when adding
+  onAddToQuote: (product: Product, quantity: number, unitPrice?: number) => void;
 }
 
 export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
@@ -28,18 +28,6 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
       ...prev,
       [productId]: Math.max(1, Math.min(99, value))
     }));
-  };
-
-  const getCharacteristics = (product: Product) => {
-    const characteristics = [];
-
-    if (product.biometrics) characteristics.push("Biometria");
-    if (product.facial !== "None") characteristics.push(`Facial ${product.facial}`);
-    if (product.proximity !== "None") characteristics.push(`Prox ${product.proximity}`);
-    if ((product as any).urn) characteristics.push("Urna");
-    if ((product as any).qr) characteristics.push("QR");
-
-    return characteristics.join(", ");
   };
 
   function getComplementMeta(product: Product, candidateKeys: string[]) {
@@ -112,8 +100,33 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
                 <TableCell>{materialPorta || "-"}</TableCell>
                 <TableCell>{controle || "-"}</TableCell>
 
-                <TableCell>{priceCom ? formatCurrencyBRL(priceCom) : "-"}</TableCell>
-                <TableCell>{priceSem ? formatCurrencyBRL(priceSem) : "-"}</TableCell>
+                <TableCell>
+                  {priceCom ? (
+                    <button
+                      className="text-left text-blue-600 hover:underline cursor-pointer"
+                      onClick={() => onAddToQuote(product, qty, priceCom)}
+                      title="Clique para adicionar este item com o preço 'Com iDSecure'"
+                    >
+                      {formatCurrencyBRL(priceCom)}
+                    </button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+
+                <TableCell>
+                  {priceSem ? (
+                    <button
+                      className="text-left text-blue-600 hover:underline cursor-pointer"
+                      onClick={() => onAddToQuote(product, qty, priceSem)}
+                      title="Clique para adicionar este item com o preço 'Sem iDSecure'"
+                    >
+                      {formatCurrencyBRL(priceSem)}
+                    </button>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
 
                 <TableCell>{liteOrSystem || "-"}</TableCell>
 

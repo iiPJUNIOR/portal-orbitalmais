@@ -263,19 +263,22 @@ export default function Index() {
     toast.success("Catálogo recarregado a partir da planilha (importedProducts)");
   };
 
-  const handleAddToQuote = (product: Product, quantity: number) => {
+  // Updated: accept optional unitPrice so clicks on Com/Sem iDSecure can pass the chosen price
+  const handleAddToQuote = (product: Product, quantity: number, unitPrice?: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
     const defaultUnit = product.value_12m;
+    const chosenUnit = unitPrice ?? defaultUnit;
+
     if (existing) {
-      // Move updated/existing item to top by reordering array
+      // Move updated/existing item to top by reordering array and update unitPrice if provided
       setQuoteItems((prev) =>
         [
-          { ...existing, quantity: existing.quantity + quantity },
+          { ...existing, quantity: existing.quantity + quantity, unitPrice: unitPrice ?? existing.unitPrice },
           ...prev.filter((it) => it.product.id !== product.id)
         ]
       );
     } else {
-      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: defaultUnit };
+      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: chosenUnit };
       // new items appear on top
       setQuoteItems((prev) => [newItem, ...prev]);
     }
