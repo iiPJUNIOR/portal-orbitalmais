@@ -13,6 +13,15 @@ import { parseSpreadsheetNumber } from "@/lib/formatters";
 const ENV_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 const LOCAL_STORAGE_KEY = "google_client_id_override";
 
+// Local storage keys for complement settings
+const LS_COMPLEMENT_RANGE = "complement_range";
+const LS_COMPLEMENT_SHEET = "complement_sheet";
+const LS_COMPLEMENT_KEY_COLUMN = "complement_key_column";
+const LS_COMPLEMENT_PRICE_12 = "complement_price_12_column";
+const LS_COMPLEMENT_PRICE_24 = "complement_price_24_column";
+const LS_COMPLEMENT_COM_IDS = "complement_com_ids_column";
+const LS_COMPLEMENT_SEM_IDS = "complement_sem_ids_column";
+
 // Fields expected from the user mapping
 const MAPPING_FIELDS = [
   { key: "category", label: "Categoria" },
@@ -50,7 +59,13 @@ export default function Settings() {
   const [headers, setHeaders] = useState<string[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [stage, setStage] = useState<"idle" | "sheetsLoaded" | "headersLoaded" | "mapped">("idle");
-  const [range, setRange] = useState<string>("A1:Z1000");
+  const [range, setRange] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000";
+    } catch {
+      return "A1:Z1000";
+    }
+  });
   const [overrideClientId, setOverrideClientId] = useState<string>(() => {
     try {
       return (localStorage.getItem(LOCAL_STORAGE_KEY) || "");
@@ -69,21 +84,63 @@ export default function Settings() {
   const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
 
   // --- Complement import states ---
-  const [complementSheet, setComplementSheet] = useState<string | null>(null);
-  const [complementRange, setComplementRange] = useState<string>("A1:Z1000");
+  const [complementSheet, setComplementSheet] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_SHEET) || null;
+    } catch {
+      return null;
+    }
+  });
+  const [complementRange, setComplementRange] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000";
+    } catch {
+      return "A1:Z1000";
+    }
+  });
   const [complementHeaders, setComplementHeaders] = useState<string[]>([]);
   const [complementPreviewRows, setComplementPreviewRows] = useState<any[][]>([]);
-  const [complementKeyColumn, setComplementKeyColumn] = useState<string>("");
+  const [complementKeyColumn, setComplementKeyColumn] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || "";
+    } catch {
+      return "";
+    }
+  });
   const [complementImporting, setComplementImporting] = useState(false);
   const [complementRowsCount, setComplementRowsCount] = useState<number | null>(null);
 
   // New: allow creating missing products from complement rows and choose price columns
   const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
-  const [complementPrice12Column, setComplementPrice12Column] = useState<string>("");
-  const [complementPrice24Column, setComplementPrice24Column] = useState<string>("");
+  const [complementPrice12Column, setComplementPrice12Column] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_PRICE_12) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [complementPrice24Column, setComplementPrice24Column] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_PRICE_24) || "";
+    } catch {
+      return "";
+    }
+  });
   // New columns for Com iDSecure / Sem iDSecure
-  const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>("");
-  const [complementSemIdsColumn, setComplementSemIdsColumn] = useState<string>("");
+  const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "";
+    } catch {
+      return "";
+    }
+  });
+  const [complementSemIdsColumn, setComplementSemIdsColumn] = useState<string>(() => {
+    try {
+      return localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || "";
+    } catch {
+      return "";
+    }
+  });
   // ---------------------------------
 
   useEffect(() => {
@@ -141,6 +198,23 @@ export default function Settings() {
       console.warn("Failed to persist spreadsheet link", e);
     }
   }, [spreadsheetLink]);
+
+  // Persist complement settings to localStorage when they change
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_COMPLEMENT_RANGE, complementRange || "");
+      if (complementSheet) localStorage.setItem(LS_COMPLEMENT_SHEET, complementSheet);
+      else localStorage.removeItem(LS_COMPLEMENT_SHEET);
+
+      localStorage.setItem(LS_COMPLEMENT_KEY_COLUMN, complementKeyColumn || "");
+      localStorage.setItem(LS_COMPLEMENT_PRICE_12, complementPrice12Column || "");
+      localStorage.setItem(LS_COMPLEMENT_PRICE_24, complementPrice24Column || "");
+      localStorage.setItem(LS_COMPLEMENT_COM_IDS, complementComIdsColumn || "");
+      localStorage.setItem(LS_COMPLEMENT_SEM_IDS, complementSemIdsColumn || "");
+    } catch (e) {
+      console.warn("Failed to persist complement settings", e);
+    }
+  }, [complementRange, complementSheet, complementKeyColumn, complementPrice12Column, complementPrice24Column, complementComIdsColumn, complementSemIdsColumn]);
 
   // Auto-save seller fields as the user types (also keep Save button for manual control)
   useEffect(() => {
@@ -403,7 +477,7 @@ export default function Settings() {
         // prefer header names that include '12' or '12m' / '24' or '24m' or 'valor'
         const norm = candidates.map((h) => h.toLowerCase());
         if (prefer12) {
-          const idx12 = norm.findIndex((h) => h.includes("12") || h.includes("12m") || h.includes("valor") && h.includes("12"));
+          const idx12 = norm.findIndex((h) => h.includes("12") || h.includes("12m") || (h.includes("valor") && h.includes("12")));
           if (idx12 >= 0) return candidates[idx12];
           const idxVal = norm.findIndex((h) => h.includes("valor") || h.includes("price") || h.includes("preco"));
           if (idxVal >= 0) return candidates[idxVal];
@@ -418,8 +492,8 @@ export default function Settings() {
 
       const default12 = detectPriceCol(headerStrings, true);
       const default24 = detectPriceCol(headerStrings, false);
-      setComplementPrice12Column(default12);
-      setComplementPrice24Column(default24);
+      setComplementPrice12Column((prev) => prev || default12);
+      setComplementPrice24Column((prev) => prev || default24);
 
       // Try to auto-detect "Com iDSecure" / "Sem iDSecure" columns (common naming variations)
       const lower = headerStrings.map((h) => h.toLowerCase());
@@ -430,12 +504,12 @@ export default function Settings() {
         }
         return "";
       };
-      const comCandidates = ["com idsecure", "com id secure", "com ids", "com id", "com idsecure", "comids", "com_idsecure", "com"];
-      const semCandidates = ["sem idsecure", "sem id secure", "sem ids", "sem id", "semid", "sem"];
+      const comCandidates = ["com idsecure", "com id secure", "com ids", "com id", "com idsecure", "comids", "com_idsecure", "com", "com ids e", "comidsvalor"];
+      const semCandidates = ["sem idsecure", "sem id secure", "sem ids", "sem id", "semid", "sem", "semidsvalor"];
       const foundCom = findByCandidates(comCandidates);
       const foundSem = findByCandidates(semCandidates);
-      setComplementComIdsColumn(foundCom);
-      setComplementSemIdsColumn(foundSem);
+      setComplementComIdsColumn((prev) => prev || foundCom);
+      setComplementSemIdsColumn((prev) => prev || foundSem);
 
       setStage("headersLoaded");
       toast.success("Cabeçalhos carregados e mapeamento inicial aplicado (pode ser ajustado).");
@@ -779,7 +853,7 @@ export default function Settings() {
                 {stage === "headersLoaded" && (
                   <div className="space-y-4 pt-4 border-t">
                     <Label>Range de importação dentro da aba</Label>
-                    <Input value={range} onChange={(e) => setRange(e.target.value)} />
+                    <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} />
                     <p className="text-sm text-muted-foreground">Exemplo: A1:Z1000 (será prefixado com a aba ao buscar)</p>
 
                     <div>
@@ -833,7 +907,7 @@ export default function Settings() {
                             </select>
                           </div>
 
-                          <Button onClick={handleImportWithMapping} disabled={loading}>
+                          <Button onClick={handleImportComplement} disabled={loading}>
                             Importar com Mapeamento
                           </Button>
                         </div>
@@ -884,8 +958,9 @@ export default function Settings() {
 
                 <div className="flex gap-2">
                   <Button onClick={async () => {
-                    await handleReadComplementRange();
+                    await handleLoadHeaders();
                     // After reading headers, ensure the selects for Com/Sem iDSecure are updated if headers exist
+                    toast.success("Cabeçalhos (primeira linha) recarregados. Ajuste as colunas se necessário.");
                   }} disabled={!connected || !spreadsheetId || !complementSheet}>
                     Ler intervalo (range)
                   </Button>
@@ -898,6 +973,12 @@ export default function Settings() {
                     setComplementPrice24Column("");
                     setComplementComIdsColumn("");
                     setComplementSemIdsColumn("");
+                    localStorage.removeItem(LS_COMPLEMENT_RANGE);
+                    localStorage.removeItem(LS_COMPLEMENT_KEY_COLUMN);
+                    localStorage.removeItem(LS_COMPLEMENT_PRICE_12);
+                    localStorage.removeItem(LS_COMPLEMENT_PRICE_24);
+                    localStorage.removeItem(LS_COMPLEMENT_COM_IDS);
+                    localStorage.removeItem(LS_COMPLEMENT_SEM_IDS);
                   }} variant="outline">Limpar Prévia</Button>
                 </div>
 
