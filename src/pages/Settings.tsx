@@ -438,9 +438,9 @@ export default function Settings() {
       return;
     }
 
-    // Validate that at least description and price are mapped
-    if (!mappings.description || (!mappings.value_12m && !mappings.value_24m)) {
-      toast.error("Mapeie pelo menos Descrição e um dos valores (12 meses ou 24 meses).");
+    // Require description mapping only; price columns are optional (auto-detection/fallback applies)
+    if (!mappings.description) {
+      toast.error("Mapeie ao menos a coluna 'Descrição' antes de importar.");
       return;
     }
 

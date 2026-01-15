@@ -5,7 +5,6 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
 import { ProductTable } from "@/components/ProductTable";
-import { QuoteBuilder } from "@/components/QuoteBuilder";
 import { ProposalForm } from "@/components/ProposalForm";
 import { ProposalSummary } from "@/components/ProposalSummary";
 import { QuoteHistory } from "@/components/QuoteHistory";
@@ -532,14 +531,7 @@ export default function Index() {
             {/* Right: sticky sidebar with quote summary and actions */}
             <aside className="lg:col-span-1">
               <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
-                <QuoteBuilder
-                  items={quoteItems}
-                  onRemoveItem={handleRemoveItem}
-                  onUpdateQuantity={handleUpdateQuantity}
-                  onUpdatePriceModel={handleUpdatePriceModel}
-                  onUpdateUnitPrice={handleUpdateUnitPrice}
-                  onGenerateProposal={() => setStep("review")}
-                />
+                {/* QuoteBuilder removed from UI — quote state remains functional but is not displayed here */}
 
                 <div className="bg-white p-4 rounded-md shadow-sm">
                   <div className="flex flex-col gap-3">
@@ -585,14 +577,10 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              <QuoteBuilder
-                items={quoteItems}
-                onRemoveItem={handleRemoveItem}
-                onUpdateQuantity={handleUpdateQuantity}
-                onUpdatePriceModel={handleUpdatePriceModel}
-                onUpdateUnitPrice={handleUpdateUnitPrice}
-                onGenerateProposal={() => setStep("form")}
-              />
+              {/* QuoteBuilder removed from review view as well */}
+              <div className="p-6 text-sm text-muted-foreground">
+                A revisão de itens foi removida da tela — use o botão "Gerar Proposta" para prosseguir.
+              </div>
             </div>
           </div>
         )}
