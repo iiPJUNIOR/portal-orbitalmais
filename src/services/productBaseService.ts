@@ -14,12 +14,36 @@ export type StoredBase = {
 };
 
 /**
+ * Try to get current authenticated user id. Returns string or null.
+ */
+async function getCurrentUserId(): Promise<string | null> {
+  try {
+    // supabase.auth.getUser may exist depending on version
+    // @ts-ignore
+    const resp = await supabase.auth.getUser?.();
+    const userId = resp?.data?.user?.id;
+    return userId ?? null;
+  } catch (err) {
+    console.warn("getCurrentUserId failed", err);
+    return null;
+  }
+}
+
+/**
  * Fetch all bases for the current authenticated user.
+ * Returns empty array if user not authenticated.
  */
 export async function fetchBases(): Promise<StoredBase[]> {
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    console.warn("fetchBases: no authenticated user — returning empty list");
+    return [];
+  }
+
   const { data, error } = await supabase
     .from("product_bases")
     .select("*")
+    .eq("user_id", userId)
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -32,30 +56,29 @@ export async function fetchBases(): Promise<StoredBase[]> {
 
 /**
  * Save a base. If base.id exists, perform update; otherwise insert.
+ * Requires authenticated user — throws an error with friendly message if not authenticated.
  * Returns the saved row.
  */
 export async function saveBase(base: StoredBase): Promise<StoredBase> {
-  // try to get current user id (optional)
-  let userId: string | undefined;
-  try {
-    // supabase.auth.getUser is async and returns { data: { user } }
-    // @ts-ignore
-    const userResp = await supabase.auth.getUser?.();
-    userId = userResp?.data?.user?.id;
-  } catch {
-    // ignore
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error(
+      "Usuário não autenticado. Faça login para salvar bases no Supabase."
+    );
   }
 
   const payload = {
     ...base,
-    user_id: base.user_id ?? userId ?? null,
+    user_id: userId,
   };
 
   if (base.id) {
+    // Update only if the base belongs to the authenticated user
     const { data, error } = await supabase
       .from("product_bases")
       .update(payload)
       .eq("id", base.id)
+      .eq("user_id", userId)
       .select()
       .single();
 
@@ -64,7 +87,6 @@ export async function saveBase(base: StoredBase): Promise<StoredBase> {
       throw error;
     }
 
-    // notify listeners in the client
     try {
       window.dispatchEvent(new Event("product_bases_changed"));
     } catch {}
@@ -91,10 +113,19 @@ export async function saveBase(base: StoredBase): Promise<StoredBase> {
 }
 
 /**
- * Delete a base by id.
+ * Delete a base by id. Requires authenticated user and ownership.
  */
 export async function deleteBase(id: string): Promise<void> {
-  const { error } = await supabase.from("product_bases").delete().eq("id", id);
+  const userId = await getCurrentUserId();
+  if (!userId) {
+    throw new Error("Usuário não autenticado. Faça login para remover bases.");
+  }
+
+  const { error } = await supabase
+    .from("product_bases")
+    .delete()
+    .eq("id", id)
+    .eq("user_id", userId);
 
   if (error) {
     console.error("productBaseService.delete error", error);
