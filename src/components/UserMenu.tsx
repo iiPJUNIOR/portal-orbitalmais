@@ -36,14 +36,15 @@ export default function UserMenu() {
     }
   };
 
-  // Only render a small logout control (no persistent email text)
   if (!user) {
     return null;
   }
 
+  // Hide the persistent logout control on small screens to avoid overlapping header buttons.
+  // It will appear on md and larger viewports.
   return (
-    <div className="flex items-center space-x-2">
-      <Button size="sm" variant="outline" onClick={handleLogout}>
+    <div className="hidden md:flex items-center space-x-2">
+      <Button size="sm" variant="outline" onClick={handleLogout} aria-label="Logout">
         Logout
       </Button>
     </div>
