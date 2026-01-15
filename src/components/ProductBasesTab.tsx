@@ -5,19 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
-
-type StoredBase = {
-  id: string;
-  name: string;
-  type: "catalog" | "product";
-  headers: string[];
-  rows: any[][];
-  createdAt: string;
-  // optional metadata
-  keyColumn?: string | null;
-  comIdsColumn?: string | null;
-  semIdsColumn?: string | null;
-};
+import { fetchBases, deleteBase, type StoredBase } from "@/services/productBaseService";
 
 type ProductBasesTabProps = {
   onBack?: () => void;
@@ -26,28 +14,34 @@ type ProductBasesTabProps = {
 export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
   const [bases, setBases] = useState<StoredBase[]>([]);
   const navigate = useNavigate();
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     loadBases();
+    // listen for external updates (e.g., saved/deleted from Settings)
+    const handler = () => {
+      loadBases();
+    };
+    window.addEventListener("product_bases_changed", handler);
+    return () => window.removeEventListener("product_bases_changed", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function loadBases() {
+  async function loadBases() {
+    setLoading(true);
     try {
-      const raw = localStorage.getItem("product_bases");
-      if (!raw) {
-        setBases([]);
-        return;
-      }
-      const parsed = JSON.parse(raw) as StoredBase[];
-      setBases(Array.isArray(parsed) ? parsed : []);
+      const data = await fetchBases();
+      setBases(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.warn("Failed to load product_bases", err);
+      console.error("Failed to load product bases", err);
+      toast.error("Falha ao carregar bases do servidor");
       setBases([]);
+    } finally {
+      setLoading(false);
     }
   }
 
-  function handleExport(b: StoredBase) {
+  async function handleExport(b: StoredBase) {
     try {
       const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
       const url = URL.createObjectURL(blob);
@@ -65,20 +59,30 @@ export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
     }
   }
 
-  function handleDelete(id: string) {
-    const next = bases.filter((b) => b.id !== id);
-    setBases(next);
+  async function handleDelete(id: string) {
+    if (!confirm("Remover esta base permanentemente?")) return;
     try {
-      localStorage.setItem("product_bases", JSON.stringify(next));
-      // Notify other parts of the app that bases changed so they can reload
-      try {
-        window.dispatchEvent(new Event("product_bases_changed"));
-      } catch {}
+      await deleteBase(id);
       toast.success("Base removida");
+      // reload
+      await loadBases();
     } catch (err) {
-      console.warn("failed to persist bases after delete", err);
+      console.error("delete failed", err);
       toast.error("Falha ao remover base");
     }
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Base de Produtos</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div>Carregando...</div>
+        </CardContent>
+      </Card>
+    );
   }
 
   if (bases.length === 0) {
@@ -127,16 +131,16 @@ export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
                 <div>
                   <div className="font-medium">{b.name}</div>
                   <div className="text-sm text-muted-foreground">
-                    {b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleDateString()}
+                    {Array.isArray(b.rows) ? b.rows.length : 0} linhas · {Array.isArray(b.headers) ? b.headers.length : 0} colunas · criado em {b.created_at ? new Date(b.created_at).toLocaleDateString() : ""}
                   </div>
-                  {b.keyColumn && <div className="text-sm text-muted-foreground mt-1">Coluna chave: <strong>{b.keyColumn}</strong></div>}
-                  {b.comIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Com iDSecure': <strong>{b.comIdsColumn}</strong></div>}
-                  {b.semIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Sem iDSecure': <strong>{b.semIdsColumn}</strong></div>}
+                  {b.key_column && <div className="text-sm text-muted-foreground mt-1">Coluna chave: <strong>{b.key_column}</strong></div>}
+                  {b.com_ids_column && <div className="text-sm text-muted-foreground mt-1">Coluna 'Com iDSecure': <strong>{b.com_ids_column}</strong></div>}
+                  {b.sem_ids_column && <div className="text-sm text-muted-foreground mt-1">Coluna 'Sem iDSecure': <strong>{b.sem_ids_column}</strong></div>}
                 </div>
 
                 <div className="flex items-center gap-2">
                   <Button size="sm" variant="outline" onClick={() => handleExport(b)}>Exportar</Button>
-                  <Button size="sm" variant="destructive" onClick={() => handleDelete(b.id)}>Remover</Button>
+                  <Button size="sm" variant="destructive" onClick={() => handleDelete(String(b.id))}>Remover</Button>
                 </div>
               </div>
             ))}
