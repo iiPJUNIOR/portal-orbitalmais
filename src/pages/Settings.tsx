@@ -114,6 +114,55 @@ export default function Settings() {
     })();
   }, []);
 
+  // Try to restore persisted Google access token (so the user remains connected across reloads)
+  useEffect(() => {
+    (async () => {
+      try {
+        // ensure script loaded (so requestAccessToken could run later if needed)
+        await googleClient.init();
+      } catch (err) {
+        // ignore init error here
+      }
+
+      try {
+        const stored = googleClient.getStoredAccessToken();
+        if (stored && stored.access_token) {
+          // validate by listing drive files (best-effort)
+          try {
+            const driveFiles = await googleClient.listDriveSpreadsheets(stored.access_token);
+            setAccessToken(stored.access_token);
+            setConnected(true);
+            setFiles((driveFiles || []).map((f: any) => ({ id: f.id, name: f.name })));
+            // keep storage in google client; nothing else needed
+          } catch (err) {
+            console.warn("Stored Google token seems invalid; attempting to request a fresh one", err);
+            // Try a fresh token request silently (may open a consent prompt only if needed)
+            try {
+              const resp = await googleClient.requestAccessToken();
+              if (resp?.access_token) {
+                setAccessToken(resp.access_token);
+                setConnected(true);
+                try {
+                  const driveFiles = await googleClient.listDriveSpreadsheets(resp.access_token);
+                  setFiles((driveFiles || []).map((f: any) => ({ id: f.id, name: f.name })));
+                } catch {}
+              }
+            } catch (reqErr) {
+              console.warn("Silent requestAccessToken failed", reqErr);
+              // leave disconnected; user can re-click Connect
+              setConnected(false);
+              setAccessToken(null);
+            }
+          }
+        }
+      } catch (err) {
+        console.warn("Failed to restore stored Google token", err);
+      }
+    })();
+    // only on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     try {
       localStorage.setItem("spreadsheet_link", spreadsheetLink || "");
@@ -149,7 +198,6 @@ export default function Settings() {
         setAccessToken(resp.access_token);
         setConnected(true);
         toast.success("Conectado ao Google");
-        // prefetch drive files for convenience
         try {
           const driveFiles = await googleClient.listDriveSpreadsheets(resp.access_token);
           setFiles((driveFiles || []).map((f: any) => ({ id: f.id, name: f.name })));
@@ -177,7 +225,7 @@ export default function Settings() {
     }
     setLoading(true);
     try {
-      const titles = await googleClient.getSpreadsheetSheets(accessToken!, id);
+      const titles = await googleClient.getSpreadsheetSheets(accessToken, id);
       setSpreadsheetId(id);
       setSheetTitles(titles);
       setSelectedSheet(titles[0] ?? null);

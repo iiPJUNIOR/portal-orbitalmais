@@ -4,11 +4,11 @@
  * Notes:
  * - Requires VITE_GOOGLE_CLIENT_ID to be set in your environment.
  * - Uses Google Identity Services token client to obtain access tokens for Drive/Sheets scopes.
- * - No external npm packages required; uses fetch against Google REST APIs.
+ * - Persists access token + expiry in localStorage so the app can restore connection across page reloads.
  *
  * Usage:
  *  await init();
- *  await requestAccessToken(); // prompts consent if needed
+ *  await requestAccessToken(); // prompts consent if needed (and persists token)
  *  const files = await listDriveSpreadsheets(token);
  *  const values = await getSpreadsheetValues(token, spreadsheetId, range);
  *  const sheets = await getSpreadsheetSheets(token, spreadsheetId);
@@ -28,6 +28,48 @@ const SCOPES = [
 
 let _scriptLoaded = false;
 let _tokenClient: any = null;
+
+const STORAGE_KEY = "gis_access_token";
+const STORAGE_EXPIRES_KEY = "gis_access_token_expires_at";
+
+/**
+ * Return stored access token if present and not expired.
+ * Returns { access_token, expires_at } or null.
+ */
+export function getStoredAccessToken(): { access_token: string; expires_at?: number } | null {
+  try {
+    const token = localStorage.getItem(STORAGE_KEY);
+    if (!token) return null;
+    const expiresRaw = localStorage.getItem(STORAGE_EXPIRES_KEY);
+    const expiresAt = expiresRaw ? Number(expiresRaw) : undefined;
+    if (expiresAt && Date.now() > expiresAt) {
+      // expired -> clear it
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_EXPIRES_KEY);
+      return null;
+    }
+    return { access_token: token, expires_at: expiresAt };
+  } catch (err) {
+    console.warn("getStoredAccessToken failed", err);
+    return null;
+  }
+}
+
+async function persistAccessToken(tokenResp: any) {
+  try {
+    if (!tokenResp?.access_token) return;
+    localStorage.setItem(STORAGE_KEY, tokenResp.access_token);
+    if (tokenResp.expires_in) {
+      // subtract a small slack so we treat near-expiry as expired
+      const expiresAt = Date.now() + Number(tokenResp.expires_in) * 1000 - 10_000;
+      localStorage.setItem(STORAGE_EXPIRES_KEY, String(expiresAt));
+    } else {
+      localStorage.removeItem(STORAGE_EXPIRES_KEY);
+    }
+  } catch (err) {
+    console.warn("persistAccessToken failed", err);
+  }
+}
 
 export async function init() {
   if (!CLIENT_ID) {
@@ -58,7 +100,7 @@ export async function init() {
   });
 }
 
-export function initTokenClient(onTokenResponse?: (resp: any) => void) {
+export function initTokenClient(onTokenResponse?: (resp: any) => void, prompt = "") {
   if (!_scriptLoaded) {
     throw new Error("Google Identity Services script not loaded. Call init() first.");
   }
@@ -70,9 +112,11 @@ export function initTokenClient(onTokenResponse?: (resp: any) => void) {
   _tokenClient = window.google.accounts.oauth2.initTokenClient({
     client_id: CLIENT_ID,
     scope: SCOPES,
-    prompt: "", // use default prompt behavior
+    prompt, // use default prompt behavior unless overridden
     callback: (resp: any) => {
       // resp: { access_token, expires_in, scope, token_type }
+      // persist token for reloads
+      persistAccessToken(resp);
       if (onTokenResponse) onTokenResponse(resp);
     },
   });
@@ -91,6 +135,7 @@ export function requestAccessToken(): Promise<any> {
       if (!_tokenClient) {
         initTokenClient((resp: any) => {
           if (resp && resp.access_token) {
+            // persist done in initTokenClient callback
             resolve(resp);
           } else {
             reject(new Error("No token received"));
@@ -100,6 +145,8 @@ export function requestAccessToken(): Promise<any> {
         // ensure callback resolves
         _tokenClient.callback = (resp: any) => {
           if (resp && resp.access_token) {
+            // persist done in callback
+            persistAccessToken(resp);
             resolve(resp);
           } else {
             reject(new Error("No token received"));
@@ -116,16 +163,23 @@ export function requestAccessToken(): Promise<any> {
 }
 
 /**
- * Revokes an access token
+ * Revokes an access token and clears persisted storage
  */
 export async function revokeToken(accessToken: string) {
-  if (!accessToken) return;
-  await fetch(`https://oauth2.googleapis.com/revoke?token=${accessToken}`, {
-    method: "POST",
-    headers: {
-      "Content-type": "application/x-www-form-urlencoded",
-    },
-  });
+  try {
+    if (!accessToken) return;
+    await fetch(`https://oauth2.googleapis.com/revoke?token=${accessToken}`, {
+      method: "POST",
+      headers: {
+        "Content-type": "application/x-www-form-urlencoded",
+      },
+    });
+  } finally {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+      localStorage.removeItem(STORAGE_EXPIRES_KEY);
+    } catch {}
+  }
 }
 
 /**
