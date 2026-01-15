@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 
@@ -17,6 +17,30 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   const [initializing, setInitializing] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
+
+  // guard to avoid repeated navigation to the same target within a short time
+  const lastNavigateRef = useRef<{ target: string; at: number } | null>(null);
+  const NAV_THROTTLE_MS = 800;
+
+  const safeNavigate = (target: string) => {
+    try {
+      const now = Date.now();
+      const last = lastNavigateRef.current;
+      if (location.pathname === target) {
+        // already there — no navigation needed
+        return;
+      }
+      if (last && last.target === target && now - last.at < NAV_THROTTLE_MS) {
+        // attempted recently — skip
+        return;
+      }
+      lastNavigateRef.current = { target, at: now };
+      navigate(target);
+    } catch (err) {
+      // ignore navigation errors
+      // console.warn("safeNavigate failed", err);
+    }
+  };
 
   useEffect(() => {
     let mounted = true;
@@ -41,6 +65,11 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       // onAuthStateChange returns { data } where data.subscription.unsubscribe() is available
       // @ts-ignore
       const { data } = supabase.auth.onAuthStateChange((event, payload) => {
+        // Ignore the INITIAL_SESSION event to avoid double-handling during startup
+        if (event === "INITIAL_SESSION") {
+          return;
+        }
+
         const s = payload?.session ?? null;
         setSession(s);
         setUser(s?.user ?? null);
@@ -48,9 +77,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         // Only auto-redirect on explicit sign-out events.
         // Avoid forcing navigation to "/" on SIGNED_IN (lets user stay on pages like /settings).
         if (event === "SIGNED_OUT") {
-          try {
-            navigate("/login");
-          } catch {}
+          safeNavigate("/login");
         }
       });
 
@@ -71,14 +98,13 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     try {
       if (!session && location.pathname !== "/login") {
-        navigate("/login");
-      }
-      // If there is a session and the user is on /login, send them to root
-      if (session && location.pathname === "/login") {
-        navigate("/");
+        safeNavigate("/login");
+      } else if (session && location.pathname === "/login") {
+        // If logged in and currently on login page, go to root (only once)
+        safeNavigate("/");
       }
     } catch (err) {
-      // navigation can fail during SSR or early mount; ignore
+      // ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, location.pathname, initializing]);
