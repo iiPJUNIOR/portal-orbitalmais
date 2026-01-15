@@ -85,6 +85,91 @@ function normalizeImportedRow(row: any, idx: number): Product {
   };
 }
 
+function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
+  return products.filter((product) => {
+    // Category filter
+    if (filters.category && product.category !== filters.category) {
+      return false;
+    }
+
+    // Tipo filter (matches model or part_number loosely)
+    if (filters.tipo) {
+      const t = String(filters.tipo).toLowerCase();
+      if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) {
+        return false;
+      }
+    }
+
+    // Model filter
+    if (filters.model && product.model !== filters.model) {
+      return false;
+    }
+
+    // Color filter (match any color)
+    if (filters.color) {
+      const c = String(filters.color).toLowerCase();
+      if (!product.colors.some((col) => col.toLowerCase() === c)) {
+        return false;
+      }
+    }
+
+    // Biometrics filter
+    if (filters.biometrics !== undefined && product.biometrics !== filters.biometrics) {
+      return false;
+    }
+
+    // Facial filter
+    if (filters.facial && filters.facial !== "None" && product.facial !== filters.facial) {
+      return false;
+    }
+
+    // Proximity filter
+    if (filters.proximity && filters.proximity !== "None" && product.proximity !== filters.proximity) {
+      return false;
+    }
+
+    // Urn filter
+    if (filters.urn !== undefined && product.urn !== filters.urn) {
+      return false;
+    }
+
+    // QR filter
+    if (filters.qr !== undefined && product.qr !== filters.qr) {
+      return false;
+    }
+
+    // Price range filter
+    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+      const minPriceFilter = filters.minPrice ?? Number.NEGATIVE_INFINITY;
+      const maxPriceFilter = filters.maxPrice ?? Number.POSITIVE_INFINITY;
+
+      const lowestPrice = Math.min(product.value_12m, product.value_24m);
+      const highestPrice = Math.max(product.value_12m, product.value_24m);
+
+      if (highestPrice < minPriceFilter) {
+        return false;
+      }
+      if (lowestPrice > maxPriceFilter) {
+        return false;
+      }
+    }
+
+    // Search filter
+    if (filters.search) {
+      const searchLower = String(filters.search).toLowerCase();
+      if (
+        !product.description.toLowerCase().includes(searchLower) &&
+        !product.part_number.toLowerCase().includes(searchLower) &&
+        !product.sku.toLowerCase().includes(searchLower)
+      ) {
+        return false;
+      }
+    }
+
+    return product.status === "Ativo";
+  });
+}
+
 export default function Index() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
@@ -105,18 +190,15 @@ export default function Index() {
         try {
           const rows = JSON.parse(raw) as any[];
           const imported = rows.map((r, idx) => normalizeImportedRow(r, idx));
-          // If filters provided try to filter imported products
-          if (filters && filters.search) {
-            const searchLower = String(filters.search).toLowerCase();
-            const filtered = imported.filter((p) =>
-              p.description.toLowerCase().includes(searchLower) ||
-              p.part_number.toLowerCase().includes(searchLower) ||
-              p.sku.toLowerCase().includes(searchLower)
-            );
+
+          // If there are filters, apply them (full set)
+          if (filters && Object.keys(filters).length > 0) {
+            const filtered = applyFiltersToProducts(imported, filters);
             setProducts(filtered);
           } else {
             setProducts(imported.filter((p) => p.status === "Ativo"));
           }
+
           setLoading(false);
           return;
         } catch (err) {
@@ -124,7 +206,7 @@ export default function Index() {
         }
       }
 
-      // Fallback to mock fetch
+      // Fallback to mock fetch (productService will apply filters there)
       const data = await fetchProducts(filters);
       setProducts(data);
     } catch (err) {
@@ -151,9 +233,10 @@ export default function Index() {
       window.clearTimeout(debounceRef.current);
     }
 
-    // If there's no search text, hide products immediately
+    // If there's no search text and there are no other filters, hide products immediately
     const search = (filters?.search ?? "").toString().trim();
-    if (!search) {
+    const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
+    if (!search && !otherFiltersExist) {
       // Clear products and avoid fetching
       setProducts([]);
       setLoading(false);
