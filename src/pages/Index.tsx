@@ -292,13 +292,60 @@ export default function Index() {
       b.rows.forEach((r, idx) => {
         try {
           const prod = productFromBaseRow(b.headers, r, idx);
-          // attach complement meta markers if needed
+
+          // Attach complement metadata (map of header -> raw cell value)
+          const complementMeta: Record<string, any> = {};
+          b.headers.forEach((h, i) => {
+            complementMeta[h] = r[i];
+          });
+          (prod as any).complementMeta = complementMeta;
+
+          // Preserve base metadata references
           (prod as any)._baseId = b.id;
           (prod as any)._baseName = b.name;
-          // preserve optional key/price column hints on product objects for downstream UX if needed
           (prod as any)._baseKeyColumn = b.keyColumn ?? null;
           (prod as any)._baseComIdsColumn = b.comIdsColumn ?? null;
           (prod as any)._baseSemIdsColumn = b.semIdsColumn ?? null;
+
+          // If the base specified columns for 'com' and 'sem' iDSecure prices, extract them
+          if (b.comIdsColumn) {
+            const i = b.headers.indexOf(b.comIdsColumn);
+            if (i >= 0) {
+              const raw = r[i];
+              const parsed = parseSpreadsheetNumber(raw);
+              if (parsed > 0) {
+                (prod as any).price_com_iDSecure = parsed;
+                // if product has no explicit monthly values, use parsed as value_12m
+                if (!prod.value_12m || prod.value_12m === 0) prod.value_12m = parsed;
+              }
+            }
+          }
+
+          if (b.semIdsColumn) {
+            const i = b.headers.indexOf(b.semIdsColumn);
+            if (i >= 0) {
+              const raw = r[i];
+              const parsed = parseSpreadsheetNumber(raw);
+              if (parsed > 0) {
+                (prod as any).price_sem_iDSecure = parsed;
+                if (!prod.value_24m || prod.value_24m === 0) prod.value_24m = parsed;
+              }
+            }
+          }
+
+          // If the base included a keyColumn, try to set SKU/part_number accordingly (helps matching)
+          if (b.keyColumn) {
+            const i = b.headers.indexOf(b.keyColumn);
+            if (i >= 0) {
+              const rawKey = r[i];
+              const keyVal = rawKey !== undefined && rawKey !== null ? String(rawKey) : "";
+              if (keyVal) {
+                prod.sku = keyVal;
+                prod.part_number = keyVal;
+              }
+            }
+          }
+
           out.push(prod);
         } catch {
           // ignore
