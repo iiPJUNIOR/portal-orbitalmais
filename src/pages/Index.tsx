@@ -136,13 +136,15 @@ export default function Index() {
       const raw = localStorage.getItem("quote_items");
       if (!raw) return [];
       const parsed = JSON.parse(raw) as QuoteItem[];
-      // Basic validation: ensure array and minimal shape
       if (Array.isArray(parsed)) return parsed;
       return [];
     } catch (err) {
       return [];
     }
   });
+
+  const prevQuoteRef = useRef<QuoteItem[] | null>(null);
+  const undoTimeoutRef = useRef<number | null>(null);
 
   const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
@@ -206,6 +208,10 @@ export default function Index() {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
         debounceRef.current = null;
+      }
+      if (undoTimeoutRef.current) {
+        window.clearTimeout(undoTimeoutRef.current);
+        undoTimeoutRef.current = null;
       }
     };
   }, []);
@@ -288,17 +294,54 @@ export default function Index() {
   };
 
   const handleRequestClear = () => {
-    // open confirmation modal
     setConfirmClearOpen(true);
   };
 
   const handleConfirmClear = () => {
+    // Save previous items for undo
+    prevQuoteRef.current = quoteItems.length > 0 ? [...quoteItems] : null;
+
     setQuoteItems([]);
     try {
       localStorage.removeItem("quote_items");
     } catch {}
+
     setConfirmClearOpen(false);
-    toast.success("Orçamento limpo");
+
+    // Show toast with undo action (Sonner)
+    toast("Orçamento limpo", {
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          if (prevQuoteRef.current) {
+            setQuoteItems(prevQuoteRef.current);
+            try {
+              localStorage.setItem("quote_items", JSON.stringify(prevQuoteRef.current));
+            } catch {}
+            prevQuoteRef.current = null;
+            // clear any pending timeout
+            if (undoTimeoutRef.current) {
+              window.clearTimeout(undoTimeoutRef.current);
+              undoTimeoutRef.current = null;
+            }
+            toast.success("Orçamento restaurado");
+          } else {
+            toast.error("Nada para restaurar");
+          }
+        },
+      },
+      // leave default duration; user can click action to restore
+    });
+
+    // Invalidate stored prev after 10 seconds to avoid memory retention
+    if (undoTimeoutRef.current) {
+      window.clearTimeout(undoTimeoutRef.current);
+      undoTimeoutRef.current = null;
+    }
+    undoTimeoutRef.current = window.setTimeout(() => {
+      prevQuoteRef.current = null;
+      undoTimeoutRef.current = null;
+    }, 10000) as unknown as number;
   };
 
   const handleCancelClear = () => {
@@ -334,6 +377,7 @@ export default function Index() {
     setSaving(true);
     const proposalNumber = generateProposalNumber();
 
+    const loadToastId = toast.loading("Gerando proposta...");
     try {
       const proposalPayload = {
         ...proposalData,
@@ -371,13 +415,13 @@ export default function Index() {
         };
       });
 
-      const savingToastId = toast.loading("Salvando proposta...");
-
       try {
+        const savingToastId = toast.loading("Salvando proposta no servidor...");
         const savedQuoteId = await saveQuote(quotePayload, itemsToSave, blob, `proposta-${proposalNumber}.pptx`);
         toast.dismiss(savingToastId);
         toast.success("Proposta salva com sucesso (ID: " + savedQuoteId + ")");
 
+        // Trigger download
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -394,10 +438,12 @@ export default function Index() {
         setProposalData(null);
         setStep("catalog");
       } catch (err: any) {
-        toast.dismiss(savingToastId);
+        toast.dismiss(loadToastId);
         console.error("Erro ao salvar proposta:", err);
+
+        // Attempt to let user download local copy and inform with actionable toast
         try {
-          const url = URL.createObjectURL(blob);
+          const url = URL.createObjectURL((await generateProposalPPTX(proposalPayload)) as any);
           const a = document.createElement("a");
           a.href = url;
           a.download = `proposta-${proposalNumber}.pptx`;
@@ -405,11 +451,13 @@ export default function Index() {
           a.click();
           document.body.removeChild(a);
           URL.revokeObjectURL(url);
-          toast.error("Falha ao salvar no Supabase, mas o arquivo foi gerado para download localmente.");
+          toast.error("Falha ao salvar no servidor; proposta gerada localmente.");
         } catch (downloadErr) {
           console.error("Erro ao iniciar download:", downloadErr);
           toast.error("Falha ao salvar e ao gerar download.");
         }
+      } finally {
+        toast.dismiss(loadToastId);
       }
     } catch (err) {
       console.error("Erro ao gerar proposta:", err);
@@ -473,7 +521,7 @@ export default function Index() {
 
             {/* Right: sticky sidebar with quote summary and actions */}
             <aside className="lg:col-span-1">
-              <div className="sticky top-8 space-y-4">
+              <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
                 <QuoteBuilder
                   items={quoteItems}
                   onRemoveItem={handleRemoveItem}
@@ -610,18 +658,18 @@ export default function Index() {
         onCancel={handleCancelClear}
       />
 
-      {/* Sticky bottom action bar when there are items */}
+      {/* Sticky bottom action bar when there are items (mobile-friendly) */}
       {quoteItems.length > 0 && (
-        <div className="fixed left-0 right-0 bottom-4 z-50 flex justify-center pointer-events-none px-4">
-          <div className="w-full max-w-3xl bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex items-center gap-3 pointer-events-auto">
+        <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none">
+          <div className="w-full max-w-3xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
             <div className="flex-1">
               <div className="text-sm text-muted-foreground">Itens: <span className="font-medium">{totalItemsCount}</span></div>
               <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
             </div>
 
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={handleRequestClear}>Limpar</Button>
-              <Button onClick={openProposalForm}>Gerar Proposta</Button>
+            <div className="flex md:flex-row flex-col gap-2 w-full md:w-auto">
+              <Button variant="outline" onClick={handleRequestClear} className="w-full md:w-auto">Limpar</Button>
+              <Button onClick={openProposalForm} className="w-full md:w-auto">Gerar Proposta</Button>
             </div>
           </div>
         </div>
