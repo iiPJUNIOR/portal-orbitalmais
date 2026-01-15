@@ -12,7 +12,6 @@ import {
   SelectValue 
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Slider } from "@/components/ui/slider";
 import { Search } from "lucide-react";
 import { ProductFilters } from "@/types/product";
 import { getCategories, getModels } from "@/services/productService";
@@ -40,7 +39,6 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
     search: ""
   });
   
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 5000]);
   const debounceRef = useRef<number | null>(null);
   const mountedRef = useRef(false); // avoid triggering filter on initial mount
 
@@ -98,15 +96,6 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
     setFilters(prev => ({ ...prev, [field]: value }));
   };
 
-  const handlePriceChange = (values: number[]) => {
-    setPriceRange([values[0], values[1]]);
-    setFilters(prev => ({ 
-      ...prev, 
-      minPrice: values[0], 
-      maxPrice: values[1] 
-    }));
-  };
-
   const resetFilters = () => {
     const reset = {
       category: undefined,
@@ -121,7 +110,6 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
       search: ""
     };
     setFilters(reset);
-    setPriceRange([0, 5000]);
 
     // Apply immediately (don't wait for debounce)
     if (debounceRef.current) {
@@ -184,23 +172,6 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
           </Select>
         </div>
         
-        <div className="space-y-2">
-          <Label>Preço (R$)</Label>
-          <div className="pt-1">
-            <Slider
-              min={0}
-              max={5000}
-              step={50}
-              value={priceRange}
-              onValueChange={handlePriceChange}
-              className="w-full"
-            />
-            <div className="flex justify-between text-sm text-muted-foreground mt-1">
-              <span>R$ {priceRange[0]}</span>
-              <span>R$ {priceRange[1]}</span>
-            </div>
-          </div>
-        </div>
       </div>
       
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
