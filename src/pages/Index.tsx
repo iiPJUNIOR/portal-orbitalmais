@@ -38,6 +38,15 @@ type ProposalFormData = {
   priceModel: "12m" | "24m";
 };
 
+type StoredBase = {
+  id: string;
+  name: string;
+  type: "catalog" | "product";
+  headers: string[];
+  rows: any[][];
+  createdAt: string;
+};
+
 function normalizeImportedRow(row: any, idx: number): Product {
   const id = row.id || row.ID || row.sku || row.SKU || `imported-${idx}-${Date.now()}`;
   const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
@@ -86,6 +95,50 @@ function normalizeImportedRow(row: any, idx: number): Product {
 }
 
 /**
+ * Helper: convert a base row (headers + row array) into a Product object (best-effort).
+ */
+function productFromBaseRow(headers: string[], row: any[], idx: number): Product {
+  const map: Record<string, any> = {};
+  headers.forEach((h, i) => {
+    map[h] = row[i];
+  });
+
+  const safe = (k: string[]) => {
+    for (const key of k) {
+      if (map[key] !== undefined && map[key] !== null && String(map[key]).trim() !== "") {
+        return String(map[key]);
+      }
+    }
+    return "";
+  };
+
+  const sku = safe(["sku", "SKU", "part_number", "part number", "partnumber", "id", "code"]);
+  const description = safe(["description", "Description", "descrição", "Descrição", "product", "Produto", "nome"]) || sku || `item-${idx}`;
+  const model = safe(["model", "Model", "modelo", "Modelo"]) || description;
+  const value12 = parseSpreadsheetNumber(safe(["value_12m", "12m", "valor12", "valor_12m", "price12", "price_12"]));
+  const value24 = parseSpreadsheetNumber(safe(["value_24m", "24m", "valor24", "valor_24m", "price24", "price_24"]));
+  const part_number = sku || safe(["part_number", "part number", "partnumber"]) || `pn-${idx}`;
+
+  return {
+    id: `${sku || part_number || "base"}-${idx}-${Date.now()}`,
+    sku: sku || part_number || `sku-${idx}`,
+    category: "Controladores Porta" as Product["category"],
+    model,
+    colors: [],
+    biometrics: false,
+    facial: "None",
+    proximity: "None",
+    urn: false,
+    qr: false,
+    description,
+    value_12m: Number(value12 || 0),
+    value_24m: Number(value24 || 0),
+    part_number,
+    status: "Ativo",
+  };
+}
+
+/**
  * Apply filters to products. When a search term is provided, complementary items
  * (those created from the complementary import — detected via _complementSource or complementMeta)
  * are prioritized and placed first in the returned array. Duplicates are preserved.
@@ -129,7 +182,7 @@ function applyFiltersToProducts(products: Product[], filters: Partial<Record<str
     return product.status === "Ativo";
   });
 
-  // If user is searching, ensure complementary items appear first.
+  // If user is searching, ensure complementary items appear first (legacy behavior).
   const searchTerm = String(filters.search ?? "").trim();
   if (searchTerm.length > 0) {
     filtered.sort((a, b) => {
@@ -164,7 +217,7 @@ export default function Index() {
   const prevQuoteRef = useRef<QuoteItem[] | null>(null);
   const undoTimeoutRef = useRef<number | null>(null);
 
-  const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history">("catalog");
+  const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history" | "productLookup">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
 
@@ -181,37 +234,72 @@ export default function Index() {
     }
   }, [quoteItems]);
 
-  const getImportedProducts = (): Product[] => {
+  // Load stored bases once
+  const [bases, setBases] = useState<StoredBase[]>(() => {
     try {
-      const raw = localStorage.getItem("importedProducts");
+      const raw = localStorage.getItem("product_bases");
       if (!raw) return [];
-      const rows = JSON.parse(raw) as any[];
-      if (!Array.isArray(rows) || rows.length === 0) return [];
-
-      // Prioritize rows that were created/updated by the complement import.
-      // We detect either explicit _complementPriority flag or presence of complementMeta.
-      const sorted = [...rows].sort((a, b) => {
-        const pa = !!(a && (a._complementPriority || a.complementMeta || a._complementSource));
-        const pb = !!(b && (b._complementPriority || b.complementMeta || b._complementSource));
-        if (pa === pb) return 0;
-        return pa ? -1 : 1; // complement entries first
-      });
-
-      return sorted.map((r, idx) => normalizeImportedRow(r, idx));
-    } catch (err) {
-      console.warn("Failed to parse importedProducts", err);
+      return JSON.parse(raw) as StoredBase[];
+    } catch {
       return [];
     }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("product_bases", JSON.stringify(bases));
+    } catch (e) {
+      console.warn("failed persist bases", e);
+    }
+  }, [bases]);
+
+  // Helper: collect all products for Catalog from 'catalog' bases and legacy importedProducts
+  const getCatalogProductsFromBases = (): Product[] => {
+    const out: Product[] = [];
+
+    // first, legacy importedProducts (keep backwards compatibility)
+    try {
+      const raw = localStorage.getItem("importedProducts");
+      if (raw) {
+        const parsed = JSON.parse(raw) as any[];
+        if (Array.isArray(parsed)) {
+          parsed.forEach((p, idx) => {
+            try {
+              out.push(normalizeImportedRow(p, idx));
+            } catch {
+              // ignore individual failures
+            }
+          });
+        }
+      }
+    } catch {}
+
+    // then, bases of type 'catalog'
+    bases.filter(b => b.type === "catalog").forEach((b) => {
+      b.rows.forEach((r, idx) => {
+        try {
+          const prod = productFromBaseRow(b.headers, r, idx);
+          // attach complement meta markers if needed
+          (prod as any)._baseId = b.id;
+          (prod as any)._baseName = b.name;
+          out.push(prod);
+        } catch {
+          // ignore
+        }
+      });
+    });
+
+    return out;
   };
 
   const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
     setLoading(true);
     try {
-      const imported = getImportedProducts();
+      const imported = getCatalogProductsFromBases();
 
       if (imported.length === 0) {
         setProducts([]);
-        toast.error("Nenhuma planilha importada — importe sua planilha em Configurações");
+        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
         setLoading(false);
         return;
       }
@@ -229,7 +317,7 @@ export default function Index() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [bases]);
 
   useEffect(() => {
     return () => {
@@ -257,11 +345,11 @@ export default function Index() {
       return;
     }
 
-    const imported = getImportedProducts();
+    const imported = getCatalogProductsFromBases();
     if (imported.length === 0) {
       setProducts([]);
       setLoading(false);
-      toast.error("Nenhuma planilha importada — importe a planilha em Configurações");
+      toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
       return;
     }
 
@@ -271,15 +359,15 @@ export default function Index() {
     }, delay);
   };
 
-  const reloadFromImported = () => {
-    const imported = getImportedProducts();
+  const reloadFromBases = () => {
+    const imported = getCatalogProductsFromBases();
     if (imported.length === 0) {
-      toast.error("Nenhuma planilha importada — vá em Configurações para importar.");
+      toast.error("Nenhuma base de orçamentos — vá em Configurações para criar uma base.");
       setProducts([]);
       return;
     }
     loadProducts();
-    toast.success("Catálogo recarregado a partir da planilha (importedProducts)");
+    toast.success("Catálogo recarregado a partir das bases");
   };
 
   // Accept optional unitPrice so clicks on Com/Sem iDSecure can pass the chosen price
@@ -302,6 +390,26 @@ export default function Index() {
       setQuoteItems((prev) => [newItem, ...prev]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
+  };
+
+  // When adding from a product base row, try to find price from catalog bases
+  const handleAddFromLookupRow = (headers: string[], row: any[]) => {
+    const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
+    // try to find a matching price in catalog bases by SKU/part_number
+    const skuCandidates = [prod.sku, prod.part_number].filter(Boolean).map(String);
+    let foundPrice: number | undefined = undefined;
+
+    const catalogProducts = getCatalogProductsFromBases();
+    for (const candidate of skuCandidates) {
+      const found = catalogProducts.find(p => String(p.sku) === candidate || String(p.part_number) === candidate);
+      if (found) {
+        // prefer 12m
+        foundPrice = found.value_12m || found.value_24m;
+        break;
+      }
+    }
+
+    handleAddToQuote(prod, 1, foundPrice);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -513,105 +621,212 @@ export default function Index() {
   const totalItemsCount = quoteItems.reduce((s, it) => s + it.quantity, 0);
   const totalPrice = computeTotalPrice();
 
+  // Product lookup state
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [lookupResults, setLookupResults] = useState<Array<{ base: StoredBase; headers: string[]; row: any[] }>>([]);
+  const [lookupLoading, setLookupLoading] = useState(false);
+
+  const runLookup = () => {
+    const q = String(lookupQuery || "").trim().toLowerCase();
+    if (!q) {
+      setLookupResults([]);
+      return;
+    }
+    setLookupLoading(true);
+    try {
+      const productBases = bases.filter(b => b.type === "product");
+      const results: Array<{ base: StoredBase; headers: string[]; row: any[] }> = [];
+      productBases.forEach((b) => {
+        b.rows.forEach((r) => {
+          // try to match SKU/part columns or any cell
+          const rowStr = r.map((c) => String(c ?? "").toLowerCase()).join(" ");
+          const headersStr = b.headers.join(" ").toLowerCase();
+          if (rowStr.includes(q) || headersStr.includes(q)) {
+            results.push({ base: b, headers: b.headers, row: r });
+          } else {
+            // also try specific sku-like columns
+            const candidate = b.headers.find(h => /sku|part|code|id/i.test(h));
+            if (candidate) {
+              const idx = b.headers.indexOf(candidate);
+              const val = String(r[idx] ?? "").toLowerCase();
+              if (val.includes(q)) {
+                results.push({ base: b, headers: b.headers, row: r });
+              }
+            }
+          }
+        });
+      });
+      setLookupResults(results.slice(0, 200)); // cap results
+    } catch (err) {
+      console.error("lookup failed", err);
+      toast.error("Erro na busca de código");
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
-        <header className="mb-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <header className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Plataforma de Cotação Control iD</h1>
-            <p className="text-gray-600 mt-1">Monte orçamentos rapidamente a partir da sua planilha.</p>
+            <p className="text-gray-600 mt-1">Monte orçamentos rapidamente a partir das suas bases.</p>
           </div>
 
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate("/settings")}>Importar Planilha</Button>
-            <Button variant="outline" onClick={reloadFromImported}>Recarregar catálogo</Button>
+            <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
+            <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
+            <Button variant="outline" onClick={() => navigate("/settings")}>Configurações / Bases</Button>
+            <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
             <Button onClick={openHistory}>Histórico</Button>
           </div>
         </header>
 
         {step === "catalog" && (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left: catalog and filters */}
-            <main className="lg:col-span-2 space-y-6">
-              <section className="bg-white p-4 rounded-md shadow-sm">
-                <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
-              </section>
+          <>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Left: catalog and filters */}
+              <main className="lg:col-span-2 space-y-6">
+                <section className="bg-white p-4 rounded-md shadow-sm">
+                  <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
+                </section>
 
-              <section className="bg-white p-4 rounded-md shadow-sm">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-medium">Catálogo de Produtos</h2>
-                  <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${products.length} produtos`}</div>
-                </div>
+                <section className="bg-white p-4 rounded-md shadow-sm">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-lg font-medium">Catálogo de Produtos</h2>
+                    <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${products.length} produtos`}</div>
+                  </div>
 
-                <div>
-                  {loading ? (
-                    <div className="p-8 text-center text-muted-foreground">Carregando produtos...</div>
-                  ) : (
-                    <ProductTable products={products} onAddToQuote={handleAddToQuote} />
-                  )}
-                </div>
-              </section>
-            </main>
-
-            {/* Right: sticky sidebar with compact added-items list + actions */}
-            <aside className="lg:col-span-1">
-              <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
-                {/* Compact list of added items (appears on top) */}
-                <div className="bg-white p-4 rounded-md shadow-sm">
-                  <h3 className="font-semibold mb-3">Itens adicionados</h3>
-                  <div className="space-y-2 max-h-56 overflow-auto">
-                    {quoteItems.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
+                  <div>
+                    {loading ? (
+                      <div className="p-8 text-center text-muted-foreground">Carregando produtos...</div>
                     ) : (
-                      quoteItems.map((it) => (
-                        <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
-                          <div className="text-left">
-                            <div className="font-medium text-sm truncate">{it.product.description}</div>
-                            <div className="text-xs text-muted-foreground">
-                              Qtd: {it.quantity} · {it.product.part_number}
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
-                          </div>
-                        </div>
-                      ))
+                      <ProductTable products={products} onAddToQuote={handleAddToQuote} />
                     )}
                   </div>
-                </div>
+                </section>
+              </main>
 
-                {/* Compact actions / totals (no 12m/24m breakdown card) */}
-                <div className="bg-white p-4 rounded-md shadow-sm">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Itens</div>
-                      <div className="font-medium">{totalItemsCount}</div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Total</div>
-                      <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
-                      <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
-                      <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
-                        Gerar Proposta
-                      </Button>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground text-center mt-1">
-                      A proposta será gerada com os valores editados nos itens.
+              {/* Right: sticky sidebar with compact added-items list + actions */}
+              <aside className="lg:col-span-1">
+                <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
+                  {/* Compact list of added items (appears on top) */}
+                  <div className="bg-white p-4 rounded-md shadow-sm">
+                    <h3 className="font-semibold mb-3">Itens adicionados</h3>
+                    <div className="space-y-2 max-h-56 overflow-auto">
+                      {quoteItems.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
+                      ) : (
+                        quoteItems.map((it) => (
+                          <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
+                            <div className="text-left">
+                              <div className="font-medium text-sm truncate">{it.product.description}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Qtd: {it.quantity} · {it.product.part_number}
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
+                            </div>
+                          </div>
+                        ))
+                      )}
                     </div>
                   </div>
-                </div>
 
-                <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
-                  Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
+                  {/* Compact actions / totals */}
+                  <div className="bg-white p-4 rounded-md shadow-sm">
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">Itens</div>
+                        <div className="font-medium">{totalItemsCount}</div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">Total</div>
+                        <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
+                        <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
+                        <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
+                          Gerar Proposta
+                        </Button>
+                      </div>
+
+                      <div className="text-xs text-muted-foreground text-center mt-1">
+                        A proposta será gerada com os valores editados nos itens.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
+                    Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
+                  </div>
                 </div>
+              </aside>
+            </div>
+          </>
+        )}
+
+        {step === "productLookup" && (
+          <div className="bg-white p-6 rounded-md shadow-sm">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-2xl font-semibold">Pesquisar Código (Bases de Produtos)</h2>
+                <p className="text-sm text-muted-foreground">Pesquise em todas as bases do tipo "Base de Produtos" e adicione itens ao orçamento.</p>
               </div>
-            </aside>
+
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
+              </div>
+            </div>
+
+            <div className="flex gap-2 mb-4">
+              <Input
+                placeholder="Digite SKU / código / parte do nome..."
+                value={lookupQuery}
+                onChange={(e) => setLookupQuery(e.target.value)}
+              />
+              <Button onClick={runLookup} disabled={lookupLoading || !lookupQuery}>Buscar</Button>
+            </div>
+
+            <div>
+              {lookupLoading ? (
+                <div>Buscando...</div>
+              ) : (
+                <div className="space-y-3">
+                  {lookupResults.length === 0 ? (
+                    <div className="text-sm text-muted-foreground">Nenhum resultado. Verifique se você possui bases do tipo 'Base de Produtos' em Configurações.</div>
+                  ) : (
+                    lookupResults.map((r, idx) => (
+                      <div key={idx} className="border rounded p-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium">{r.base.name} — {r.base.headers.join(", ")}</div>
+                            <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.createdAt).toLocaleDateString()}</div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button onClick={() => handleAddFromLookupRow(r.headers, r.row)}>Adicionar</Button>
+                          </div>
+                        </div>
+
+                        <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                          {r.base.headers.map((h, i) => (
+                            <div key={i} className="flex flex-col">
+                              <div className="text-xs text-muted-foreground">{h}</div>
+                              <div className="font-medium">{String(r.row[i] ?? "")}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 

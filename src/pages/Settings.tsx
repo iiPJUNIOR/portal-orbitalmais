@@ -22,6 +22,9 @@ const LS_COMPLEMENT_PRICE_24 = "complement_price_24_column";
 const LS_COMPLEMENT_COM_IDS = "complement_com_ids_column";
 const LS_COMPLEMENT_SEM_IDS = "complement_sem_ids_column";
 
+// Stored bases key
+const LS_PRODUCT_BASES = "product_bases";
+
 // Fields expected from the user mapping
 const MAPPING_FIELDS = [
   { key: "category", label: "Categoria" },
@@ -38,6 +41,15 @@ const MAPPING_FIELDS = [
   { key: "value_12m", label: "Valor mensal 12 meses" },
   { key: "value_24m", label: "Valor mensal 24 meses" },
 ];
+
+type StoredBase = {
+  id: string;
+  name: string;
+  type: "catalog" | "product"; // catalog = bases for pricing (appear in Catalog), product = lookup by code
+  headers: string[];
+  rows: any[][]; // raw rows (excluding header)
+  createdAt: string;
+};
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -142,6 +154,25 @@ export default function Settings() {
     }
   });
   // ---------------------------------
+
+  // Bases stored in localStorage (multiple)
+  const [bases, setBases] = useState<StoredBase[]>(() => {
+    try {
+      const raw = localStorage.getItem(LS_PRODUCT_BASES);
+      if (!raw) return [];
+      return JSON.parse(raw) as StoredBase[];
+    } catch {
+      return [];
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LS_PRODUCT_BASES, JSON.stringify(bases));
+    } catch (e) {
+      console.warn("Failed to persist product_bases", e);
+    }
+  }, [bases]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem("google_access_token");
@@ -368,13 +399,6 @@ export default function Settings() {
       setSelectedSheet(titles[0] ?? null);
       setStage("sheetsLoaded");
       toast.success(`Encontradas ${titles.length} abas`);
-
-      // If there's a saved mapping for this spreadsheet, automatically attempt to load headers and apply it.
-      const saved = loadSavedMappingForSpreadsheet(id);
-      if (saved) {
-        // Auto-load headers which will apply saved mapping when headers are available
-        await handleLoadHeaders(); // handleLoadHeaders will read saved mapping from storage
-      }
     } catch (err: any) {
       console.error("Erro ao obter abas:", err);
       toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
@@ -562,14 +586,7 @@ export default function Settings() {
 
   /**
    * Complement import changed: no merging.
-   * Behavior:
-   * - For every data row in the complement range, create a NEW product entry (if complementCreateMissing is true).
-   * - The new product will include:
-   *    - sku generated if key column is not provided or not found
-   *    - description built from row columns
-   *    - value_12m / value_24m extracted from selected complement price columns (or auto-detected)
-   *    - additional fields price_com_iDSecure and price_sem_iDSecure extracted from the two new selects (if provided)
-   * - Do not modify or merge with existing importedProducts entries.
+   * Behavior identical to previous import: create new items in importedProducts.
    */
   const handleImportComplement = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
@@ -716,7 +733,57 @@ export default function Settings() {
     }
   };
 
-  // ----------------------------------------------------------------
+  // ----------------- New: Bases management ---------------------
+
+  // Read full range and return parsed header + rows
+  const fetchFullRange = async () => {
+    if (!accessToken || !spreadsheetId || !complementSheet) {
+      throw new Error("Selecione planilha e aba antes de salvar como base");
+    }
+    setLoading(true);
+    try {
+      const fullRange = `${complementSheet}!${complementRange}`;
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+      const values: any[][] = res.values || [];
+      if (values.length === 0) throw new Error("Intervalo vazio");
+      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
+      const dataRows = values.slice(1);
+      return { headerRow, dataRows };
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSaveBase = async (name: string, type: StoredBase["type"]) => {
+    if (!name || name.trim().length === 0) {
+      toast.error("Informe um nome para a base");
+      return;
+    }
+
+    try {
+      const { headerRow, dataRows } = await fetchFullRange();
+      const base: StoredBase = {
+        id: `base-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`,
+        name: name.trim(),
+        type,
+        headers: headerRow,
+        rows: dataRows,
+        createdAt: new Date().toISOString(),
+      };
+      setBases((prev) => [base, ...prev]);
+      toast.success(`Base "${base.name}" salva (${base.type}) com ${dataRows.length} linhas`);
+    } catch (err: any) {
+      console.error("save base failed", err);
+      toast.error("Falha ao salvar a base: " + (err?.message || err));
+    }
+  };
+
+  const handleDeleteBase = (id: string) => {
+    setBases((prev) => prev.filter((b) => b.id !== id));
+    toast.success("Base removida");
+  };
+
+  // ------------------------------------------------------------
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1086,11 +1153,73 @@ export default function Settings() {
                       </div>
                     </div>
 
-                    <div className="flex justify-end gap-2 mt-3">
-                      <Button onClick={handleImportComplement} disabled={complementImporting}>
-                        {complementImporting ? "Importando..." : "Importar e Criar Novos Itens"}
-                      </Button>
+                    <div className="flex justify-between items-center gap-2 mt-3">
+                      <div className="flex gap-2 items-center">
+                        <Label>Salvar este intervalo como base:</Label>
+                        <Input id="new_base_name" placeholder="Nome da base (ex: Preços Maio 2025)" />
+                        <select id="new_base_type" defaultValue="catalog" className="border rounded px-2 py-1">
+                          <option value="catalog">Base de Orçamentos (aparece no Catálogo)</option>
+                          <option value="product">Base de Produtos (pesquisa por código)</option>
+                        </select>
+                        <Button onClick={() => {
+                          const nameInput = (document.getElementById("new_base_name") as HTMLInputElement | null)?.value || "";
+                          const type = (document.getElementById("new_base_type") as HTMLSelectElement | null)?.value as any;
+                          handleSaveBase(nameInput, type);
+                        }} disabled={!complementHeaders.length || !complementSheet || loading}>
+                          Salvar Base
+                        </Button>
+                      </div>
+
+                      <div>
+                        <Button onClick={handleImportComplement} disabled={complementImporting}>
+                          {complementImporting ? "Importando..." : "Importar e Criar Novos Itens"}
+                        </Button>
+                      </div>
                     </div>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Bases list */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Bases de Pesquisa</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">Gerencie bases salvas (catalog = preços; product = base para busca por código).</p>
+
+                {bases.length === 0 ? (
+                  <div className="p-4 text-sm text-muted-foreground">Nenhuma base salva ainda.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {bases.map((b) => (
+                      <div key={b.id} className="flex items-center justify-between border rounded p-3">
+                        <div>
+                          <div className="font-medium">{b.name}</div>
+                          <div className="text-sm text-muted-foreground">{b.type === "catalog" ? "Base de Orçamentos (exibe no Catálogo)" : "Base de Produtos (pesquisa por código)"}</div>
+                          <div className="text-xs text-muted-foreground mt-1">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleString()}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            // export base as JSON
+                            const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${b.name.replace(/\s+/g, "-") || b.id}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast.success("Base exportada");
+                          }}>Exportar</Button>
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteBase(b.id)}>Remover</Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
