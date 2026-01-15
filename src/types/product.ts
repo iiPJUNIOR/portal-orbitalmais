@@ -18,7 +18,9 @@ export interface Product {
 
 export interface ProductFilters {
   category?: string;
+  tipo?: string;
   model?: string;
+  color?: string;
   biometrics?: boolean;
   facial?: string;
   proximity?: string;

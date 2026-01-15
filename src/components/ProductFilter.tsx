@@ -14,7 +14,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from "lucide-react";
 import { ProductFilters } from "@/types/product";
-import { getCategories, getModels } from "@/services/productService";
+import { getCategories, getModels, getTipos, getColors } from "@/services/productService";
 
 interface ProductFilterProps {
   onFilterChange: (filters: ProductFilters) => void;
@@ -25,10 +25,14 @@ const DEBOUNCE_MS = 300;
 export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
+  const [tipos, setTipos] = useState<string[]>([]);
+  const [colors, setColors] = useState<string[]>([]);
   
   const [filters, setFilters] = useState<ProductFilters>({
     category: undefined,
+    tipo: undefined,
     model: undefined,
+    color: undefined,
     biometrics: undefined,
     facial: undefined,
     proximity: undefined,
@@ -46,8 +50,12 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
     const loadFilters = async () => {
       const categories = getCategories();
       const models = getModels();
+      const tipos = getTipos();
+      const colors = getColors();
       setCategories(categories);
       setModels(models);
+      setTipos(tipos);
+      setColors(colors);
     };
     
     loadFilters();
@@ -70,7 +78,9 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
       onFilterChange({
         // ensure we pass primitive values (avoid unexpected references)
         category: filters.category,
+        tipo: filters.tipo,
         model: filters.model,
+        color: filters.color,
         biometrics: filters.biometrics,
         facial: filters.facial,
         proximity: filters.proximity,
@@ -97,9 +107,11 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   };
 
   const resetFilters = () => {
-    const reset = {
+    const reset: ProductFilters = {
       category: undefined,
+      tipo: undefined,
       model: undefined,
+      color: undefined,
       biometrics: undefined,
       facial: undefined,
       proximity: undefined,
@@ -121,8 +133,8 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
 
   return (
     <div className="space-y-6">
-      {/* Single responsive row: Search (wider) + Category + Model + Facial + Proximity */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      {/* Single responsive row: Search (wider) + Category + Tipo + Model + Cor/Material */}
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="search">Buscar</Label>
           <div className="relative">
@@ -156,6 +168,24 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="tipo">Tipo</Label>
+          <Select 
+            value={filters.tipo ?? "ALL"} 
+            onValueChange={(value) => handleInputChange("tipo", value === "ALL" ? undefined : value)}
+          >
+            <SelectTrigger id="tipo">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todos</SelectItem>
+              {tipos.map(t => (
+                <SelectItem key={t} value={t}>{t}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
           <Label htmlFor="model">Modelo</Label>
           <Select 
             value={filters.model ?? "ALL"} 
@@ -174,6 +204,25 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
         </div>
 
         <div className="space-y-2">
+          <Label htmlFor="color">Cor / Material</Label>
+          <Select
+            value={filters.color ?? "ALL"}
+            onValueChange={(value) => handleInputChange("color", value === "ALL" ? undefined : value)}
+          >
+            <SelectTrigger id="color">
+              <SelectValue placeholder="Selecione" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Todas</SelectItem>
+              {colors.map(col => <SelectItem key={col} value={col}>{col}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      
+      {/* Secondary row: Facial + Proximidade + checkboxes (Biometria, Urna, QR) */}
+      <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-end">
+        <div className="space-y-2 md:col-span-1">
           <Label htmlFor="facial">Facial</Label>
           <Select 
             value={filters.facial ?? "ALL"} 
@@ -192,7 +241,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
           </Select>
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-1">
           <Label htmlFor="proximity">Proximidade</Label>
           <Select 
             value={filters.proximity ?? "ALL"} 
@@ -208,41 +257,40 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             </SelectContent>
           </Select>
         </div>
-      </div>
-      
-      {/* Secondary row: checkboxes (Biometria, Urna, QR) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="biometrics" 
-            checked={filters.biometrics === true}
-            onCheckedChange={(checked) => 
-              handleInputChange("biometrics", checked ? true : undefined)
-            }
-          />
-          <Label htmlFor="biometrics">Biometria</Label>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="urn" 
-            checked={filters.urn === true}
-            onCheckedChange={(checked) => 
-              handleInputChange("urn", checked ? true : undefined)
-            }
-          />
-          <Label htmlFor="urn">Urna</Label>
-        </div>
-        
-        <div className="flex items-center space-x-2">
-          <Checkbox 
-            id="qr" 
-            checked={filters.qr === true}
-            onCheckedChange={(checked) => 
-              handleInputChange("qr", checked ? true : undefined)
-            }
-          />
-          <Label htmlFor="qr">QR Code</Label>
+
+        <div className="flex items-center space-x-2 md:col-span-4">
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="biometrics" 
+              checked={filters.biometrics === true}
+              onCheckedChange={(checked) => 
+                handleInputChange("biometrics", checked ? true : undefined)
+              }
+            />
+            <Label htmlFor="biometrics">Biometria</Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="urn" 
+              checked={filters.urn === true}
+              onCheckedChange={(checked) => 
+                handleInputChange("urn", checked ? true : undefined)
+              }
+            />
+            <Label htmlFor="urn">Urna</Label>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            <Checkbox 
+              id="qr" 
+              checked={filters.qr === true}
+              onCheckedChange={(checked) => 
+                handleInputChange("qr", checked ? true : undefined)
+              }
+            />
+            <Label htmlFor="qr">QR Code</Label>
+          </div>
         </div>
       </div>
       

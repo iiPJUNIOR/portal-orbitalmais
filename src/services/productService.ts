@@ -99,9 +99,25 @@ export const fetchProducts = async (filters: ProductFilters = {}): Promise<Produ
       return false;
     }
 
+    // Tipo filter (matches model or part_number loosely)
+    if (filters.tipo) {
+      const t = String(filters.tipo).toLowerCase();
+      if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) {
+        return false;
+      }
+    }
+
     // Model filter
     if (filters.model && product.model !== filters.model) {
       return false;
+    }
+
+    // Color filter (match any color)
+    if (filters.color) {
+      const c = String(filters.color).toLowerCase();
+      if (!product.colors.some((col) => col.toLowerCase() === c)) {
+        return false;
+      }
     }
 
     // Biometrics filter
@@ -173,4 +189,22 @@ export const getCategories = (): string[] => {
 
 export const getModels = (): string[] => {
   return Array.from(new Set(mockProducts.map((p) => p.model)));
+};
+
+// Return a list of 'tipo' candidates (we derive from model and part_number for flexibility)
+export const getTipos = (): string[] => {
+  const tipos = new Set<string>();
+  mockProducts.forEach((p) => {
+    tipos.add(p.model);
+    tipos.add(p.part_number);
+  });
+  return Array.from(tipos);
+};
+
+export const getColors = (): string[] => {
+  const set = new Set<string>();
+  mockProducts.forEach((p) => {
+    (p.colors || []).forEach((c) => set.add(c));
+  });
+  return Array.from(set);
 };
