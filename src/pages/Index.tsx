@@ -267,14 +267,17 @@ export default function Index() {
     const existing = quoteItems.find((it) => it.product.id === product.id);
     const defaultUnit = product.value_12m;
     if (existing) {
+      // Move updated/existing item to top by reordering array
       setQuoteItems((prev) =>
-        prev.map((it) =>
-          it.product.id === product.id ? { ...it, quantity: it.quantity + quantity } : it
-        )
+        [
+          { ...existing, quantity: existing.quantity + quantity },
+          ...prev.filter((it) => it.product.id !== product.id)
+        ]
       );
     } else {
       const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: defaultUnit };
-      setQuoteItems((prev) => [...prev, newItem]);
+      // new items appear on top
+      setQuoteItems((prev) => [newItem, ...prev]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
   };
@@ -528,11 +531,34 @@ export default function Index() {
               </section>
             </main>
 
-            {/* Right: sticky sidebar with quote summary and actions */}
+            {/* Right: sticky sidebar with compact added-items list + actions */}
             <aside className="lg:col-span-1">
               <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
-                {/* QuoteBuilder removed from UI — quote state remains functional but is not displayed here */}
+                {/* Compact list of added items (appears on top) */}
+                <div className="bg-white p-4 rounded-md shadow-sm">
+                  <h3 className="font-semibold mb-3">Itens adicionados</h3>
+                  <div className="space-y-2 max-h-56 overflow-auto">
+                    {quoteItems.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
+                    ) : (
+                      quoteItems.map((it) => (
+                        <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
+                          <div className="text-left">
+                            <div className="font-medium text-sm truncate">{it.product.description}</div>
+                            <div className="text-xs text-muted-foreground">
+                              Qtd: {it.quantity} · {it.product.part_number}
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
 
+                {/* Compact actions / totals (no 12m/24m breakdown card) */}
                 <div className="bg-white p-4 rounded-md shadow-sm">
                   <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
@@ -577,7 +603,6 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              {/* QuoteBuilder removed from review view as well */}
               <div className="p-6 text-sm text-muted-foreground">
                 A revisão de itens foi removida da tela — use o botão "Gerar Proposta" para prosseguir.
               </div>
