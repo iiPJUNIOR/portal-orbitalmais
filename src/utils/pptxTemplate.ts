@@ -10,11 +10,10 @@ import JSZip from "jszip";
  * - RETURNS a Blob (.pptx) ready for upload/download.
  *
  * Important change:
- * - Substituições agora são aplicadas por bloco <a:txBody> (cada caixa de texto/shape).
- * - Para cada txBody nós detectamos posições (intervalos) dos tokens no texto concatenado,
- *   e aplicamos substituições apenas nesses intervalos, reconstruindo os runs para preservar
- *   o texto estático e a formatação aplicada a cada run. Isso evita remover trechos não relacionados
- *   e reduz a chance de slides ficarem em branco ou perderem partes do conteúdo.
+ * - Tokens found in the template as {{...}} are normalized (remove accents, non-alnum, lowercase)
+ *   and matched against replacement keys so variants like {{Seller Name}} or {{seller_name}}
+ *   will map to the same replacement key (e.g. sellerName). This fixes missing vendor fields.
+ * - Substitutions are applied per <a:txBody> block and only to the matched spans, preserving other text and run formatting.
  */
 
 export interface PptxGenerateOptions {
@@ -77,6 +76,16 @@ function loadPlainMapping(): Record<string, string> {
   return {};
 }
 
+function normalizeKey(k?: string) {
+  if (!k) return "";
+  return String(k)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "")
+    .trim();
+}
+
 /**
  * Build list of search patterns (tokens like {{key}} and plain mapped source texts).
  * Longer patterns are prioritized to avoid partial matches.
@@ -87,6 +96,9 @@ function buildPatterns(replacements: Record<string, string | number>) {
   for (const [key, val] of Object.entries(replacements || {})) {
     const token = `{{${key}}}`;
     patterns.push({ source: token, replacement: String(val ?? "") });
+    // also add underscored variant and spaced variant to catch common token forms
+    const underscored = `{{${key.replace(/([A-Z])/g, "_$1").toLowerCase().replace(/^_/, "")}}}`;
+    patterns.push({ source: underscored, replacement: String(val ?? "") });
   }
 
   const plainMap = loadPlainMapping();
@@ -142,10 +154,34 @@ function findMatchesInText(full: string, patterns: Array<{ source: string; repla
 }
 
 /**
+ * Find tokens of the form {{...}} inside a string and attempt to map them to replacement keys
+ * using normalizeKey. Returns matches with start/end and replacement when a mapping is found.
+ */
+function findNormalizedTokenMatches(full: string, replacements: Record<string, string | number>) {
+  const tokenRegex = /\{\{\s*([^}]+?)\s*\}\}/g;
+  const matches: Array<{ start: number; end: number; replacement: string; source: string }> = [];
+  const normalizedMap: Record<string, string> = {};
+  for (const k of Object.keys(replacements || {})) {
+    normalizedMap[normalizeKey(k)] = k;
+  }
+  let m;
+  while ((m = tokenRegex.exec(full)) !== null) {
+    const inner = String(m[1] || "");
+    const norm = normalizeKey(inner);
+    const mappedKey = normalizedMap[norm];
+    if (mappedKey) {
+      const replacement = String(replacements[mappedKey] ?? "");
+      matches.push({ start: m.index, end: m.index + m[0].length, replacement, source: m[0] });
+    }
+  }
+  return matches;
+}
+
+/**
  * Process a block of XML corresponding to a <a:txBody>...</a:txBody>.
  * This implementation:
  * - Extracts all <a:t> run texts (in order) and computes the full concatenated text.
- * - Finds token/source matches in full text and their replacements.
+ * - Finds token/source matches in full text and their replacements (including normalized {{...}} tokens).
  * - Reconstructs each run's new text by emitting original substrings outside matches and replacement strings where matches occur,
  *   preserving runs that are not touched and preserving run-level formatting.
  */
@@ -171,13 +207,27 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
   }
 
   const patterns = buildPatterns(replacements);
-  if (patterns.length === 0) {
-    return blockContent;
+  const patternMatches = findMatchesInText(full, patterns);
+  const normalizedTokenMatches = findNormalizedTokenMatches(full, replacements);
+
+  // Combine matches and dedupe by start/end (prefer patternMatches first)
+  const combined = [...patternMatches, ...normalizedTokenMatches];
+  if (combined.length === 0) return blockContent;
+
+  // Sort and filter overlaps (earliest start, longest first)
+  combined.sort((a, b) => a.start - b.start || b.end - b.start - (a.end - a.start));
+  const filtered: typeof combined = [];
+  let lastEnd = -1;
+  for (const c of combined) {
+    if (c.start >= lastEnd) {
+      filtered.push(c);
+      lastEnd = c.end;
+    }
   }
 
-  const matches = findMatchesInText(full, patterns);
+  const matches = filtered;
+
   if (matches.length === 0) {
-    // nothing to replace in this txBody
     return blockContent;
   }
 
@@ -204,9 +254,8 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
     let cursor = runStart;
     let outPieces: string[] = [];
 
-    // Process matches that intersect this run
+    // Advance matchIndex if matches are before current run
     while (matchIndex < matches.length && matches[matchIndex].end <= runStart) {
-      // this match is before current run (shouldn't happen with our scanning, but skip defensively)
       matchIndex++;
     }
 
@@ -215,7 +264,7 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
       const m = matches[localMatchIdx];
       if (m.start >= runEnd) break;
 
-      // Append original substring from cursor to match.start
+      // Append original substring from cursor to match.start (but clipped to this run)
       if (m.start > cursor) {
         outPieces.push(full.slice(cursor, Math.min(m.start, runEnd)));
       }
@@ -225,15 +274,12 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
         outPieces.push(m.replacement);
       } else if (m.start < runStart && m.end > runStart) {
         // Match started in previous run(s) and continues into this run.
-        // We should ensure replacement was already emitted when encountering the first run that contains start.
-        // So in this branch we skip emitting replacement and just advance cursor.
-        // (replacement already emitted earlier)
+        // Replacement should have been emitted in the run containing the start; just advance cursor.
       }
 
       // Advance cursor to max(cursor, m.end) but do not exceed runEnd
       cursor = Math.max(cursor, Math.min(m.end, runEnd));
 
-      // If match fully contained within this run or spans beyond, still need to progress localMatchIdx forward
       localMatchIdx++;
     }
 
@@ -242,8 +288,7 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
       outPieces.push(full.slice(cursor, runEnd));
     }
 
-    // If we emitted replacements whose match.start was before this run (i.e., replacement already emitted),
-    // ensure that matchIndex keeps up: advance global matchIndex while matches end <= runEnd
+    // Ensure global matchIndex keeps up
     while (matchIndex < matches.length && matches[matchIndex].end <= runEnd) {
       matchIndex++;
     }
@@ -330,6 +375,7 @@ async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
 export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promise<Blob> {
   const debug = (typeof window !== "undefined" && localStorage.getItem("pptx_debug") === "1") || false;
 
+  // Candidate URLs: try public path first, then bundled template path
   const candidateUrls: string[] = ["/proposal-template.pptx"];
   try {
     const modUrl = new URL("../templates/proposal-template.pptx", import.meta.url).href;
