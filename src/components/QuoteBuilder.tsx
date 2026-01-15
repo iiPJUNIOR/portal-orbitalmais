@@ -179,16 +179,6 @@ export function QuoteBuilder({
               <div className="text-sm text-muted-foreground">Valor Total 24m</div>
               <div className="text-2xl font-bold">{formatCurrencyBRL(total24m)}</div>
             </div>
-            
-            <div className="flex items-end justify-end">
-              <Button 
-                size="lg"
-                onClick={onGenerateProposal}
-                disabled={items.length === 0}
-              >
-                Gerar Proposta
-              </Button>
-            </div>
           </div>
         </CardContent>
       </Card>
