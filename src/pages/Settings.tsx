@@ -81,6 +81,9 @@ export default function Settings() {
   const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
   const [complementPrice12Column, setComplementPrice12Column] = useState<string>("");
   const [complementPrice24Column, setComplementPrice24Column] = useState<string>("");
+  // New columns for Com iDSecure / Sem iDSecure
+  const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>("");
+  const [complementSemIdsColumn, setComplementSemIdsColumn] = useState<string>("");
   // ---------------------------------
 
   useEffect(() => {
@@ -418,6 +421,22 @@ export default function Settings() {
       setComplementPrice12Column(default12);
       setComplementPrice24Column(default24);
 
+      // Try to auto-detect "Com iDSecure" / "Sem iDSecure" columns (common naming variations)
+      const lower = headerStrings.map((h) => h.toLowerCase());
+      const findByCandidates = (cands: string[]) => {
+        for (const cand of cands) {
+          const idx = lower.findIndex((h) => h.includes(cand));
+          if (idx >= 0) return headerStrings[idx];
+        }
+        return "";
+      };
+      const comCandidates = ["com idsecure", "com id secure", "com ids", "com id", "com idsecure", "comids", "com_idsecure", "com"];
+      const semCandidates = ["sem idsecure", "sem id secure", "sem ids", "sem id", "semid", "sem"];
+      const foundCom = findByCandidates(comCandidates);
+      const foundSem = findByCandidates(semCandidates);
+      setComplementComIdsColumn(foundCom);
+      setComplementSemIdsColumn(foundSem);
+
       setStage("headersLoaded");
       toast.success("Cabeçalhos carregados e mapeamento inicial aplicado (pode ser ajustado).");
     } catch (err: any) {
@@ -432,230 +451,18 @@ export default function Settings() {
     setMappings(prev => ({ ...prev, [fieldKey]: headerName }));
   };
 
-  const handleImportWithMapping = async () => {
-    if (!accessToken || !spreadsheetId || !selectedSheet) {
-      toast.error("Selecione a planilha e a aba primeiro.");
-      return;
-    }
-
-    // Require description mapping only; price columns are optional (auto-detection/fallback applies)
-    if (!mappings.description) {
-      toast.error("Mapeie ao menos a coluna 'Descrição' antes de importar.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const fullRange = `${selectedSheet}!${range}`;
-      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
-      const values: any[][] = res.values || [];
-      if (values.length <= 1) {
-        toast.error("Planilha não contém linhas de dados além do cabeçalho.");
-        setLoading(false);
-        return;
-      }
-      const headerRow = values[0].map((h: any) => String(h).trim());
-      const rows = values.slice(1);
-
-      const mappedRows = rows.map((row) => {
-        const obj: any = {};
-        headerRow.forEach((h: string, idx: number) => {
-          obj[h] = row[idx] ?? "";
-        });
-
-        // Build output object using mappings
-        const out: any = {};
-        if (mappings.category) out.category = obj[mappings.category];
-        const modelVal = mappings.model ? obj[mappings.model] : (mappings.tipo ? obj[mappings.tipo] : "");
-        out.model = modelVal || "";
-        out.colors = mappings.colors ? String(obj[mappings.colors] || "").split(",").map((c: string) => c.trim()).filter(Boolean) : [];
-        out.biometrics = mappings.biometrics ? String(obj[mappings.biometrics] || "").toLowerCase() === "true" || String(obj[mappings.biometrics] || "").toLowerCase() === "sim" : false;
-        out.facial = mappings.facial ? String(obj[mappings.facial] || "None") : "None";
-        out.proximity = mappings.proximity ? String(obj[mappings.proximity] || "None") : "None";
-        out.urn = mappings.urn ? String(obj[mappings.urn] || "").toLowerCase() === "true" || String(obj[mappings.urn] || "").toLowerCase() === "sim" : false;
-        out.qr = mappings.qr ? String(obj[mappings.qr] || "").toLowerCase() === "true" || String(obj[mappings.qr] || "").toLowerCase() === "sim" : false;
-        out.part_number = mappings.part_number ? String(obj[mappings.part_number] || "") : "";
-        out.description = mappings.description ? String(obj[mappings.description] || "") : "";
-        out.value_12m = mappings.value_12m ? parseSpreadsheetNumber(obj[mappings.value_12m] || "0") : 0;
-        out.value_24m = mappings.value_24m ? parseSpreadsheetNumber(obj[mappings.value_24m] || "0") : 0;
-        out.sku = out.part_number || out.description || `imported-${Math.random().toString(36).slice(2, 9)}`;
-        out.status = "Ativo";
-        return out;
-      });
-
-      localStorage.setItem("importedProducts", JSON.stringify(mappedRows));
-      // persist mapping per spreadsheet (already saved in effect), but also ensure it's stored explicitly
-      try {
-        if (spreadsheetId) {
-          localStorage.setItem(`import_column_map_${spreadsheetId}`, JSON.stringify(mappings));
-        } else {
-          localStorage.setItem("import_column_map", JSON.stringify(mappings));
-        }
-      } catch {}
-      toast.success(`Importado ${mappedRows.length} linhas e salvo em localStorage (importedProducts)`);
-      setStage("mapped");
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Erro ao importar planilha com mapeamento: " + (err?.message || err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUseFileLink = (id: string) => {
-    const fullLink = `https://docs.google.com/spreadsheets/d/${id}`;
-    setSpreadsheetLink(fullLink);
-    try {
-      localStorage.setItem("spreadsheet_link", fullLink);
-    } catch {
-      // ignore
-    }
-  };
-
-  const filteredFiles = useMemo(() => {
-    const q = fileSearch.trim().toLowerCase();
-    if (!q) return files;
-    return files.filter(f => {
-      return f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
-    });
-  }, [files, fileSearch]);
-
-  const saveOverrideClientId = () => {
-    try {
-      if (!overrideClientId) {
-        toast.error("Cole um Client ID válido antes de salvar.");
-        return;
-      }
-      localStorage.setItem(LOCAL_STORAGE_KEY, overrideClientId);
-      toast.success("Client ID salvo para esta sessão (localStorage).");
-    } catch (err) {
-      console.error("Erro ao salvar override client id:", err);
-      toast.error("Não foi possível salvar o Client ID.");
-    }
-  };
-
-  const clearOverrideClientId = () => {
-    try {
-      localStorage.removeItem(LOCAL_STORAGE_KEY);
-      setOverrideClientId("");
-      toast.success("Client ID de override removido.");
-    } catch (err) {
-      console.error("Erro ao limpar override client id:", err);
-      toast.error("Não foi possível limpar o Client ID.");
-    }
-  };
-
-  // Seller persistence functions (Save/clear still available, but auto-save also occurs)
-  const saveSeller = () => {
-    try {
-      localStorage.setItem("seller_name", sellerName);
-      localStorage.setItem("seller_role", sellerRole);
-      localStorage.setItem("seller_email", sellerEmail);
-      localStorage.setItem("seller_phone", sellerPhone);
-      toast.success("Dados do vendedor salvos.");
-    } catch (err) {
-      console.error("Erro ao salvar dados do vendedor:", err);
-      toast.error("Não foi possível salvar os dados do vendedor.");
-    }
-  };
-
-  const clearSeller = () => {
-    try {
-      localStorage.removeItem("seller_name");
-      localStorage.removeItem("seller_role");
-      localStorage.removeItem("seller_email");
-      localStorage.removeItem("seller_phone");
-      setSellerName("");
-      setSellerRole("");
-      setSellerEmail("");
-      setSellerPhone("");
-      toast.success("Dados do vendedor removidos.");
-    } catch (err) {
-      console.error("Erro ao limpar dados do vendedor:", err);
-      toast.error("Não foi possível limpar os dados do vendedor.");
-    }
-  };
-
-  // Allow manual reset of saved import mapping for this spreadsheet
-  const clearSavedImportMapping = () => {
-    try {
-      if (spreadsheetId) {
-        localStorage.removeItem(`import_column_map_${spreadsheetId}`);
-      }
-      localStorage.removeItem("import_column_map");
-      setMappings({});
-      toast.success("Mapeamento salvo removido.");
-    } catch (err) {
-      console.error("Erro ao limpar mapeamento salvo", err);
-      toast.error("Não foi possível limpar o mapeamento salvo.");
-    }
-  };
-
-  // ------------------ Complement import helpers ------------------
-
-  // Read the full range specified by the user (sheet + range), extract headers and sample rows
-  async function handleReadComplementRange() {
-    if (!accessToken || !spreadsheetId || !complementSheet) {
-      toast.error("É necessário conectar ao Google e selecionar uma planilha/aba.");
-      return;
-    }
-
-    setComplementHeaders([]);
-    setComplementPreviewRows([]);
-    setComplementRowsCount(null);
-
-    try {
-      const fullRange = `${complementSheet}!${complementRange}`;
-      const resp = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
-      const values: any[][] = resp.values || [];
-
-      if (values.length === 0) {
-        toast.error("Intervalo vazio ou inválido.");
-        return;
-      }
-
-      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
-      const dataRows = values.slice(1);
-      setComplementHeaders(headerRow);
-      setComplementPreviewRows(dataRows.slice(0, 5)); // preview up to 5 rows
-      setComplementRowsCount(dataRows.length);
-
-      // Auto-detect key column if possible
-      const tryFind = headerRow.find(h => /sku/i.test(h) || /part/i.test(h) || /codigo/i.test(h) || /part_number/i.test(h));
-      if (tryFind) setComplementKeyColumn(tryFind);
-
-      // Auto-detect price columns if headers detected
-      if (headerRow.length > 0) {
-        const lower = headerRow.map(h => h.toLowerCase());
-        if (!complementPrice12Column) {
-          const idx12 = lower.findIndex(h => h.includes("12") || h.includes("12m") || (h.includes("valor") && h.includes("12")));
-          if (idx12 >= 0) setComplementPrice12Column(headerRow[idx12]);
-        }
-        if (!complementPrice24Column) {
-          const idx24 = lower.findIndex(h => h.includes("24") || h.includes("24m") || (h.includes("valor") && h.includes("24")));
-          if (idx24 >= 0) setComplementPrice24Column(headerRow[idx24]);
-        }
-      }
-
-      toast.success(`Intervalo lido: ${dataRows.length} linhas (pré-visualizando até 5).`);
-    } catch (err: any) {
-      console.error("Erro ao ler intervalo complementar:", err);
-      toast.error("Falha ao ler o intervalo complementar: " + (err?.message || err));
-    }
-  }
-
-  // normalize header into a safe object key (camelCase-ish)
-  function normalizeHeaderToKey(h?: string) {
-    if (!h) return "";
-    const noAcc = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    const parts = noAcc.replace(/[^a-zA-Z0-9 ]/g, " ").trim().split(/\s+/);
-    if (parts.length === 0) return "";
-    const first = parts[0].toLowerCase();
-    const rest = parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join("");
-    return (first + rest).replace(/^_+|_+$/g, "");
-  }
-
-  async function handleImportComplement() {
+  /**
+   * Complement import changed: no merging.
+   * Behavior:
+   * - For every data row in the complement range, create a NEW product entry (if complementCreateMissing is true).
+   * - The new product will include:
+   *    - sku based on the key column (or generated)
+   *    - description built from row columns
+   *    - value_12m / value_24m extracted from selected complement price columns (or auto-detected)
+   *    - additional fields price_com_iDSecure and price_sem_iDSecure extracted from the two new selects (if provided)
+   * - Do not modify or merge with existing importedProducts entries.
+   */
+  const handleImportComplement = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
       toast.error("Selecione planilha e aba complementar antes de importar.");
       return;
@@ -686,7 +493,7 @@ export default function Settings() {
 
       const dataRows = values.slice(1);
 
-      // Load existing importedProducts
+      // Load existing importedProducts (we will append new items, not merge)
       const raw = localStorage.getItem("importedProducts");
       let imported: any[] = [];
       if (raw) {
@@ -696,194 +503,113 @@ export default function Settings() {
           imported = [];
         }
       }
-
       if (!Array.isArray(imported)) imported = [];
 
-      // Build a lookup map by sku and part_number for fast matching (normalize)
-      const normalizeMatchKey = (s?: any) => (s ? String(s).trim().toLowerCase() : "");
-      const lookupBySku: Record<string, number[]> = {};
-      imported.forEach((p: any, idx: number) => {
-        const skuKey = normalizeMatchKey(p.sku || p.SKU || p.part_number || p.partNumber || p.part_number);
-        if (skuKey) {
-          lookupBySku[skuKey] = lookupBySku[skuKey] || [];
-          lookupBySku[skuKey].push(idx);
-        }
-      });
-
-      let updatedCount = 0;
-      let matchedRows = 0;
       let createdCount = 0;
+
+      // helper to get column value by header name
+      const getColValue = (row: any[], colName: string) => {
+        if (!colName) return "";
+        const idx = headerRow.findIndex(h => h === colName);
+        if (idx === -1) return "";
+        return row[idx] ?? "";
+      };
 
       for (const row of dataRows) {
         const keyRaw = row[keyIndex];
-        const keyVal = normalizeMatchKey(keyRaw);
-        if (!keyVal) continue;
+        const keyVal = String(keyRaw ?? "").trim();
+        // If not creating missing, skip (user opted out)
+        if (!complementCreateMissing) continue;
 
-        const matchedIdxs = lookupBySku[keyVal] ? [...lookupBySku[keyVal]] : [];
-
-        if (matchedIdxs.length === 0) {
-          // try fuzzy: match by part_number containing keyVal or sku containing keyVal
-          const fallbackIdxs = imported
-            .map((p: any, idx: number) => ({ p, idx }))
-            .filter(({ p }) => {
-              const s1 = normalizeMatchKey(p.sku || p.part_number);
-              return s1 && s1.includes(keyVal);
-            })
-            .map(({ idx }) => idx);
-
-          if (fallbackIdxs.length > 0) {
-            matchedIdxs.push(...fallbackIdxs);
+        // Build description from several non-empty columns (excluding key)
+        const descParts: string[] = [];
+        for (let c = 0; c < headerRow.length; c++) {
+          if (c === keyIndex) continue;
+          const val = row[c];
+          if (val !== undefined && val !== null && String(val).trim() !== "") {
+            const header = headerRow[c];
+            descParts.push(`${header}: ${String(val).trim()}`);
+            if (descParts.length >= 4) break;
           }
         }
+        const description = descParts.join(" · ") || String(keyRaw || keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
 
-        if (matchedIdxs.length === 0) {
-          // No match found. If configured, create a new product entry from this complement row.
-          if (complementCreateMissing) {
-            // Build a sensible description from a few non-empty columns (excluding the key)
-            const descParts: string[] = [];
-            for (let c = 0; c < headerRow.length; c++) {
-              if (c === keyIndex) continue;
-              const val = row[c];
-              if (val !== undefined && val !== null && String(val).trim() !== "") {
-                const header = headerRow[c];
-                descParts.push(`${header}: ${String(val).trim()}`);
-                if (descParts.length >= 4) break; // limit length
-              }
-            }
-            const description = descParts.join(" · ") || String(keyRaw || keyVal);
+        // Determine prices using selected complement price columns, falling back to auto-detection
+        const findPriceFromColumn = (colName: string) => {
+          if (!colName) return 0;
+          const v = getColValue(row, colName);
+          return parseSpreadsheetNumber(v ?? 0);
+        };
 
-            // Determine prices using selected complement price columns, falling back to auto-detection
-            const findPriceFromColumn = (colName: string) => {
-              if (!colName) return 0;
-              const idx = headerRow.findIndex(h => h === colName);
-              if (idx === -1) return 0;
-              return parseSpreadsheetNumber(row[idx] ?? 0);
-            };
+        let value12 = findPriceFromColumn(complementPrice12Column);
+        let value24 = findPriceFromColumn(complementPrice24Column);
 
-            let value12 = findPriceFromColumn(complementPrice12Column);
-            let value24 = findPriceFromColumn(complementPrice24Column);
-
-            // If not provided, try auto-detect: look for any numeric-looking column in the row
-            if ((!value12 || value12 === 0) && (!value24 || value24 === 0)) {
-              for (let c = 0; c < headerRow.length; c++) {
-                if (c === keyIndex) continue;
-                const n = parseSpreadsheetNumber(row[c]);
-                if (n > 0) {
-                  // prefer assigning to 12m if complementPrice12Column not set
-                  if (!value12 || value12 === 0) value12 = n;
-                  else if (!value24 || value24 === 0) value24 = n;
-                }
-              }
-            }
-
-            const newProd: any = {
-              id: `imported-${Math.random().toString(36).slice(2, 9)}`,
-              sku: String(keyRaw || keyVal),
-              category: "Controladores Porta",
-              model: String(keyRaw || keyVal),
-              colors: [],
-              biometrics: false,
-              facial: "None",
-              proximity: "None",
-              urn: false,
-              qr: false,
-              description,
-              value_12m: Number(value12 || 0),
-              value_24m: Number(value24 || 0),
-              part_number: String(keyRaw || keyVal),
-              status: "Ativo",
-              // store raw complement fields for later pricing/selection logic
-              complementMeta: headerRow.reduce((acc: any, h, idx) => {
-                acc[normalizeHeaderToKey(h)] = row[idx] ?? "";
-                return acc;
-              }, {} as Record<string, any>),
-              // mark as complement-sourced so UI can prioritize it
-              _complementPriority: true
-            };
-
-            imported.push(newProd);
-            // update lookup index map so subsequent rows can match newly created ones
-            const newIdx = imported.length - 1;
-            const skuKeyNew = normalizeMatchKey(newProd.sku);
-            if (skuKeyNew) {
-              lookupBySku[skuKeyNew] = lookupBySku[skuKeyNew] || [];
-              lookupBySku[skuKeyNew].push(newIdx);
-            }
-
-            createdCount++;
-            continue;
-          } else {
-            // not creating missing, skip
-            continue;
-          }
-        }
-
-        // Merge complementary columns into all matched products
-        matchedRows++;
-        for (const mi of matchedIdxs) {
-          const prod = imported[mi];
-          let anyChanged = false;
-          // For every header column except key, merge into product under normalized key
+        // If not provided, try auto-detect: look for any numeric-looking column in the row
+        if ((!value12 || value12 === 0) && (!value24 || value24 === 0)) {
           for (let c = 0; c < headerRow.length; c++) {
             if (c === keyIndex) continue;
-            const header = headerRow[c];
-            const cell = row[c] ?? "";
-            const normalizedKey = normalizeHeaderToKey(header);
-            if (!normalizedKey) continue;
-            // Only set if there's a value (non-empty) to avoid overwriting good existing data with blanks
-            if (cell !== "" && cell !== null && cell !== undefined) {
-              // Try to smart-parse numbers similar to other flows
-              const parsedNumber = parseSpreadsheetNumber(cell);
-              const valueToSet = parsedNumber !== 0 || String(cell).match(/[0-9]/) ? (parsedNumber !== 0 ? parsedNumber : cell) : cell;
-              // if existing value is empty or differs, update
-              if (prod[normalizedKey] === undefined || prod[normalizedKey] === "" || String(prod[normalizedKey]) !== String(valueToSet)) {
-                prod[normalizedKey] = valueToSet;
-                anyChanged = true;
-              }
+            const n = parseSpreadsheetNumber(row[c]);
+            if (n > 0) {
+              if (!value12 || value12 === 0) value12 = n;
+              else if (!value24 || value24 === 0) value24 = n;
             }
-          }
-          // If price columns exist in complement, ensure they are applied to product fields
-          // (so product shows the complementary price)
-          const idxPrice12 = complementPrice12Column ? headerRow.findIndex(h => h === complementPrice12Column) : -1;
-          if (idxPrice12 >= 0) {
-            const parsed = parseSpreadsheetNumber(row[idxPrice12]);
-            if (parsed > 0 && prod.value_12m !== parsed) {
-              prod.value_12m = parsed;
-              anyChanged = true;
-            }
-          }
-          const idxPrice24 = complementPrice24Column ? headerRow.findIndex(h => h === complementPrice24Column) : -1;
-          if (idxPrice24 >= 0) {
-            const parsed = parseSpreadsheetNumber(row[idxPrice24]);
-            if (parsed > 0 && prod.value_24m !== parsed) {
-              prod.value_24m = parsed;
-              anyChanged = true;
-            }
-          }
-
-          if (anyChanged) {
-            // mark as complement-enriched so UI knows to prioritize it
-            prod._complementPriority = true;
-            updatedCount++;
           }
         }
+
+        // Extract Com/Sem iDSecure values if columns selected
+        const comIdsRaw = complementComIdsColumn ? getColValue(row, complementComIdsColumn) : "";
+        const semIdsRaw = complementSemIdsColumn ? getColValue(row, complementSemIdsColumn) : "";
+        const priceComIds = parseSpreadsheetNumber(comIdsRaw);
+        const priceSemIds = parseSpreadsheetNumber(semIdsRaw);
+
+        const newProd: any = {
+          id: `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`,
+          sku: String(keyRaw || keyVal || `comp-${Math.random().toString(36).slice(2, 6)}`),
+          category: "Controladores Porta",
+          model: String(keyRaw || keyVal || ""),
+          colors: [],
+          biometrics: false,
+          facial: "None",
+          proximity: "None",
+          urn: false,
+          qr: false,
+          description,
+          value_12m: Number(value12 || 0),
+          value_24m: Number(value24 || 0),
+          part_number: String(keyRaw || keyVal || ""),
+          status: "Ativo",
+          // Keep complement-specific pricing fields
+          price_com_iDSecure: priceComIds > 0 ? priceComIds : undefined,
+          price_sem_iDSecure: priceSemIds > 0 ? priceSemIds : undefined,
+          // store raw complement fields for later usage
+          complementMeta: headerRow.reduce((acc: any, h, idx) => {
+            acc[h] = row[idx] ?? "";
+            return acc;
+          }, {} as Record<string, any>),
+          _complementSource: true,
+        };
+
+        imported.push(newProd);
+        createdCount++;
       }
 
-      // Save merged importedProducts back to localStorage
+      // Save appended importedProducts back to localStorage
       try {
         localStorage.setItem("importedProducts", JSON.stringify(imported));
       } catch (e) {
         console.warn("Failed to persist importedProducts after complement import", e);
       }
 
-      toast.success(`Importação complementar concluída: ${matchedRows} linhas mescladas, ${updatedCount} atualizações aplicadas, ${createdCount} novos produtos criados.`);
+      toast.success(`Importação complementar concluída: ${createdCount} novos produtos criados (sem mesclagem).`);
+      setComplementRowsCount(dataRows.length);
+      setComplementPreviewRows(dataRows.slice(0, 5));
     } catch (err: any) {
       console.error("Erro ao importar complemento:", err);
       toast.error("Falha na importação complementar: " + (err?.message || err));
     } finally {
       setComplementImporting(false);
     }
-  }
+  };
 
   // ----------------------------------------------------------------
 
@@ -915,8 +641,8 @@ export default function Settings() {
                     value={overrideClientId}
                     onChange={(e) => setOverrideClientId(e.target.value)}
                   />
-                  <Button onClick={saveOverrideClientId}>Salvar</Button>
-                  <Button variant="outline" onClick={clearOverrideClientId}>Limpar</Button>
+                  <Button onClick={() => { try { localStorage.setItem(LOCAL_STORAGE_KEY, overrideClientId); toast.success("Client ID salvo"); } catch {} }}>Salvar</Button>
+                  <Button variant="outline" onClick={() => { localStorage.removeItem(LOCAL_STORAGE_KEY); setOverrideClientId(""); toast.success("Client ID removido"); }}>Limpar</Button>
                 </div>
                 <div className="mt-2 text-sm">
                   Depois de salvar, tente clicar em "Conectar ao Google". O Client ID será lido do armazenamento local.
@@ -1002,24 +728,23 @@ export default function Settings() {
                       </div>
 
                       <div className="space-y-2 mt-2 max-h-40 overflow-auto">
-                        {filteredFiles.length === 0 ? (
-                          <div className="text-sm text-muted-foreground p-2">Nenhum arquivo encontrado.</div>
-                        ) : (
-                          filteredFiles.map((f) => (
-                            <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
-                              <div className="truncate pr-4">{f.name}</div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleUseFileLink(f.id)}
-                                >
-                                  Usar link
-                                </Button>
-                              </div>
+                        {files.filter(f => {
+                          const q = fileSearch.trim().toLowerCase();
+                          return !q || f.name.toLowerCase().includes(q) || f.id.toLowerCase().includes(q);
+                        }).map((f) => (
+                          <div key={f.id} className="flex items-center justify-between border rounded px-3 py-2">
+                            <div className="truncate pr-4">{f.name}</div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => { setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${f.id}`); toast.success("Link preenchido"); }}
+                              >
+                                Usar link
+                              </Button>
                             </div>
-                          ))
-                        )}
+                          </div>
+                        ))}
                       </div>
                     </div>
                   )}
@@ -1039,7 +764,14 @@ export default function Settings() {
                       <Button onClick={handleLoadHeaders} disabled={!selectedSheet || loading}>
                         Carregar Cabeçalhos (1ª linha)
                       </Button>
-                      <Button variant="outline" onClick={clearSavedImportMapping}>Limpar Mapeamento Salvo</Button>
+                      <Button variant="outline" onClick={() => {
+                        if (spreadsheetId) {
+                          localStorage.removeItem(`import_column_map_${spreadsheetId}`);
+                        }
+                        localStorage.removeItem("import_column_map");
+                        setMappings({});
+                        toast.success("Mapeamento salvo removido");
+                      }}>Limpar Mapeamento Salvo</Button>
                     </div>
                   </div>
                 )}
@@ -1080,11 +812,11 @@ export default function Settings() {
 
                           <div className="flex items-center space-x-2">
                             <input type="checkbox" id="createMissing" checked={complementCreateMissing} onChange={(e) => setComplementCreateMissing(e.target.checked)} />
-                            <label htmlFor="createMissing" className="text-sm">Criar produtos ausentes a partir do intervalo complementar</label>
+                            <label htmlFor="createMissing" className="text-sm">Criar produtos a partir do intervalo complementar</label>
                           </div>
                         </div>
 
-                        <div className="flex gap-2">
+                        <div className="flex gap-2 items-center">
                           <div className="flex items-center">
                             <Label className="mr-2">Coluna preço 12m</Label>
                             <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1">
@@ -1127,7 +859,7 @@ export default function Settings() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e complementar os produtos já importados (match por SKU / part_number). Se uma linha complementar não tiver correspondência e a opção estiver ativada, será criado um novo produto com base nas colunas da linha (útil para configurações como 'Interna/Externa', 'Madeira/Metal', etc.).
+                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e criar novos produtos (sem mesclar com os já importados). Se uma linha complementar não tiver correspondência, será criado um novo produto com base nas colunas da linha.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1151,7 +883,10 @@ export default function Settings() {
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={handleReadComplementRange} disabled={!connected || !spreadsheetId || !complementSheet}>
+                  <Button onClick={async () => {
+                    await handleReadComplementRange();
+                    // After reading headers, ensure the selects for Com/Sem iDSecure are updated if headers exist
+                  }} disabled={!connected || !spreadsheetId || !complementSheet}>
                     Ler intervalo (range)
                   </Button>
                   <Button onClick={() => {
@@ -1161,6 +896,8 @@ export default function Settings() {
                     setComplementRowsCount(null);
                     setComplementPrice12Column("");
                     setComplementPrice24Column("");
+                    setComplementComIdsColumn("");
+                    setComplementSemIdsColumn("");
                   }} variant="outline">Limpar Prévia</Button>
                 </div>
 
@@ -1195,19 +932,53 @@ export default function Settings() {
 
                 {complementHeaders.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Coluna chave (SKU / part number) — será usada para localizar o produto (igual ao campo sku / part_number)</Label>
+                    <Label>Coluna chave (SKU / part number) — será usada para gerar o SKU/part_number do novo item</Label>
                     <select className="border rounded w-full px-2 py-1" value={complementKeyColumn} onChange={(e) => setComplementKeyColumn(e.target.value)}>
                       <option value="">-- selecione a coluna chave --</option>
                       {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
 
-                    <div className="text-sm text-muted-foreground">
-                      Cabeçalhos detectados: {complementHeaders.join(", ")}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div>
+                        <Label>Coluna preço 12m (opcional)</Label>
+                        <select value={complementPrice12Column} onChange={(e) => setComplementPrice12Column(e.target.value)} className="border rounded px-2 py-1 w-full">
+                          <option value="">(auto)</option>
+                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
+
+                      <div>
+                        <Label>Coluna preço 24m (opcional)</Label>
+                        <select value={complementPrice24Column} onChange={(e) => setComplementPrice24Column(e.target.value)} className="border rounded px-2 py-1 w-full">
+                          <option value="">(auto)</option>
+                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                      </div>
                     </div>
 
-                    <div className="flex justify-end gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-2">
+                      <div>
+                        <Label>Coluna "Com iDSecure" (opcional)</Label>
+                        <select value={complementComIdsColumn} onChange={(e) => setComplementComIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full">
+                          <option value="">(nenhuma)</option>
+                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <div className="text-sm text-muted-foreground mt-1">Selecione a coluna que contém o preço/composição para clientes com iDSecure.</div>
+                      </div>
+
+                      <div>
+                        <Label>Coluna "Sem iDSecure" (opcional)</Label>
+                        <select value={complementSemIdsColumn} onChange={(e) => setComplementSemIdsColumn(e.target.value)} className="border rounded px-2 py-1 w-full">
+                          <option value="">(nenhuma)</option>
+                          {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                        </select>
+                        <div className="text-sm text-muted-foreground mt-1">Selecione a coluna que contém o preço/composição para clientes sem iDSecure.</div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 mt-3">
                       <Button onClick={handleImportComplement} disabled={complementImporting || !complementKeyColumn}>
-                        {complementImporting ? "Importando..." : "Importar e Mesclar"}
+                        {complementImporting ? "Importando..." : "Importar e Criar Novos Itens"}
                       </Button>
                     </div>
                   </div>
@@ -1245,8 +1016,8 @@ export default function Settings() {
               </div>
 
               <div className="flex justify-end gap-2 mt-4">
-                <Button onClick={saveSeller}>Salvar Dados do Vendedor</Button>
-                <Button variant="outline" onClick={clearSeller}>Limpar Dados</Button>
+                <Button onClick={() => { localStorage.setItem("seller_name", sellerName); localStorage.setItem("seller_role", sellerRole); localStorage.setItem("seller_email", sellerEmail); localStorage.setItem("seller_phone", sellerPhone); toast.success("Dados do vendedor salvos."); }}>Salvar Dados do Vendedor</Button>
+                <Button variant="outline" onClick={() => { localStorage.removeItem("seller_name"); localStorage.removeItem("seller_role"); localStorage.removeItem("seller_email"); localStorage.removeItem("seller_phone"); setSellerName(""); setSellerRole(""); setSellerEmail(""); setSellerPhone(""); toast.success("Dados do vendedor removidos."); }}>Limpar Dados</Button>
               </div>
             </CardContent>
           </Card>
