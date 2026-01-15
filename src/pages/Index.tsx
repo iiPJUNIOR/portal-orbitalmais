@@ -20,6 +20,7 @@ import ConfirmModal from "@/components/ConfirmModal";
 import { QuoteBuilder } from "@/components/QuoteBuilder";
 import ProductBasesTab from "@/components/ProductBasesTab";
 import { Input } from "@/components/ui/input";
+import { fetchBases } from "@/services/productBaseService";
 
 /* --- Types & helpers (kept local for this page) --- */
 
@@ -404,13 +405,45 @@ export default function Index() {
     loadProducts();
   }, [loadProducts, bases]);
 
+  // Try to load product bases from the server on mount (and persist to localStorage for backward-compat)
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const serverBases = await fetchBases();
+        if (!mounted) return;
+        if (Array.isArray(serverBases) && serverBases.length > 0) {
+          setBases(serverBases as StoredBase[]);
+          try {
+            localStorage.setItem("product_bases", JSON.stringify(serverBases));
+          } catch {}
+          // refresh products after loading bases
+          setTimeout(() => {
+            try {
+              loadProducts(currentFilters);
+            } catch {}
+          }, 0);
+        }
+      } catch (err) {
+        // non-fatal; keep existing local bases if any
+        console.warn("Failed to fetch bases from server on mount", err);
+      }
+    })();
+    return () => { mounted = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Listen for external changes to product_bases (e.g. deletion/save in Settings or ProductBasesTab)
   useEffect(() => {
-    const handler = () => {
+    const handler = async () => {
       try {
-        const raw = localStorage.getItem("product_bases");
-        const parsed = raw ? JSON.parse(raw) : [];
-        setBases(Array.isArray(parsed) ? parsed : []);
+        // Prefer fetching fresh list from server (keeps authoritative copy)
+        const serverBases = await fetchBases();
+        const toSet = Array.isArray(serverBases) ? serverBases : [];
+        setBases(toSet as StoredBase[]);
+        try {
+          localStorage.setItem("product_bases", JSON.stringify(toSet));
+        } catch {}
         // refresh products using current filters
         setTimeout(() => {
           try {
@@ -418,7 +451,20 @@ export default function Index() {
           } catch {}
         }, 0);
       } catch (err) {
-        console.warn("Failed to reload product_bases from storage", err);
+        console.warn("Failed to reload product_bases from server", err);
+        // Fallback: try to read from localStorage (legacy flow)
+        try {
+          const raw = localStorage.getItem("product_bases");
+          const parsed = raw ? JSON.parse(raw) : [];
+          setBases(Array.isArray(parsed) ? parsed : []);
+          setTimeout(() => {
+            try {
+              loadProducts(currentFilters);
+            } catch {}
+          }, 0);
+        } catch (err2) {
+          console.warn("Failed to reload product_bases from storage after server fetch failed", err2);
+        }
       }
     };
 
