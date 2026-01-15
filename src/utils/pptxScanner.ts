@@ -4,12 +4,14 @@ import JSZip from "jszip";
 import PptxGenJS from "pptxgenjs";
 
 /**
- * Scans the PPTX template and returns a list of unique text fragments found in slide <a:t> nodes,
- * along with occurrence counts. This helps mapping template text to replacement keys.
+ * Scans the PPTX template and returns a list of unique token fragments found in slide <a:t> nodes,
+ * along with occurrence counts. Tokens are recognized in the form {{tokenName}}.
  *
- * This version tries both a public root fallback (/proposal-template.pptx) and the src-relative template.
- * If fetching a binary PPTX fails or returns a non-ZIP resource, the function will generate a small
- * fallback PPTX in-memory (using pptxgenjs) and scan that so the UI doesn't break during development.
+ * Behavior:
+ * - First tries to fetch /proposal-template.pptx (public) then the src-relative template.
+ * - If fetching a valid PPTX fails, generates a fallback in-memory PPTX that includes common tokens.
+ * - Extracts tokens like {{companyName}} and returns an array [{ text: "{{companyName}}", count: n }, ...]
+ * - If no tokens are found, falls back to returning generic text fragments found in <a:t> nodes (legacy behavior).
  */
 
 async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
@@ -125,26 +127,51 @@ async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
   }
 }
 
+/**
+ * scanTemplateTexts
+ * - returns tokens in the form {{token}} with occurrence counts.
+ * - if no tokens are found, falls back to returning generic text fragments (legacy).
+ */
 export async function scanTemplateTexts(): Promise<Array<{ text: string; count: number }>> {
   const arrayBuffer = await fetchTemplateArrayBuffer();
   const zip = await JSZip.loadAsync(arrayBuffer);
 
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
-  const counts: Record<string, number> = {};
+  const tokenCounts: Record<string, number> = {};
+  const textCounts: Record<string, number> = {};
+
+  const tokenRegex = /\{\{\s*([^}]+?)\s*\}\}/g;
+  const textNodeRegex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
 
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
-    // extract text nodes <a:t>...</a:t>
-    const re = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
+
+    // 1) Extract tokens like {{tokenName}} from the slide XML
     let m;
-    while ((m = re.exec(content)) !== null) {
-      const t = (m[1] || "").trim();
-      if (!t) continue;
-      counts[t] = (counts[t] || 0) + 1;
+    while ((m = tokenRegex.exec(content)) !== null) {
+      const raw = m[0]; // keep braces to make selection explicit (e.g. "{{companyName}}")
+      const key = raw.trim();
+      tokenCounts[key] = (tokenCounts[key] || 0) + 1;
+    }
+
+    // 2) Also collect plain text nodes in case we need fallback (do not mix with tokenCounts)
+    let t;
+    while ((t = textNodeRegex.exec(content)) !== null) {
+      const txt = (t[1] || "").trim();
+      if (!txt) continue;
+      textCounts[txt] = (textCounts[txt] || 0) + 1;
     }
   }
 
-  const arr = Object.entries(counts).map(([text, count]) => ({ text, count }));
-  arr.sort((a, b) => b.count - a.count || b.text.length - a.text.length);
-  return arr;
+  // If we found any tokens, return them (preferred)
+  const tokenEntries = Object.entries(tokenCounts).map(([text, count]) => ({ text, count }));
+  if (tokenEntries.length > 0) {
+    tokenEntries.sort((a, b) => b.count - a.count || a.text.length - b.text.length);
+    return tokenEntries;
+  }
+
+  // Fallback: return generic text fragments (legacy behavior)
+  const textEntries = Object.entries(textCounts).map(([text, count]) => ({ text, count }));
+  textEntries.sort((a, b) => b.count - a.count || a.text.length - b.text.length);
+  return textEntries;
 }
