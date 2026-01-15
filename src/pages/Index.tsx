@@ -88,7 +88,7 @@ function normalizeImportedRow(row: any, idx: number): Product {
 export default function Index() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [loading, setLoading] = useState<boolean>(false);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
@@ -105,7 +105,18 @@ export default function Index() {
         try {
           const rows = JSON.parse(raw) as any[];
           const imported = rows.map((r, idx) => normalizeImportedRow(r, idx));
-          setProducts(imported.filter((p) => p.status === "Ativo"));
+          // If filters provided try to filter imported products
+          if (filters && filters.search) {
+            const searchLower = String(filters.search).toLowerCase();
+            const filtered = imported.filter((p) =>
+              p.description.toLowerCase().includes(searchLower) ||
+              p.part_number.toLowerCase().includes(searchLower) ||
+              p.sku.toLowerCase().includes(searchLower)
+            );
+            setProducts(filtered);
+          } else {
+            setProducts(imported.filter((p) => p.status === "Ativo"));
+          }
           setLoading(false);
           return;
         } catch (err) {
@@ -124,20 +135,31 @@ export default function Index() {
     }
   }, []);
 
+  // Do NOT auto-load products on mount — keep them hidden until user types in 'Buscar'.
   useEffect(() => {
-    loadProducts();
+    // intentionally empty: products remain hidden until search input triggers load via ProductFilter
     return () => {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
         debounceRef.current = null;
       }
     };
-  }, [loadProducts]);
+  }, []);
 
   const debouncedLoad = (filters?: any, delay = 250) => {
     if (debounceRef.current) {
       window.clearTimeout(debounceRef.current);
     }
+
+    // If there's no search text, hide products immediately
+    const search = (filters?.search ?? "").toString().trim();
+    if (!search) {
+      // Clear products and avoid fetching
+      setProducts([]);
+      setLoading(false);
+      return;
+    }
+
     debounceRef.current = window.setTimeout(() => {
       loadProducts(filters);
       debounceRef.current = null;
@@ -145,6 +167,7 @@ export default function Index() {
   };
 
   const reloadFromImported = () => {
+    // keep existing behavior: reload catalog from importedProducts (manual action)
     loadProducts();
     toast.success("Catálogo recarregado a partir da planilha (importedProducts)");
   };
