@@ -22,6 +22,7 @@ type QuoteItem = {
   product: Product;
   quantity: number;
   priceModel: "12m" | "24m";
+  unitPrice?: number;
 };
 
 type ProposalFormData = {
@@ -56,7 +57,6 @@ function normalizeImportedRow(row: any, idx: number): Product {
   const qr = String(row.qr || row.QR || row.qrcode || "").toLowerCase() === "true";
 
   const parseNumber = (v: any) => {
-    // Use the shared parser which handles both "1.368,81" and "1368,81" etc.
     return parseSpreadsheetNumber(v);
   };
 
@@ -86,83 +86,38 @@ function normalizeImportedRow(row: any, idx: number): Product {
 
 function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
   return products.filter((product) => {
-    // Category filter
-    if (filters.category && product.category !== filters.category) {
-      return false;
-    }
-
-    // Tipo filter (matches model or part_number loosely)
+    if (filters.category && product.category !== filters.category) return false;
     if (filters.tipo) {
       const t = String(filters.tipo).toLowerCase();
-      if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) {
-        return false;
-      }
+      if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) return false;
     }
-
-    // Model filter
-    if (filters.model && product.model !== filters.model) {
-      return false;
-    }
-
-    // Color filter (match any color)
+    if (filters.model && product.model !== filters.model) return false;
     if (filters.color) {
       const c = String(filters.color).toLowerCase();
-      if (!product.colors.some((col) => col.toLowerCase() === c)) {
-        return false;
-      }
+      if (!product.colors.some((col) => col.toLowerCase() === c)) return false;
     }
+    if (filters.biometrics !== undefined && product.biometrics !== filters.biometrics) return false;
+    if (filters.facial && filters.facial !== "None" && product.facial !== filters.facial) return false;
+    if (filters.proximity && filters.proximity !== "None" && product.proximity !== filters.proximity) return false;
+    if (filters.urn !== undefined && product.urn !== filters.urn) return false;
+    if (filters.qr !== undefined && product.qr !== filters.qr) return false;
 
-    // Biometrics filter
-    if (filters.biometrics !== undefined && product.biometrics !== filters.biometrics) {
-      return false;
-    }
-
-    // Facial filter
-    if (filters.facial && filters.facial !== "None" && product.facial !== filters.facial) {
-      return false;
-    }
-
-    // Proximity filter
-    if (filters.proximity && filters.proximity !== "None" && product.proximity !== filters.proximity) {
-      return false;
-    }
-
-    // Urn filter
-    if (filters.urn !== undefined && product.urn !== filters.urn) {
-      return false;
-    }
-
-    // QR filter
-    if (filters.qr !== undefined && product.qr !== filters.qr) {
-      return false;
-    }
-
-    // Price range filter
     if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
       const minPriceFilter = filters.minPrice ?? Number.NEGATIVE_INFINITY;
       const maxPriceFilter = filters.maxPrice ?? Number.POSITIVE_INFINITY;
-
       const lowestPrice = Math.min(product.value_12m, product.value_24m);
       const highestPrice = Math.max(product.value_12m, product.value_24m);
-
-      if (highestPrice < minPriceFilter) {
-        return false;
-      }
-      if (lowestPrice > maxPriceFilter) {
-        return false;
-      }
+      if (highestPrice < minPriceFilter) return false;
+      if (lowestPrice > maxPriceFilter) return false;
     }
 
-    // Search filter
     if (filters.search) {
       const searchLower = String(filters.search).toLowerCase();
       if (
         !product.description.toLowerCase().includes(searchLower) &&
         !product.part_number.toLowerCase().includes(searchLower) &&
         !product.sku.toLowerCase().includes(searchLower)
-      ) {
-        return false;
-      }
+      ) return false;
     }
 
     return product.status === "Ativo";
@@ -196,7 +151,6 @@ export default function Index() {
   const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
     setLoading(true);
     try {
-      // Use only importedProducts (no mock fallback)
       const imported = getImportedProducts();
 
       if (imported.length === 0) {
@@ -206,7 +160,6 @@ export default function Index() {
         return;
       }
 
-      // If there are filters, apply them (full set)
       if (filters && Object.keys(filters).length > 0) {
         const filtered = applyFiltersToProducts(imported, filters);
         setProducts(filtered);
@@ -222,7 +175,6 @@ export default function Index() {
     }
   }, []);
 
-  // Do NOT auto-load products on mount — keep them hidden until user types in 'Buscar' or triggers reload.
   useEffect(() => {
     return () => {
       if (debounceRef.current) {
@@ -237,7 +189,6 @@ export default function Index() {
       window.clearTimeout(debounceRef.current);
     }
 
-    // If there's no search text and there are no other filters, hide products immediately
     const search = (filters?.search ?? "").toString().trim();
     const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
     if (!search && !otherFiltersExist) {
@@ -246,7 +197,6 @@ export default function Index() {
       return;
     }
 
-    // Ensure an imported sheet exists
     const imported = getImportedProducts();
     if (imported.length === 0) {
       setProducts([]);
@@ -274,6 +224,7 @@ export default function Index() {
 
   const handleAddToQuote = (product: Product, quantity: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
+    const defaultUnit = product.value_12m;
     if (existing) {
       setQuoteItems((prev) =>
         prev.map((it) =>
@@ -283,7 +234,7 @@ export default function Index() {
     } else {
       setQuoteItems((prev) => [
         ...prev,
-        { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m" },
+        { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: defaultUnit },
       ]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
@@ -298,7 +249,19 @@ export default function Index() {
   };
 
   const handleUpdatePriceModel = (id: string, model: "12m" | "24m") => {
-    setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, priceModel: model } : it)));
+    setQuoteItems((prev) => prev.map((it) => {
+      if (it.id === id) {
+        // If user hasn't set a custom unitPrice, update to the default for the new model
+        const currentUnit = it.unitPrice;
+        const defaultUnit = model === "12m" ? it.product.value_12m : it.product.value_24m;
+        return { ...it, priceModel: model, unitPrice: currentUnit === undefined ? defaultUnit : currentUnit };
+      }
+      return it;
+    }));
+  };
+
+  const handleUpdateUnitPrice = (id: string, unitPrice: number) => {
+    setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, unitPrice: Number(isNaN(unitPrice) ? 0 : unitPrice) } : it)));
   };
 
   const openProposalForm = () => {
@@ -320,7 +283,7 @@ export default function Index() {
 
   const computeTotalPrice = () => {
     return quoteItems.reduce((sum, item) => {
-      const unit = item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m;
+      const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
       return sum + unit * item.quantity;
     }, 0);
   };
@@ -331,17 +294,14 @@ export default function Index() {
     const proposalNumber = generateProposalNumber();
 
     try {
-      // prepare payload for PPTX generator (service expects items in a certain shape)
       const proposalPayload = {
         ...proposalData,
         items: quoteItems,
         proposalNumber,
       } as any;
 
-      // generate the PPTX blob
       const blob = await generateProposalPPTX(proposalPayload);
 
-      // Prepare quote object and items for saving
       const totalPrice = computeTotalPrice();
       const quotePayload: any = {
         cnpj: proposalData.cnpj,
@@ -359,7 +319,7 @@ export default function Index() {
       };
 
       const itemsToSave = quoteItems.map((it) => {
-        const unit = it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m;
+        const unit = it.unitPrice ?? (it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
         return {
           sku: it.product.sku,
           productDescription: it.product.description,
@@ -370,16 +330,13 @@ export default function Index() {
         };
       });
 
-      // Show saving toast
       const savingToastId = toast.loading("Salvando proposta...");
 
       try {
-        // Call saveQuote which uploads PPTX and inserts DB records (or falls back)
         const savedQuoteId = await saveQuote(quotePayload, itemsToSave, blob, `proposta-${proposalNumber}.pptx`);
         toast.dismiss(savingToastId);
         toast.success("Proposta salva com sucesso (ID: " + savedQuoteId + ")");
 
-        // Trigger download after successful save
         const url = URL.createObjectURL(blob);
         const a = document.createElement("a");
         a.href = url;
@@ -389,14 +346,12 @@ export default function Index() {
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
-        // reset state
         setQuoteItems([]);
         setProposalData(null);
         setStep("catalog");
       } catch (err: any) {
         toast.dismiss(savingToastId);
         console.error("Erro ao salvar proposta:", err);
-        // Even if save failed, still offer the download of the generated file to the user
         try {
           const url = URL.createObjectURL(blob);
           const a = document.createElement("a");
@@ -474,6 +429,7 @@ export default function Index() {
                   onRemoveItem={handleRemoveItem}
                   onUpdateQuantity={handleUpdateQuantity}
                   onUpdatePriceModel={handleUpdatePriceModel}
+                  onUpdateUnitPrice={handleUpdateUnitPrice}
                   onGenerateProposal={() => setStep("review")}
                 />
                 <div className="mt-4 flex gap-2">
@@ -501,6 +457,7 @@ export default function Index() {
                 onRemoveItem={handleRemoveItem}
                 onUpdateQuantity={handleUpdateQuantity}
                 onUpdatePriceModel={handleUpdatePriceModel}
+                onUpdateUnitPrice={handleUpdateUnitPrice}
                 onGenerateProposal={() => setStep("form")}
               />
             </div>
