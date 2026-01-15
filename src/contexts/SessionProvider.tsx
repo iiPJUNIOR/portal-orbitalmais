@@ -14,6 +14,7 @@ const SessionContext = createContext<SessionContextValue | undefined>(undefined)
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<any | null>(null);
   const [user, setUser] = useState<any | null>(null);
+  const [initializing, setInitializing] = useState(true);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -31,6 +32,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         setUser(currentSession?.user ?? null);
       } catch (err) {
         console.warn("SessionProvider: getSession failed", err);
+      } finally {
+        // Mark that initial session check finished (prevents redirect flicker)
+        if (mounted) setInitializing(false);
       }
 
       // Listen for auth state changes
@@ -41,7 +45,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         setSession(s);
         setUser(s?.user ?? null);
 
-        // Redirects: signed in -> / ; signed out -> /login
+        // Redirects on explicit sign events only
         if (event === "SIGNED_IN") {
           try {
             navigate("/");
@@ -64,9 +68,10 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Keep routing consistent: if not authenticated and not on /login -> push to /login.
-  // If authenticated and on /login -> push to /
+  // Only perform route redirects after initial session check finishes to avoid flicker
   useEffect(() => {
+    if (initializing) return;
+
     try {
       if (session && location.pathname === "/login") {
         navigate("/");
@@ -77,7 +82,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       // navigation can fail during SSR or early mount; ignore
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [session, location.pathname]);
+  }, [session, location.pathname, initializing]);
 
   return <SessionContext.Provider value={{ session, user }}>{children}</SessionContext.Provider>;
 };
