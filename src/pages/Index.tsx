@@ -9,7 +9,6 @@ import { QuoteBuilder } from "@/components/QuoteBuilder";
 import { ProposalForm } from "@/components/ProposalForm";
 import { ProposalSummary } from "@/components/ProposalSummary";
 import { QuoteHistory } from "@/components/QuoteHistory";
-import { fetchProducts } from "@/services/productService";
 import { generateProposalPPTX, generateProposalNumber } from "@/services/proposalService";
 import { Product } from "@/types/product";
 import { toast } from "sonner";
@@ -181,45 +180,50 @@ export default function Index() {
 
   const debounceRef = useRef<number | null>(null);
 
+  const getImportedProducts = (): Product[] => {
+    try {
+      const raw = localStorage.getItem("importedProducts");
+      if (!raw) return [];
+      const rows = JSON.parse(raw) as any[];
+      if (!Array.isArray(rows) || rows.length === 0) return [];
+      return rows.map((r, idx) => normalizeImportedRow(r, idx));
+    } catch (err) {
+      console.warn("Failed to parse importedProducts", err);
+      return [];
+    }
+  };
+
   const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
     setLoading(true);
     try {
-      // Priority: importedProducts from localStorage (created via Settings import)
-      const raw = localStorage.getItem("importedProducts");
-      if (raw) {
-        try {
-          const rows = JSON.parse(raw) as any[];
-          const imported = rows.map((r, idx) => normalizeImportedRow(r, idx));
+      // Use only importedProducts (no mock fallback)
+      const imported = getImportedProducts();
 
-          // If there are filters, apply them (full set)
-          if (filters && Object.keys(filters).length > 0) {
-            const filtered = applyFiltersToProducts(imported, filters);
-            setProducts(filtered);
-          } else {
-            setProducts(imported.filter((p) => p.status === "Ativo"));
-          }
-
-          setLoading(false);
-          return;
-        } catch (err) {
-          console.warn("Falha ao parsear importedProducts:", err);
-        }
+      if (imported.length === 0) {
+        setProducts([]);
+        toast.error("Nenhuma planilha importada — importe sua planilha em Configurações");
+        setLoading(false);
+        return;
       }
 
-      // Fallback to mock fetch (productService will apply filters there)
-      const data = await fetchProducts(filters);
-      setProducts(data);
+      // If there are filters, apply them (full set)
+      if (filters && Object.keys(filters).length > 0) {
+        const filtered = applyFiltersToProducts(imported, filters);
+        setProducts(filtered);
+      } else {
+        setProducts(imported.filter((p) => p.status === "Ativo"));
+      }
     } catch (err) {
       console.error("Erro ao carregar produtos:", err);
       toast.error("Erro ao carregar produtos");
+      setProducts([]);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Do NOT auto-load products on mount — keep them hidden until user types in 'Buscar'.
+  // Do NOT auto-load products on mount — keep them hidden until user types in 'Buscar' or triggers reload.
   useEffect(() => {
-    // intentionally empty: products remain hidden until search input triggers load via ProductFilter
     return () => {
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
@@ -237,9 +241,17 @@ export default function Index() {
     const search = (filters?.search ?? "").toString().trim();
     const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
     if (!search && !otherFiltersExist) {
-      // Clear products and avoid fetching
       setProducts([]);
       setLoading(false);
+      return;
+    }
+
+    // Ensure an imported sheet exists
+    const imported = getImportedProducts();
+    if (imported.length === 0) {
+      setProducts([]);
+      setLoading(false);
+      toast.error("Nenhuma planilha importada — importe a planilha em Configurações");
       return;
     }
 
@@ -250,7 +262,12 @@ export default function Index() {
   };
 
   const reloadFromImported = () => {
-    // keep existing behavior: reload catalog from importedProducts (manual action)
+    const imported = getImportedProducts();
+    if (imported.length === 0) {
+      toast.error("Nenhuma planilha importada — vá em Configurações para importar.");
+      setProducts([]);
+      return;
+    }
     loadProducts();
     toast.success("Catálogo recarregado a partir da planilha (importedProducts)");
   };

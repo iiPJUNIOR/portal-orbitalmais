@@ -14,7 +14,6 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from "lucide-react";
 import { ProductFilters } from "@/types/product";
-import { getCategories, getModels, getTipos, getColors } from "@/services/productService";
 
 interface ProductFilterProps {
   onFilterChange: (filters: ProductFilters) => void;
@@ -22,11 +21,16 @@ interface ProductFilterProps {
 
 const DEBOUNCE_MS = 300;
 
+function uniq<T>(arr: T[]) {
+  return Array.from(new Set(arr.filter(Boolean)));
+}
+
 export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [tipos, setTipos] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
+  const [hasImported, setHasImported] = useState<boolean>(false);
   
   const [filters, setFilters] = useState<ProductFilters>({
     category: undefined,
@@ -46,19 +50,42 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const debounceRef = useRef<number | null>(null);
   const mountedRef = useRef(false); // avoid triggering filter on initial mount
 
+  // Load option lists only from importedProducts in localStorage
   useEffect(() => {
-    const loadFilters = async () => {
-      const categories = getCategories();
-      const models = getModels();
-      const tipos = getTipos();
-      const colors = getColors();
-      setCategories(categories);
-      setModels(models);
-      setTipos(tipos);
-      setColors(colors);
-    };
-    
-    loadFilters();
+    try {
+      const raw = localStorage.getItem("importedProducts");
+      if (raw) {
+        const rows = JSON.parse(raw) as any[];
+        if (Array.isArray(rows) && rows.length > 0) {
+          setHasImported(true);
+          const products = rows;
+          const c = uniq(products.map((p) => (p.category ? String(p.category) : "")).filter(Boolean));
+          const m = uniq(products.map((p) => (p.model ? String(p.model) : "")).filter(Boolean));
+          // tipo: derive from model and part_number if available
+          const tset: string[] = [];
+          products.forEach((p) => {
+            if (p.model) tset.push(String(p.model));
+            if (p.part_number) tset.push(String(p.part_number));
+          });
+          const types = uniq(tset);
+          const cols = uniq(products.flatMap((p) => (Array.isArray(p.colors) ? p.colors : (p.colors ? String(p.colors).split(",") : []) ) ).map((c: any) => String(c).trim()).filter(Boolean));
+          setCategories(c);
+          setModels(m);
+          setTipos(types);
+          setColors(cols);
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to parse importedProducts for filter lists", err);
+    }
+
+    // No imported products available
+    setHasImported(false);
+    setCategories([]);
+    setModels([]);
+    setTipos([]);
+    setColors([]);
   }, []);
 
   // Debounced filter application: wait DEBOUNCE_MS after the last change
@@ -133,6 +160,17 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
 
   return (
     <div className="space-y-6">
+      {!hasImported && (
+        <div className="p-3 bg-yellow-50 border rounded text-yellow-900">
+          Nenhuma planilha importada detectada. Importe a planilha em <strong>Configurações</strong> para habilitar busca e filtros.
+          <div className="mt-2">
+            <Button onClick={() => { window.location.href = "/settings"; }}>
+              Ir para Configurações
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Single responsive row: Search (wider) + Category + Tipo + Model + Cor/Material */}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
         <div className="space-y-2 md:col-span-2">
@@ -141,10 +179,11 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               id="search"
-              placeholder="Descrição, part number..."
+              placeholder={hasImported ? "Descrição, part number..." : "Importe a planilha para buscar"}
               className="pl-8"
               value={filters.search || ""}
               onChange={(e) => handleInputChange("search", e.target.value)}
+              disabled={!hasImported}
             />
           </div>
         </div>
@@ -155,7 +194,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.category ?? "ALL"} 
             onValueChange={(value) => handleInputChange("category", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="category">
+            <SelectTrigger id="category" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -173,7 +212,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.tipo ?? "ALL"} 
             onValueChange={(value) => handleInputChange("tipo", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="tipo">
+            <SelectTrigger id="tipo" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -191,7 +230,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.model ?? "ALL"} 
             onValueChange={(value) => handleInputChange("model", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="model">
+            <SelectTrigger id="model" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -209,7 +248,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.color ?? "ALL"}
             onValueChange={(value) => handleInputChange("color", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="color">
+            <SelectTrigger id="color" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -228,7 +267,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.facial ?? "ALL"} 
             onValueChange={(value) => handleInputChange("facial", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="facial">
+            <SelectTrigger id="facial" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -247,7 +286,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             value={filters.proximity ?? "ALL"} 
             onValueChange={(value) => handleInputChange("proximity", value === "ALL" ? undefined : value)}
           >
-            <SelectTrigger id="proximity">
+            <SelectTrigger id="proximity" disabled={!hasImported}>
               <SelectValue placeholder="Selecione" />
             </SelectTrigger>
             <SelectContent>
@@ -266,6 +305,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
               onCheckedChange={(checked) => 
                 handleInputChange("biometrics", checked ? true : undefined)
               }
+              disabled={!hasImported}
             />
             <Label htmlFor="biometrics">Biometria</Label>
           </div>
@@ -277,6 +317,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
               onCheckedChange={(checked) => 
                 handleInputChange("urn", checked ? true : undefined)
               }
+              disabled={!hasImported}
             />
             <Label htmlFor="urn">Urna</Label>
           </div>
@@ -288,6 +329,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
               onCheckedChange={(checked) => 
                 handleInputChange("qr", checked ? true : undefined)
               }
+              disabled={!hasImported}
             />
             <Label htmlFor="qr">QR Code</Label>
           </div>
@@ -295,7 +337,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
       </div>
       
       <div className="flex justify-end">
-        <Button variant="outline" onClick={resetFilters}>
+        <Button variant="outline" onClick={resetFilters} disabled={!hasImported}>
           Limpar Filtros
         </Button>
       </div>
