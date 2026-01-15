@@ -12,7 +12,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Minus } from "lucide-react";
 import { Product } from "@/types/product";
 import { formatModelLabel, formatCurrencyBRL } from "@/lib/formatters";
 
@@ -29,16 +28,6 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
       ...prev,
       [productId]: Math.max(1, Math.min(99, value))
     }));
-  };
-
-  const incrementQuantity = (productId: string) => {
-    const current = quantities[productId] || 1;
-    handleQuantityChange(productId, current + 1);
-  };
-
-  const decrementQuantity = (productId: string) => {
-    const current = quantities[productId] || 1;
-    handleQuantityChange(productId, current - 1);
   };
 
   const getCharacteristics = (product: Product) => {
@@ -81,14 +70,7 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
               <TableCell>{formatCurrencyBRL(product.value_12m)}</TableCell>
               <TableCell>{formatCurrencyBRL(product.value_24m)}</TableCell>
               <TableCell className="text-right">
-                <div className="flex items-center justify-end space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => decrementQuantity(product.id)}
-                  >
-                    <Minus className="h-4 w-4" />
-                  </Button>
+                <div className="flex items-center justify-end">
                   <Input
                     type="number"
                     min="1"
@@ -97,15 +79,8 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
                     onChange={(e) => 
                       handleQuantityChange(product.id, parseInt(e.target.value) || 1)
                     }
-                    className="w-16 text-center"
+                    className="w-20 text-center"
                   />
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => incrementQuantity(product.id)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
                 </div>
               </TableCell>
               <TableCell className="text-right">
