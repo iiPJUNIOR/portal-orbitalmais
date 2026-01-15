@@ -16,6 +16,7 @@ import { saveQuote } from "@/services/supabaseService";
 import { formatModelLabel } from "@/lib/formatters";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
 import ConfirmModal from "@/components/ConfirmModal";
+import { QuoteBuilder } from "@/components/QuoteBuilder";
 
 type QuoteItem = {
   id: string;
@@ -281,7 +282,7 @@ export default function Index() {
     toast.success("Catálogo recarregado a partir da planilha (importedProducts)");
   };
 
-  // Updated: accept optional unitPrice so clicks on Com/Sem iDSecure can pass the chosen price
+  // Accept optional unitPrice so clicks on Com/Sem iDSecure can pass the chosen price
   const handleAddToQuote = (product: Product, quantity: number, unitPrice?: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
     const defaultUnit = product.value_12m;
@@ -594,6 +595,7 @@ export default function Index() {
 
                     <div className="flex gap-2">
                       <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
+                      <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
                       <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
                         Gerar Proposta
                       </Button>
@@ -616,7 +618,7 @@ export default function Index() {
         {step === "review" && (
           <div className="space-y-6">
             <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Revisar Orçamento</h2>
+              <h2 className="text-2xl font-semibold">Revisar Itens do Orçamento</h2>
               <div className="flex gap-2">
                 <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
                 <Button onClick={openProposalForm}>Continuar</Button>
@@ -624,9 +626,27 @@ export default function Index() {
             </div>
 
             <div className="bg-white p-6 rounded shadow-sm">
-              <div className="p-6 text-sm text-muted-foreground">
-                A revisão de itens foi removida da tela — use o botão "Gerar Proposta" para prosseguir.
-              </div>
+              <QuoteBuilder
+                items={quoteItems.map(q => ({
+                  id: q.id,
+                  product: q.product,
+                  quantity: q.quantity,
+                  priceModel: q.priceModel,
+                  unitPrice: q.unitPrice,
+                }))}
+                onRemoveItem={(id) => handleRemoveItem(id)}
+                onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)}
+                onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)}
+                onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)}
+                onGenerateProposal={() => {
+                  // Continue to proposal form
+                  if (quoteItems.length === 0) {
+                    toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta");
+                    return;
+                  }
+                  setStep("form");
+                }}
+              />
             </div>
           </div>
         )}
@@ -713,6 +733,7 @@ export default function Index() {
 
             <div className="flex md:flex-row flex-col gap-2 w-full md:w-auto">
               <Button variant="outline" onClick={handleRequestClear} className="w-full md:w-auto">Limpar</Button>
+              <Button variant="outline" onClick={() => setStep("review")} className="w-full md:w-auto">Revisar</Button>
               <Button onClick={openProposalForm} className="w-full md:w-auto">Gerar Proposta</Button>
             </div>
           </div>

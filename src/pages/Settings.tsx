@@ -530,7 +530,7 @@ export default function Settings() {
    * Behavior:
    * - For every data row in the complement range, create a NEW product entry (if complementCreateMissing is true).
    * - The new product will include:
-   *    - sku based on the key column (or generated)
+   *    - sku generated if key column is not provided or not found
    *    - description built from row columns
    *    - value_12m / value_24m extracted from selected complement price columns (or auto-detected)
    *    - additional fields price_com_iDSecure and price_sem_iDSecure extracted from the two new selects (if provided)
@@ -539,10 +539,6 @@ export default function Settings() {
   const handleImportComplement = async () => {
     if (!accessToken || !spreadsheetId || !complementSheet) {
       toast.error("Selecione planilha e aba complementar antes de importar.");
-      return;
-    }
-    if (!complementKeyColumn) {
-      toast.error("Selecione a coluna chave (SKU / part number) nas colunas complementares.");
       return;
     }
 
@@ -558,12 +554,7 @@ export default function Settings() {
       }
 
       const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
-      const keyIndex = headerRow.findIndex(h => String(h).trim() === complementKeyColumn);
-      if (keyIndex === -1) {
-        toast.error("Não foi possível localizar a coluna chave selecionada no cabeçalho.");
-        setComplementImporting(false);
-        return;
-      }
+      const keyIndex = complementKeyColumn ? headerRow.findIndex(h => String(h).trim() === complementKeyColumn) : -1;
 
       const dataRows = values.slice(1);
 
@@ -589,9 +580,11 @@ export default function Settings() {
         return row[idx] ?? "";
       };
 
-      for (const row of dataRows) {
-        const keyRaw = row[keyIndex];
-        const keyVal = String(keyRaw ?? "").trim();
+      for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+        const row = dataRows[rowIdx];
+        const keyRaw = keyIndex >= 0 ? row[keyIndex] : undefined;
+        const keyVal = keyRaw ? String(keyRaw ?? "").trim() : "";
+
         // If not creating missing, skip (user opted out)
         if (!complementCreateMissing) continue;
 
@@ -606,7 +599,7 @@ export default function Settings() {
             if (descParts.length >= 4) break;
           }
         }
-        const description = descParts.join(" · ") || String(keyRaw || keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
+        const description = descParts.join(" · ") || (keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
 
         // Determine prices using selected complement price columns, falling back to auto-detection
         const findPriceFromColumn = (colName: string) => {
@@ -636,11 +629,14 @@ export default function Settings() {
         const priceComIds = parseSpreadsheetNumber(comIdsRaw);
         const priceSemIds = parseSpreadsheetNumber(semIdsRaw);
 
+        // If no key provided or not found, generate a unique SKU/part_number
+        const generatedKey = keyVal || `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString().slice(-6)}`;
+
         const newProd: any = {
           id: `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`,
-          sku: String(keyRaw || keyVal || `comp-${Math.random().toString(36).slice(2, 6)}`),
+          sku: generatedKey,
           category: "Controladores Porta",
-          model: String(keyRaw || keyVal || ""),
+          model: String(keyVal || generatedKey),
           colors: [],
           biometrics: false,
           facial: "None",
@@ -650,7 +646,7 @@ export default function Settings() {
           description,
           value_12m: Number(value12 || 0),
           value_24m: Number(value24 || 0),
-          part_number: String(keyRaw || keyVal || ""),
+          part_number: String(generatedKey),
           status: "Ativo",
           // Keep complement-specific pricing fields
           price_com_iDSecure: priceComIds > 0 ? priceComIds : undefined,
@@ -933,7 +929,7 @@ export default function Settings() {
             <CardContent>
               <div className="space-y-4">
                 <p className="text-sm text-muted-foreground">
-                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e criar novos produtos (sem mesclar com os já importados). Se uma linha complementar não tiver correspondência, será criado um novo produto com base nas colunas da linha.
+                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e criar novos produtos (sem mesclar com os já importados). Se uma linha complementar não tiver correspondência, será criado um novo produto com base nas colunas da linha. A coluna chave (SKU/part_number) é opcional — se não informada, será gerado um identificador interno para cada linha.
                 </p>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1013,9 +1009,9 @@ export default function Settings() {
 
                 {complementHeaders.length > 0 && (
                   <div className="space-y-2">
-                    <Label>Coluna chave (SKU / part number) — será usada para gerar o SKU/part_number do novo item</Label>
+                    <Label>Coluna chave (SKU / part number) — opcional</Label>
                     <select className="border rounded w-full px-2 py-1" value={complementKeyColumn} onChange={(e) => setComplementKeyColumn(e.target.value)}>
-                      <option value="">-- selecione a coluna chave --</option>
+                      <option value="">(gerar automaticamente)</option>
                       {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
 
@@ -1058,7 +1054,7 @@ export default function Settings() {
                     </div>
 
                     <div className="flex justify-end gap-2 mt-3">
-                      <Button onClick={handleImportComplement} disabled={complementImporting || !complementKeyColumn}>
+                      <Button onClick={handleImportComplement} disabled={complementImporting}>
                         {complementImporting ? "Importando..." : "Importar e Criar Novos Itens"}
                       </Button>
                     </div>
