@@ -13,11 +13,15 @@ type StoredBase = {
   headers: string[];
   rows: any[][];
   createdAt: string;
+  // optional metadata
+  keyColumn?: string | null;
+  comIdsColumn?: string | null;
+  semIdsColumn?: string | null;
 };
 
-interface ProductBasesTabProps {
+type ProductBasesTabProps = {
   onBack?: () => void;
-}
+};
 
 export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
   const [bases, setBases] = useState<StoredBase[]>([]);
@@ -121,6 +125,9 @@ export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
                   <div className="text-sm text-muted-foreground">
                     {b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleDateString()}
                   </div>
+                  {b.keyColumn && <div className="text-sm text-muted-foreground mt-1">Coluna chave: <strong>{b.keyColumn}</strong></div>}
+                  {b.comIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Com iDSecure': <strong>{b.comIdsColumn}</strong></div>}
+                  {b.semIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Sem iDSecure': <strong>{b.semIdsColumn}</strong></div>}
                 </div>
 
                 <div className="flex items-center gap-2">

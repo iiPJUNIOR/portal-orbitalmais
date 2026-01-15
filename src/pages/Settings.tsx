@@ -47,6 +47,10 @@ type StoredBase = {
   headers: string[];
   rows: any[][]; // raw rows (excluding header)
   createdAt: string;
+  // optional columns to help identify SKUs/prices when importing/using the base
+  keyColumn?: string | null; // SKU / part number column name (optional)
+  comIdsColumn?: string | null; // column used for 'Com iDSecure' price (optional)
+  semIdsColumn?: string | null; // column used for 'Sem iDSecure' price (optional)
 };
 
 export default function Settings() {
@@ -722,6 +726,10 @@ export default function Settings() {
         headers: headerRow,
         rows: dataRows,
         createdAt: new Date().toISOString(),
+        // Save optional columns so downstream pages know which column is the SKU/key and price columns
+        keyColumn: complementKeyColumn || null,
+        comIdsColumn: complementComIdsColumn || null,
+        semIdsColumn: complementSemIdsColumn || null,
       };
       setBases((prev) => [base, ...prev]);
       toast.success(`Base "${base.name}" salva (${base.type}) com ${dataRows.length} linhas`);
@@ -763,6 +771,8 @@ export default function Settings() {
         headers: headerRow,
         rows: dataRows,
         createdAt: new Date().toISOString(),
+        // product-type bases might also benefit from a key column if user selected one previously
+        keyColumn: complementKeyColumn || null,
       };
       setBases((prev) => [base, ...prev]);
       toast.success(`Base de produtos "${base.name}" salva com ${dataRows.length} linhas.`);
@@ -929,6 +939,9 @@ export default function Settings() {
                         <div>
                           <div className="font-medium">{b.name} <span className="text-xs text-muted-foreground ml-2">[{b.type}]</span></div>
                           <div className="text-sm text-muted-foreground">{b.rows.length} linhas · {b.headers.length} colunas · criado em {new Date(b.createdAt).toLocaleDateString()}</div>
+                          {b.keyColumn && <div className="text-sm text-muted-foreground mt-1">Coluna chave: <strong>{b.keyColumn}</strong></div>}
+                          {b.comIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Com iDSecure': <strong>{b.comIdsColumn}</strong></div>}
+                          {b.semIdsColumn && <div className="text-sm text-muted-foreground mt-1">Coluna 'Sem iDSecure': <strong>{b.semIdsColumn}</strong></div>}
                         </div>
                         <div className="flex items-center gap-2">
                           <Button size="sm" variant="outline" onClick={() => {

@@ -47,6 +47,10 @@ type StoredBase = {
   headers: string[];
   rows: any[][];
   createdAt: string;
+  // optional metadata: key column and optional price columns for catalog bases
+  keyColumn?: string | null;
+  comIdsColumn?: string | null;
+  semIdsColumn?: string | null;
 };
 
 function normalizeImportedRow(row: any, idx: number): Product {
@@ -291,6 +295,10 @@ export default function Index() {
           // attach complement meta markers if needed
           (prod as any)._baseId = b.id;
           (prod as any)._baseName = b.name;
+          // preserve optional key/price column hints on product objects for downstream UX if needed
+          (prod as any)._baseKeyColumn = b.keyColumn ?? null;
+          (prod as any)._baseComIdsColumn = b.comIdsColumn ?? null;
+          (prod as any)._baseSemIdsColumn = b.semIdsColumn ?? null;
           out.push(prod);
         } catch {
           // ignore
