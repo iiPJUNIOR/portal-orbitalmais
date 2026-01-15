@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -67,6 +67,14 @@ export default function Settings() {
   const [sellerRole, setSellerRole] = useState<string>(() => localStorage.getItem("seller_role") || "");
   const [sellerEmail, setSellerEmail] = useState<string>(() => localStorage.getItem("seller_email") || "");
   const [sellerPhone, setSellerPhone] = useState<string>(() => localStorage.getItem("seller_phone") || "");
+
+  // --- Complement import states ---
+  const [complementSheet, setComplementSheet] = useState<string | null>(null);
+  const [complementRange, setComplementRange] = useState<string>("A1:Z1000");
+  const [complementHeaders, setComplementHeaders] = useState<string[]>([]);
+  const [complementKeyColumn, setComplementKeyColumn] = useState<string>("");
+  const [complementImporting, setComplementImporting] = useState(false);
+  // ---------------------------------
 
   useEffect(() => {
     const storedToken = localStorage.getItem("google_access_token");
@@ -135,6 +143,13 @@ export default function Settings() {
       console.warn("Failed to auto-save seller fields", e);
     }
   }, [sellerName, sellerRole, sellerEmail, sellerPhone]);
+
+  useEffect(() => {
+    // If sheetTitles change and complementSheet not set, default it
+    if (sheetTitles.length > 0 && !complementSheet) {
+      setComplementSheet(sheetTitles[0]);
+    }
+  }, [sheetTitles, complementSheet]);
 
   function extractSpreadsheetId(input: string): string | null {
     if (!input) return null;
@@ -544,6 +559,172 @@ export default function Settings() {
     }
   };
 
+  // ------------------ Complement import helpers ------------------
+
+  async function handleLoadComplementHeaders() {
+    if (!accessToken || !spreadsheetId || !complementSheet) {
+      toast.error("É necessário conectar ao Google e selecionar uma planilha/aba.");
+      return;
+    }
+
+    setComplementHeaders([]);
+    try {
+      const resp = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${complementSheet}!1:1`);
+      const row = (resp.values && resp.values[0]) || [];
+      const headerStrings = row.map((h: any) => String(h).trim());
+      setComplementHeaders(headerStrings);
+      // If we can auto-detect a key column (sku/part) prefer it
+      const tryFind = headerStrings.find(h => /sku/i.test(h) || /part/i.test(h) || /codigo/i.test(h) || /part_number/i.test(h));
+      if (tryFind) setComplementKeyColumn(tryFind);
+      toast.success("Cabeçalhos carregados para importação complementar.");
+    } catch (err: any) {
+      console.error("Erro ao carregar cabeçalhos complementares:", err);
+      toast.error("Falha ao carregar cabeçalhos da aba complementar: " + (err?.message || err));
+    }
+  }
+
+  // normalize header into a safe object key (camelCase-ish)
+  function normalizeHeaderToKey(h?: string) {
+    if (!h) return "";
+    const noAcc = String(h).normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    const parts = noAcc.replace(/[^a-zA-Z0-9 ]/g, " ").trim().split(/\s+/);
+    if (parts.length === 0) return "";
+    const first = parts[0].toLowerCase();
+    const rest = parts.slice(1).map(p => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join("");
+    return (first + rest).replace(/^_+|_+$/g, "");
+  }
+
+  async function handleImportComplement() {
+    if (!accessToken || !spreadsheetId || !complementSheet) {
+      toast.error("Selecione planilha e aba complementar antes de importar.");
+      return;
+    }
+    if (!complementKeyColumn) {
+      toast.error("Selecione a coluna chave (SKU / part number) nas colunas complementares.");
+      return;
+    }
+
+    setComplementImporting(true);
+    try {
+      const fullRange = `${complementSheet}!${complementRange}`;
+      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+      const values: any[][] = res.values || [];
+      if (values.length <= 1) {
+        toast.error("Intervalo complementar não contém dados (além do cabeçalho).");
+        setComplementImporting(false);
+        return;
+      }
+
+      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
+      const keyIndex = headerRow.findIndex(h => String(h).trim() === complementKeyColumn);
+      if (keyIndex === -1) {
+        toast.error("Não foi possível localizar a coluna chave selecionada no cabeçalho.");
+        setComplementImporting(false);
+        return;
+      }
+
+      const dataRows = values.slice(1);
+
+      // Load existing importedProducts
+      const raw = localStorage.getItem("importedProducts");
+      let imported: any[] = [];
+      if (raw) {
+        try {
+          imported = JSON.parse(raw);
+        } catch {
+          imported = [];
+        }
+      }
+
+      if (!Array.isArray(imported) || imported.length === 0) {
+        toast.error("Nenhum produto importado encontrado (importedProducts). Importe a planilha principal primeiro.");
+        setComplementImporting(false);
+        return;
+      }
+
+      // Build a lookup map by sku and part_number for fast matching (normalize)
+      const normalizeMatchKey = (s?: any) => (s ? String(s).trim().toLowerCase() : "");
+      const lookupBySku: Record<string, number[]> = {};
+      imported.forEach((p: any, idx: number) => {
+        const skuKey = normalizeMatchKey(p.sku || p.SKU || p.part_number || p.partNumber || p.part_number);
+        if (skuKey) {
+          lookupBySku[skuKey] = lookupBySku[skuKey] || [];
+          lookupBySku[skuKey].push(idx);
+        }
+      });
+
+      let updatedCount = 0;
+      let matchedRows = 0;
+
+      for (const row of dataRows) {
+        const keyRaw = row[keyIndex];
+        const keyVal = normalizeMatchKey(keyRaw);
+        if (!keyVal) continue;
+
+        const matchedIdxs = lookupBySku[keyVal] || [];
+        if (matchedIdxs.length === 0) {
+          // try fuzzy: match by part_number containing keyVal or sku containing keyVal
+          const fallbackIdxs = imported
+            .map((p: any, idx: number) => ({ p, idx }))
+            .filter(({ p }) => {
+              const s1 = normalizeMatchKey(p.sku || p.part_number);
+              return s1 && s1.includes(keyVal);
+            })
+            .map(({ idx }) => idx);
+
+          if (fallbackIdxs.length > 0) {
+            matchedIdxs.push(...fallbackIdxs);
+          }
+        }
+
+        if (matchedIdxs.length === 0) continue;
+
+        matchedRows += 1;
+
+        for (const mi of matchedIdxs) {
+          const prod = imported[mi];
+          let anyChanged = false;
+          // For every header column except key, merge into product under normalized key
+          for (let c = 0; c < headerRow.length; c++) {
+            if (c === keyIndex) continue;
+            const header = headerRow[c];
+            const cell = row[c] ?? "";
+            const normalizedKey = normalizeHeaderToKey(header);
+            if (!normalizedKey) continue;
+            // Only set if there's a value (non-empty) to avoid overwriting good existing data with blanks
+            if (cell !== "" && cell !== null && cell !== undefined) {
+              // Try to smart-parse numbers similar to other flows
+              const parsedNumber = parseSpreadsheetNumber(cell);
+              const valueToSet = parsedNumber !== 0 || String(cell).match(/[0-9]/) ? (parsedNumber !== 0 ? parsedNumber : cell) : cell;
+              // if existing value is empty or differs, update
+              if (prod[normalizedKey] === undefined || prod[normalizedKey] === "" || String(prod[normalizedKey]) !== String(valueToSet)) {
+                prod[normalizedKey] = valueToSet;
+                anyChanged = true;
+              }
+            }
+          }
+          if (anyChanged) updatedCount++;
+        }
+      }
+
+      // Save merged importedProducts back to localStorage
+      try {
+        localStorage.setItem("importedProducts", JSON.stringify(imported));
+      } catch (e) {
+        console.warn("Failed to persist importedProducts after complement import", e);
+      }
+
+      toast.success(`Importação complementar concluída: ${matchedRows} linhas encontradas, ${updatedCount} atualizações aplicadas.`);
+    } catch (err: any) {
+      console.error("Erro ao importar complemento:", err);
+      toast.error("Falha na importação complementar: " + (err?.message || err));
+    } finally {
+      setComplementImporting(false);
+    }
+  }
+
+  // ----------------------------------------------------------------
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -745,6 +926,70 @@ export default function Settings() {
                 {stage === "mapped" && (
                   <div className="p-3 bg-green-50 border rounded text-green-900">
                     Importação concluída e salva em localStorage como <strong>importedProducts</strong>. Vá para a página inicial para ver o catálogo atualizado.
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Complement import card */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Importação Complementar (outra aba)</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Use esta seção para trazer colunas adicionais de outra aba da mesma planilha e complementar os produtos já importados (match por SKU / part_number).
+                </p>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Aba (sheet)</Label>
+                    <select
+                      className="border rounded w-full px-2 py-1"
+                      value={complementSheet ?? ""}
+                      onChange={(e) => setComplementSheet(e.target.value)}
+                    >
+                      <option value="">-- selecione a aba --</option>
+                      {sheetTitles.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label>Intervalo (range)</Label>
+                    <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} />
+                    <div className="text-sm text-muted-foreground">Ex: A1:Z1000 (use a 1ª linha como cabeçalho)</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={handleLoadComplementHeaders} disabled={!connected || !spreadsheetId || !complementSheet}>
+                    Carregar Cabeçalhos da Aba
+                  </Button>
+                  <Button onClick={() => {
+                    setComplementHeaders([]);
+                    setComplementKeyColumn("");
+                  }} variant="outline">Limpar Cabeçalhos</Button>
+                </div>
+
+                {complementHeaders.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Coluna chave (SKU / part number) — será usada para localizar o produto (igual ao campo sku / part_number)</Label>
+                    <select className="border rounded w-full px-2 py-1" value={complementKeyColumn} onChange={(e) => setComplementKeyColumn(e.target.value)}>
+                      <option value="">-- selecione a coluna chave --</option>
+                      {complementHeaders.map(h => <option key={h} value={h}>{h}</option>)}
+                    </select>
+
+                    <div className="text-sm text-muted-foreground">
+                      Cabeçalhos detectados: {complementHeaders.join(", ")}
+                    </div>
+
+                    <div className="flex justify-end gap-2">
+                      <Button onClick={handleImportComplement} disabled={complementImporting || !complementKeyColumn}>
+                        {complementImporting ? "Importando..." : "Importar e Mesclar"}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
