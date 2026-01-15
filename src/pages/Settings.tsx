@@ -37,7 +37,13 @@ export default function Settings() {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
   const [fileSearch, setFileSearch] = useState<string>("");
-  const [spreadsheetLink, setSpreadsheetLink] = useState<string>("");
+  const [spreadsheetLink, setSpreadsheetLink] = useState<string>(() => {
+    try {
+      return localStorage.getItem("spreadsheet_link") || "";
+    } catch {
+      return "";
+    }
+  });
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
@@ -104,6 +110,31 @@ export default function Settings() {
       console.warn("Failed to persist import mapping", e);
     }
   }, [mappings, spreadsheetId]);
+
+  // Persist spreadsheet link to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (spreadsheetLink) {
+        localStorage.setItem("spreadsheet_link", spreadsheetLink);
+      } else {
+        localStorage.removeItem("spreadsheet_link");
+      }
+    } catch (e) {
+      console.warn("Failed to persist spreadsheet link", e);
+    }
+  }, [spreadsheetLink]);
+
+  // Auto-save seller fields as the user types (also keep Save button for manual control)
+  useEffect(() => {
+    try {
+      localStorage.setItem("seller_name", sellerName);
+      localStorage.setItem("seller_role", sellerRole);
+      localStorage.setItem("seller_email", sellerEmail);
+      localStorage.setItem("seller_phone", sellerPhone);
+    } catch (e) {
+      console.warn("Failed to auto-save seller fields", e);
+    }
+  }, [sellerName, sellerRole, sellerEmail, sellerPhone]);
 
   function extractSpreadsheetId(input: string): string | null {
     if (!input) return null;
@@ -425,7 +456,13 @@ export default function Settings() {
   };
 
   const handleUseFileLink = (id: string) => {
-    setSpreadsheetLink(`https://docs.google.com/spreadsheets/d/${id}`);
+    const fullLink = `https://docs.google.com/spreadsheets/d/${id}`;
+    setSpreadsheetLink(fullLink);
+    try {
+      localStorage.setItem("spreadsheet_link", fullLink);
+    } catch {
+      // ignore
+    }
   };
 
   const filteredFiles = useMemo(() => {
@@ -461,7 +498,7 @@ export default function Settings() {
     }
   };
 
-  // Seller persistence functions
+  // Seller persistence functions (Save/clear still available, but auto-save also occurs)
   const saveSeller = () => {
     try {
       localStorage.setItem("seller_name", sellerName);
@@ -593,6 +630,9 @@ export default function Settings() {
                       setHeaders([]);
                       setMappings({});
                       setStage("idle");
+                      try {
+                        localStorage.removeItem("spreadsheet_link");
+                      } catch {}
                     }} variant="outline">
                       Limpar
                     </Button>
