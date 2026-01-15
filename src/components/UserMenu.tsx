@@ -40,10 +40,9 @@ export default function UserMenu() {
     return null;
   }
 
-  // Hide the persistent logout control on small screens to avoid overlapping header buttons.
-  // It will appear on md and larger viewports.
+  // Fixed small logout button in the bottom-right to avoid overlapping header buttons.
   return (
-    <div className="hidden md:flex items-center space-x-2">
+    <div className="fixed bottom-4 right-4 z-50">
       <Button size="sm" variant="outline" onClick={handleLogout} aria-label="Logout">
         Logout
       </Button>
