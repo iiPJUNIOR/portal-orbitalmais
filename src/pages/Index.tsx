@@ -54,9 +54,9 @@ type StoredBase = {
 };
 
 function normalizeImportedRow(row: any, idx: number): Product {
-  const id = row.id || row.ID || row.sku || row.SKU || `imported-${idx}-${Date.now()}`;
+  const id = row.id || row.ID || row.sku || row.SKU || row.part_number || `imported-${idx}-${Date.now()}`;
   const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
-  const description = row.description || row.Description || row.Descrição || row["Product"] || sku;
+  const description = row.description || row.Description || row.Descrição || row["Product"] || sku || String(sku);
   const modelRaw = row.model || row.Modelo || row.Model || "Importado";
   const model = formatModelLabel(String(modelRaw));
   const category = (row.category || row.Categoria || "Controladores Porta") as Product["category"];
@@ -374,6 +374,11 @@ export default function Index() {
     };
   }, []);
 
+  // Ensure we load products on mount and whenever bases change (so the prices tab is populated)
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts, bases]);
+
   const debouncedLoad = (filters?: any, delay = 250) => {
     // track filters used for counting across both subtabs
     setCurrentFilters(filters);
@@ -384,14 +389,22 @@ export default function Index() {
 
     const search = (filters?.search ?? "").toString().trim();
     const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
+    const imported = getCatalogProductsFromBases();
+
+    // If no filters/search: show full catalog (if available) instead of clearing it
     if (!search && !otherFiltersExist) {
-      // no meaningful filters/search — clear displayed catalog results but still compute counts above
-      setProducts([]);
-      setLoading(false);
-      return;
+      if (imported.length === 0) {
+        setProducts([]);
+        setLoading(false);
+        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
+        return;
+      } else {
+        setProducts(imported.filter(p => p.status === "Ativo"));
+        setLoading(false);
+        return;
+      }
     }
 
-    const imported = getCatalogProductsFromBases();
     if (imported.length === 0) {
       setProducts([]);
       setLoading(false);
