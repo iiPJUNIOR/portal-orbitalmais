@@ -156,6 +156,21 @@ export default function Settings() {
     }
   }, [bases]);
 
+  // --- Google auth error helpers ---
+  function isGoogleAuthError(err: any) {
+    const msg = String(err?.message ?? err ?? "").toLowerCase();
+    return msg.includes("401") || msg.includes("unauthenticated") || msg.includes("invalid authentication") || msg.includes("invalid authentication credentials") || msg.includes("expected oauth 2 access token");
+  }
+
+  function clearGoogleSessionAndNotify() {
+    try {
+      localStorage.removeItem("google_access_token");
+    } catch {}
+    setAccessToken(null);
+    setConnected(false);
+    toast.error("Sessão do Google expirada ou inválida. Conecte novamente.");
+  }
+
   // Initialize Google cached state
   useEffect(() => {
     const storedToken = localStorage.getItem("google_access_token");
@@ -168,11 +183,15 @@ export default function Settings() {
           const driveFiles = await googleClient.listDriveSpreadsheets(storedToken);
           setFiles(driveFiles.map((f: any) => ({ id: f.id, name: f.name })));
         } catch (err: any) {
-          console.error("Failed to restore Google session:", err);
+          if (isGoogleAuthError(err)) {
+            clearGoogleSessionAndNotify();
+          } else {
+            console.error("Failed to restore Google session:", err);
+            toast.error("Falha ao restaurar sessão do Google. Conecte novamente.");
+          }
           localStorage.removeItem("google_access_token");
           setAccessToken(null);
           setConnected(false);
-          toast.error("Sessão do Google expirada. Conecte novamente.");
         } finally {
           setLoading(false);
         }
@@ -305,8 +324,12 @@ export default function Settings() {
         toast.error("Não foi possível obter token");
       }
     } catch (err: any) {
-      console.error(err);
-      toast.error("Erro ao conectar com Google: " + (err?.message || err));
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+      } else {
+        console.error(err);
+        toast.error("Erro ao conectar com Google: " + (err?.message || err));
+      }
     } finally {
       setLoading(false);
     }
@@ -349,6 +372,10 @@ export default function Settings() {
       } catch (e) {}
       toast.success("Arquivos atualizados");
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        return;
+      }
       console.error(err);
       toast.error("Erro ao listar arquivos: " + (err?.message || err));
     } finally {
@@ -376,6 +403,10 @@ export default function Settings() {
       setStage("sheetsLoaded");
       toast.success(`Encontradas ${titles.length} abas`);
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        return;
+      }
       console.error("Erro ao obter abas:", err);
       toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
     } finally {
@@ -466,6 +497,10 @@ export default function Settings() {
       setStage("headersLoaded");
       toast.success("Cabeçalhos carregados — ajuste mapeamentos se desejar.");
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        return;
+      }
       console.error(err);
       toast.error("Erro ao carregar cabeçalhos: " + (err?.message || err));
     } finally {
@@ -500,6 +535,10 @@ export default function Settings() {
 
       toast.success(`Intervalo carregado: ${dataRows.length} linhas (pré-visualizando até 5).`);
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        return;
+      }
       console.error("Erro ao ler intervalo:", err);
       toast.error("Falha ao ler intervalo: " + (err?.message || err));
     } finally {
@@ -632,6 +671,11 @@ export default function Settings() {
       setComplementRowsCount(dataRows.length);
       setComplementPreviewRows(dataRows.slice(0, 5));
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        setComplementImporting(false);
+        return;
+      }
       console.error("Erro ao importar complemento:", err);
       toast.error("Falha na importação complementar: " + (err?.message || err));
     } finally {
@@ -653,6 +697,11 @@ export default function Settings() {
       const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
       const dataRows = values.slice(1);
       return { headerRow, dataRows };
+    } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+      }
+      throw err;
     } finally {
       setLoading(false);
     }
@@ -677,14 +726,13 @@ export default function Settings() {
       setBases((prev) => [base, ...prev]);
       toast.success(`Base "${base.name}" salva (${base.type}) com ${dataRows.length} linhas`);
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        // already handled in fetchFullRange via clearGoogleSessionAndNotify
+        return;
+      }
       console.error("save base failed", err);
       toast.error("Falha ao salvar a base: " + (err?.message || err));
     }
-  };
-
-  const handleDeleteBase = (id: string) => {
-    setBases((prev) => prev.filter((b) => b.id !== id));
-    toast.success("Base removida");
   };
 
   // New helper: save selectedSheet as a product base (reads A1:Z1000)
@@ -719,6 +767,10 @@ export default function Settings() {
       setBases((prev) => [base, ...prev]);
       toast.success(`Base de produtos "${base.name}" salva com ${dataRows.length} linhas.`);
     } catch (err: any) {
+      if (isGoogleAuthError(err)) {
+        clearGoogleSessionAndNotify();
+        return;
+      }
       console.error("save product base failed", err);
       toast.error("Falha ao salvar a base de produtos: " + (err?.message || err));
     } finally {
@@ -891,7 +943,10 @@ export default function Settings() {
                             URL.revokeObjectURL(url);
                             toast.success("Base exportada");
                           }}>Exportar</Button>
-                          <Button size="sm" variant="destructive" onClick={() => handleDeleteBase(b.id)}>Remover</Button>
+                          <Button size="sm" variant="destructive" onClick={() => {
+                            setBases(prev => prev.filter(x => x.id !== b.id));
+                            toast.success("Base removida");
+                          }}>Remover</Button>
                         </div>
                       </div>
                     ))}
