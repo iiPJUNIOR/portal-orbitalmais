@@ -22,30 +22,12 @@ const LS_COMPLEMENT_KEY_COLUMN = "complement_key_column";
 const LS_COMPLEMENT_COM_IDS = "complement_com_ids_column";
 const LS_COMPLEMENT_SEM_IDS = "complement_sem_ids_column";
 
-// Fields expected from the user mapping
-const MAPPING_FIELDS = [
-  { key: "category", label: "Categoria" },
-  { key: "tipo", label: "Tipo" },
-  { key: "model", label: "Modelo" },
-  { key: "colors", label: "Cor / Material" },
-  { key: "biometrics", label: "Biometria" },
-  { key: "facial", label: "Facial" },
-  { key: "proximity", label: "Proximidade" },
-  { key: "urn", label: "Urna" },
-  { key: "qr", label: "QR Code" },
-  { key: "part_number", label: "Partnumber" },
-  { key: "description", label: "Descrição" },
-  { key: "value_12m", label: "Valor mensal 12 meses" },
-  { key: "value_24m", label: "Valor mensal 24 meses" },
-];
-
 export default function Settings() {
   const navigate = useNavigate();
   const [connected, setConnected] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState<Array<{ id: string; name: string }>>([]);
-  const [fileSearch, setFileSearch] = useState<string>("");
   const [spreadsheetLink, setSpreadsheetLink] = useState<string>(() => {
     try {
       return localStorage.getItem("spreadsheet_link") || "";
@@ -56,41 +38,8 @@ export default function Settings() {
   const [spreadsheetId, setSpreadsheetId] = useState<string | null>(null);
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [mappings, setMappings] = useState<Record<string, string>>({});
-  const [stage, setStage] = useState<"idle" | "sheetsLoaded" | "headersLoaded" | "mapped">("idle");
-  const [range, setRange] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000";
-    } catch {
-      return "A1:Z1000";
-    }
-  });
-  const [overrideClientId, setOverrideClientId] = useState<string>(() => {
-    try {
-      return (localStorage.getItem(LOCAL_STORAGE_KEY) || "");
-    } catch {
-      return "";
-    }
-  });
 
-  const effectiveClientId = ENV_GOOGLE_CLIENT_ID || (overrideClientId || undefined);
-  const isGoogleConfigured = !!effectiveClientId;
-
-  // Seller fields (persisted to Supabase now; localStorage kept as fallback)
-  const [sellerName, setSellerName] = useState<string>("");
-  const [sellerRole, setSellerRole] = useState<string>("");
-  const [sellerEmail, setSellerEmail] = useState<string>("");
-  const [sellerPhone, setSellerPhone] = useState<string>("");
-
-  // --- Complement import states (used for catalog/values bases) ---
-  const [complementSheet, setComplementSheet] = useState<string | null>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_SHEET) || null;
-    } catch {
-      return null;
-    }
-  });
+  // preview / header / range states
   const [complementRange, setComplementRange] = useState<string>(() => {
     try {
       return localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000";
@@ -100,53 +49,40 @@ export default function Settings() {
   });
   const [complementHeaders, setComplementHeaders] = useState<string[]>([]);
   const [complementPreviewRows, setComplementPreviewRows] = useState<any[][]>([]);
-  const [complementKeyColumn, setComplementKeyColumn] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || "";
-    } catch {
-      return "";
-    }
-  });
-  const [complementImporting, setComplementImporting] = useState(false);
   const [complementRowsCount, setComplementRowsCount] = useState<number | null>(null);
 
-  // Complement import options
-  const [complementCreateMissing, setComplementCreateMissing] = useState<boolean>(true);
-  const [complementComIdsColumn, setComplementComIdsColumn] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "";
-    } catch {
-      return "";
-    }
-  });
-  const [complementSemIdsColumn, setComplementSemIdsColumn] = useState<string>(() => {
-    try {
-      return localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || "";
-    } catch {
-      return "";
-    }
-  });
+  // seller settings (moved to DB)
+  const [sellerName, setSellerName] = useState<string>("");
+  const [sellerRole, setSellerRole] = useState<string>("");
+  const [sellerEmail, setSellerEmail] = useState<string>("");
+  const [sellerPhone, setSellerPhone] = useState<string>("");
 
-  // Bases loaded from Supabase
+  // list of saved bases (from Supabase)
   const [bases, setBases] = useState<StoredBase[]>([]);
+
+  // import UI helpers
+  const [importMode, setImportMode] = useState<"sheet" | "range">("sheet");
+  const [baseType, setBaseType] = useState<"product" | "catalog">("product");
+  const [newBaseName, setNewBaseName] = useState<string>("");
+  const [headersLoaded, setHeadersLoaded] = useState(false);
+
+  const effectiveClientId = ENV_GOOGLE_CLIENT_ID;
+
   useEffect(() => {
-    // load bases from Supabase
     (async () => {
+      setLoading(true);
       try {
-        setLoading(true);
         const data = await fetchBases();
         setBases(Array.isArray(data) ? data : []);
       } catch (err) {
-        console.error("Failed to load bases from supabase", err);
-        toast.error("Falha ao carregar bases do servidor");
-        setBases([]);
+        console.warn("Failed to fetch bases on mount", err);
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // Load user settings from Supabase on mount and populate fields (fallback to localStorage)
+  // Load user settings (seller fields + spreadsheet link and complement defaults) from Supabase
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -160,68 +96,35 @@ export default function Settings() {
 
           setSpreadsheetLink(s.spreadsheet_link ?? (localStorage.getItem("spreadsheet_link") || ""));
           setComplementRange(s.complement_range ?? (localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000"));
-          setComplementSheet(s.complement_sheet ?? (localStorage.getItem(LS_COMPLEMENT_SHEET) || null));
-          setComplementKeyColumn(s.complement_key_column ?? (localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || ""));
-          setComplementComIdsColumn(s.complement_com_ids_column ?? (localStorage.getItem(LS_COMPLEMENT_COM_IDS) || ""));
-          setComplementSemIdsColumn(s.complement_sem_ids_column ?? (localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || ""));
+          setSelectedSheet(s.complement_sheet ?? (localStorage.getItem(LS_COMPLEMENT_SHEET) || null));
+          setComplementHeaders([]);
+          setComplementPreviewRows([]);
         } else {
-          // No saved settings in DB — fall back to localStorage values if present
+          // fallback to localStorage
           setSellerName(localStorage.getItem("seller_name") || "");
           setSellerRole(localStorage.getItem("seller_role") || "");
           setSellerEmail(localStorage.getItem("seller_email") || "");
           setSellerPhone(localStorage.getItem("seller_phone") || "");
-          setSpreadsheetLink(localStorage.getItem("spreadsheet_link") || "");
-          setComplementRange(localStorage.getItem(LS_COMPLEMENT_RANGE) || "A1:Z1000");
-          setComplementSheet(localStorage.getItem(LS_COMPLEMENT_SHEET) || null);
-          setComplementKeyColumn(localStorage.getItem(LS_COMPLEMENT_KEY_COLUMN) || "");
-          setComplementComIdsColumn(localStorage.getItem(LS_COMPLEMENT_COM_IDS) || "");
-          setComplementSemIdsColumn(localStorage.getItem(LS_COMPLEMENT_SEM_IDS) || "");
         }
       } catch (err) {
-        console.warn("Failed to load user settings from Supabase:", err);
-        // fallback to localStorage if DB fetch fails
-        setSellerName(localStorage.getItem("seller_name") || "");
-        setSellerRole(localStorage.getItem("seller_role") || "");
-        setSellerEmail(localStorage.getItem("seller_email") || "");
-        setSellerPhone(localStorage.getItem("seller_phone") || "");
+        console.warn("Failed to load settings:", err);
       } finally {
         setLoading(false);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Persist small preferences used by UI locally as well (keeps old behavior as backup)
+  useEffect(() => {
+    try {
+      localStorage.setItem("spreadsheet_link", spreadsheetLink || "");
+    } catch {}
+  }, [spreadsheetLink]);
+
   useEffect(() => {
     try {
       localStorage.setItem(LS_COMPLEMENT_RANGE, complementRange || "");
-      if (complementSheet) localStorage.setItem(LS_COMPLEMENT_SHEET, complementSheet);
-      else localStorage.removeItem(LS_COMPLEMENT_SHEET);
-
-      localStorage.setItem(LS_COMPLEMENT_KEY_COLUMN, complementKeyColumn || "");
-      localStorage.setItem(LS_COMPLEMENT_COM_IDS, complementComIdsColumn || "");
-      localStorage.setItem(LS_COMPLEMENT_SEM_IDS, complementSemIdsColumn || "");
-    } catch (e) {
-      console.warn("Failed to persist complement settings", e);
-    }
-  }, [complementRange, complementSheet, complementKeyColumn, complementComIdsColumn, complementSemIdsColumn]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("seller_name", sellerName);
-      localStorage.setItem("seller_role", sellerRole);
-      localStorage.setItem("seller_email", sellerEmail);
-      localStorage.setItem("seller_phone", sellerPhone);
-    } catch (e) {
-      console.warn("Failed to auto-save seller fields to localStorage", e);
-    }
-  }, [sellerName, sellerRole, sellerEmail, sellerPhone]);
-
-  useEffect(() => {
-    if (sheetTitles.length > 0 && !complementSheet) {
-      setComplementSheet(sheetTitles[0]);
-    }
-  }, [sheetTitles, complementSheet]);
+    } catch {}
+  }, [complementRange]);
 
   function extractSpreadsheetId(input: string): string | null {
     if (!input) return null;
@@ -233,468 +136,195 @@ export default function Settings() {
     return null;
   }
 
-  function normalizeForMatch(s?: string) {
-    if (!s) return "";
-    return String(s)
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "")
-      .trim();
-  }
-
-  function loadSavedMappingForSpreadsheet(id?: string) {
-    try {
-      if (id) {
-        const raw = localStorage.getItem(`import_column_map_${id}`);
-        if (raw) return JSON.parse(raw);
-      }
-      const rawGlobal = localStorage.getItem("import_column_map");
-      if (rawGlobal) return JSON.parse(rawGlobal);
-    } catch (e) {
-      console.warn("Failed to load saved mapping", e);
-    }
-    return null;
-  }
-
-  const handleConnect = async () => {
-    if (!isGoogleConfigured) {
-      toast.error("VITE_GOOGLE_CLIENT_ID não está definido. Defina via variável de ambiente ou cole um Client ID abaixo.");
+  async function handleConnect() {
+    if (!effectiveClientId) {
+      toast.error("VITE_GOOGLE_CLIENT_ID não configurado (não modifiquei .env conforme solicitado).");
       return;
     }
-
     setLoading(true);
     try {
       await googleClient.init();
-      const tokenResp = await googleClient.requestAccessToken();
-      if (tokenResp && tokenResp.access_token) {
-        const token = tokenResp.access_token;
-        setAccessToken(token);
+      const resp = await googleClient.requestAccessToken();
+      if (resp?.access_token) {
+        setAccessToken(resp.access_token);
         setConnected(true);
-        localStorage.setItem("google_access_token", token);
-
-        toast.success("Conectado ao Google com sucesso");
-
-        const driveFiles = await googleClient.listDriveSpreadsheets(token);
-        const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
-        setFiles(mapped);
+        toast.success("Conectado ao Google");
+        // prefetch drive files for convenience
         try {
-          localStorage.setItem("google_drive_files", JSON.stringify(mapped));
-        } catch (e) {}
+          const driveFiles = await googleClient.listDriveSpreadsheets(resp.access_token);
+          setFiles((driveFiles || []).map((f: any) => ({ id: f.id, name: f.name })));
+        } catch {}
       } else {
-        toast.error("Não foi possível obter token");
+        toast.error("Não foi possível obter token do Google");
       }
     } catch (err: any) {
       console.error(err);
-      toast.error("Erro ao conectar com Google: " + (err?.message || err));
+      toast.error("Erro ao conectar ao Google: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleRefreshFiles = async () => {
-    if (!accessToken) {
-      toast.error("Você precisa conectar ao Google primeiro.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const driveFiles = await googleClient.listDriveSpreadsheets(accessToken);
-      const mapped = driveFiles.map((f: any) => ({ id: f.id, name: f.name }));
-      setFiles(mapped);
-      try {
-        localStorage.setItem("google_drive_files", JSON.stringify(mapped));
-      } catch (e) {}
-      toast.success("Arquivos atualizados");
-    } catch (err: any) {
-      console.error(err);
-      toast.error("Erro ao listar arquivos: " + (err?.message || err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLoadSheets = async () => {
+  async function handleLoadSheets() {
     const id = extractSpreadsheetId(spreadsheetLink);
     if (!id) {
-      toast.error("Não foi possível extrair o ID da planilha. Cole o link completo ou ID.");
+      toast.error("Cole o link completo da planilha ou o ID.");
       return;
     }
     if (!accessToken) {
-      toast.error("Você precisa conectar ao Google primeiro.");
+      toast.error("Conecte ao Google primeiro.");
       return;
     }
-
     setLoading(true);
     try {
-      const titles = await googleClient.getSpreadsheetSheets(accessToken, id);
+      const titles = await googleClient.getSpreadsheetSheets(accessToken!, id);
       setSpreadsheetId(id);
       setSheetTitles(titles);
       setSelectedSheet(titles[0] ?? null);
-      setStage("sheetsLoaded");
-      toast.success(`Encontradas ${titles.length} abas`);
+      toast.success(`Abas carregadas: ${titles.length}`);
     } catch (err: any) {
-      console.error("Erro ao obter abas:", err);
-      toast.error("Erro ao obter abas da planilha: " + (err?.message || err));
+      console.error("load sheets err", err);
+      toast.error("Erro ao carregar abas: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleLoadHeaders = async () => {
+  async function handleLoadHeaders() {
     if (!accessToken || !spreadsheetId || !selectedSheet) {
-      toast.error("Selecione a planilha e a aba primeiro.");
+      toast.error("Carregue a planilha e selecione a aba primeiro.");
       return;
     }
     setLoading(true);
     try {
       const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, `${selectedSheet}!1:1`);
       const values: any[] = res.values || [];
-      const row = values[0] || [];
-      const headerStrings = row.map((h: any) => String(h).trim());
-      setHeaders(headerStrings);
-
-      const saved = loadSavedMappingForSpreadsheet(spreadsheetId) || {};
-
-      const initial: Record<string, string> = {};
-      const headerNorms = headerStrings.map((h) => normalizeForMatch(h));
-
-      for (const f of MAPPING_FIELDS) {
-        if (saved && saved[f.key]) {
-          const candidate = String(saved[f.key]);
-          if (headerStrings.includes(candidate)) {
-            initial[f.key] = candidate;
-            continue;
-          }
-        }
-
-        const targetNorms = [
-          normalizeForMatch(f.label),
-          normalizeForMatch(f.key),
-          normalizeForMatch(f.key.replace(/_/g, "")),
-        ];
-
-        let foundHeader: string | undefined;
-        for (let i = 0; i < headerStrings.length; i++) {
-          const hnorm = headerNorms[i];
-          if (targetNorms.includes(hnorm)) {
-            foundHeader = headerStrings[i];
-            break;
-          }
-        }
-
-        if (!foundHeader) {
-          for (let i = 0; i < headerStrings.length; i++) {
-            const hnorm = headerNorms[i];
-            for (const t of targetNorms) {
-              if (!t) continue;
-              if (hnorm.includes(t) || t.includes(hnorm)) {
-                foundHeader = headerStrings[i];
-                break;
-              }
-            }
-            if (foundHeader) break;
-          }
-        }
-
-        if (!foundHeader) {
-          if (f.key === "description") {
-            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("descr") || normalizeForMatch(h).includes("description") || normalizeForMatch(h).includes("product"));
-            if (idx >= 0) foundHeader = headerStrings[idx];
-          }
-          if (f.key === "part_number") {
-            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("part") || normalizeForMatch(h).includes("partnumber") || normalizeForMatch(h).includes("part_number"));
-            if (idx >= 0) foundHeader = headerStrings[idx];
-          }
-          if (f.key === "value_12m" || f.key === "value_24m") {
-            const idx = headerStrings.findIndex(h => normalizeForMatch(h).includes("valor") || normalizeForMatch(h).includes("12") || normalizeForMatch(h).includes("24"));
-            if (idx >= 0) foundHeader = headerStrings[idx];
-          }
-        }
-
-        if (foundHeader) initial[f.key] = foundHeader;
-        else initial[f.key] = saved && saved[f.key] ? saved[f.key] : "";
-      }
-
-      setMappings(initial);
-      setStage("headersLoaded");
-      toast.success("Cabeçalhos carregados — ajuste mapeamentos se desejar.");
+      const headerRow = values[0] || [];
+      setComplementHeaders(headerRow.map((h: any) => String(h).trim()));
+      setHeadersLoaded(true);
+      toast.success("Cabeçalhos carregados.");
     } catch (err: any) {
-      console.error(err);
-      toast.error("Erro ao carregar cabeçalhos: " + (err?.message || err));
+      console.error("load headers err", err);
+      toast.error("Falha ao carregar cabeçalhos: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // Read range preview (used for catalog/values base preview)
-  const handleReadRange = async () => {
-    if (!accessToken || !spreadsheetId || !complementSheet) {
-      toast.error("Selecione planilha e aba antes de ler o intervalo.");
+  async function handleReadRange() {
+    if (!accessToken || !spreadsheetId || !selectedSheet) {
+      toast.error("Carregue a planilha e selecione a aba primeiro.");
       return;
     }
-
     setLoading(true);
     try {
-      const fullRange = `${complementSheet}!${complementRange}`;
+      const fullRange = `${selectedSheet}!${complementRange}`;
       const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
       const values: any[][] = res.values || [];
       if (values.length === 0) {
         toast.error("Intervalo vazio ou inválido.");
+        setComplementHeaders([]);
+        setComplementPreviewRows([]);
+        setComplementRowsCount(0);
         setLoading(false);
         return;
       }
-
-      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
+      const headerRow = (values[0] || []).map((h: any) => String(h).trim());
       const dataRows = values.slice(1);
-
       setComplementHeaders(headerRow);
-      setComplementPreviewRows(dataRows.slice(0, 5));
+      setComplementPreviewRows(dataRows.slice(0, 10));
       setComplementRowsCount(dataRows.length);
-
-      toast.success(`Intervalo carregado: ${dataRows.length} linhas (pré-visualizando até 5).`);
+      toast.success(`Intervalo lido: ${dataRows.length} linhas (prévia até 10).`);
     } catch (err: any) {
-      console.error("Erro ao ler intervalo:", err);
+      console.error("read range err", err);
       toast.error("Falha ao ler intervalo: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  const handleSetMapping = (fieldKey: string, headerName: string) => {
-    setMappings(prev => ({ ...prev, [fieldKey]: headerName }));
-  };
-
-  const handleImportComplement = async () => {
-    if (!accessToken || !spreadsheetId || !complementSheet) {
-      toast.error("Selecione planilha e aba complementar antes de importar.");
+  async function handleSaveImportedBase() {
+    if (!selectedSheet && importMode === "sheet") {
+      toast.error("Selecione uma aba para importar.");
+      return;
+    }
+    if (!newBaseName || newBaseName.trim() === "") {
+      toast.error("Informe um nome para a base.");
+      return;
+    }
+    if (!accessToken || !spreadsheetId) {
+      toast.error("Conecte e carregue a planilha antes de salvar.");
       return;
     }
 
-    setComplementImporting(true);
     try {
-      const fullRange = `${complementSheet}!${complementRange}`;
-      const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
-      const values: any[][] = res.values || [];
-      if (values.length <= 1) {
-        toast.error("Intervalo complementar não contém dados (além do cabeçalho).");
-        setComplementImporting(false);
-        return;
-      }
-
-      const headerRow: string[] = (values[0] || []).map((h: any) => String(h).trim());
-      const keyIndex = complementKeyColumn ? headerRow.findIndex(h => String(h).trim() === complementKeyColumn) : -1;
-
-      const dataRows = values.slice(1);
-
-      // For backward compatibility we still write created products to localStorage importedProducts.
-      const raw = localStorage.getItem("importedProducts");
-      let imported: any[] = [];
-      if (raw) {
-        try {
-          imported = JSON.parse(raw);
-        } catch {
-          imported = [];
+      setLoading(true);
+      if (importMode === "sheet") {
+        // whole sheet -> fetch A1:Z1000 (or detect dynamic range)
+        const rangeToFetch = `${selectedSheet}!A1:Z1000`;
+        const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, rangeToFetch);
+        const values: any[][] = res.values || [];
+        if (values.length === 0) {
+          toast.error("A aba selecionada parece estar vazia.");
+          return;
         }
-      }
-      if (!Array.isArray(imported)) imported = [];
+        const headerRow = (values[0] || []).map((h: any) => String(h).trim());
+        const dataRows = values.slice(1);
 
-      let createdCount = 0;
-
-      const getColValue = (row: any[], colName: string) => {
-        if (!colName) return "";
-        const idx = headerRow.findIndex(h => h === colName);
-        if (idx === -1) return "";
-        return row[idx] ?? "";
-      };
-
-      for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
-        const row = dataRows[rowIdx];
-        const keyRaw = keyIndex >= 0 ? row[keyIndex] : undefined;
-        const keyVal = keyRaw ? String(keyRaw ?? "").trim() : "";
-
-        if (!complementCreateMissing) continue;
-
-        const descParts: string[] = [];
-        for (let c = 0; c < headerRow.length; c++) {
-          if (c === keyIndex) continue;
-          const val = row[c];
-          if (val !== undefined && val !== null && String(val).trim() !== "") {
-            const header = headerRow[c];
-            descParts.push(`${header}: ${String(val).trim()}`);
-            if (descParts.length >= 4) break;
-          }
-        }
-        const description = descParts.join(" · ") || (keyVal || `complement-${Math.random().toString(36).slice(2,8)}`);
-
-        let value12 = 0;
-        let value24 = 0;
-        for (let c = 0; c < headerRow.length; c++) {
-          if (c === keyIndex) continue;
-          const parsed = parseSpreadsheetNumber(row[c]);
-          if (parsed > 0) {
-            if (!value12) value12 = parsed;
-            else if (!value24) value24 = parsed;
-          }
-        }
-
-        const comIdsRaw = complementComIdsColumn ? getColValue(row, complementComIdsColumn) : "";
-        const semIdsRaw = complementSemIdsColumn ? getColValue(row, complementSemIdsColumn) : "";
-        const priceComIds = parseSpreadsheetNumber(comIdsRaw);
-        const priceSemIds = parseSpreadsheetNumber(semIdsRaw);
-
-        const generatedKey = keyVal || `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now().toString().slice(-6)}`;
-
-        const newProd: any = {
-          id: `comp-${Math.random().toString(36).slice(2, 9)}-${Date.now()}`,
-          sku: generatedKey,
-          category: "Controladores Porta",
-          model: String(keyVal || generatedKey),
-          colors: [],
-          biometrics: false,
-          facial: "None",
-          proximity: "None",
-          urn: false,
-          qr: false,
-          description,
-          value_12m: Number(value12 || 0),
-          value_24m: Number(value24 || 0),
-          part_number: String(generatedKey),
-          status: "Ativo",
-          price_com_iDSecure: priceComIds > 0 ? priceComIds : undefined,
-          price_sem_iDSecure: priceSemIds > 0 ? priceSemIds : undefined,
-          complementMeta: headerRow.reduce((acc: any, h, idx) => {
-            acc[h] = row[idx] ?? "";
-            return acc;
-          }, {} as Record<string, any>),
-          _complementSource: true,
+        const base: StoredBase = {
+          name: newBaseName.trim(),
+          type: baseType,
+          headers: headerRow,
+          rows: dataRows,
+          key_column: null,
+          com_ids_column: null,
+          sem_ids_column: null,
         };
 
-        imported.push(newProd);
-        createdCount++;
+        const saved = await saveBase(base);
+        toast.success(`Base "${saved.name}" salva como ${baseType === "product" ? "Base de Produtos" : "Preços"} no servidor.`);
+      } else {
+        // range mode: use selectedSheet + complementRange
+        const fullRange = `${selectedSheet}!${complementRange}`;
+        const res = await googleClient.getSpreadsheetValues(accessToken, spreadsheetId, fullRange);
+        const values: any[][] = res.values || [];
+        if (values.length === 0) {
+          toast.error("Intervalo vazio.");
+          return;
+        }
+        const headerRow = (values[0] || []).map((h: any) => String(h).trim());
+        const dataRows = values.slice(1);
+
+        const base: StoredBase = {
+          name: newBaseName.trim(),
+          type: baseType,
+          headers: headerRow,
+          rows: dataRows,
+          key_column: null,
+          com_ids_column: null,
+          sem_ids_column: null,
+        };
+
+        const saved = await saveBase(base);
+        toast.success(`Base "${saved.name}" salva como ${baseType === "product" ? "Base de Produtos" : "Preços"} no servidor.`);
       }
 
-      try {
-        localStorage.setItem("importedProducts", JSON.stringify(imported));
-      } catch (e) {
-        console.warn("Failed to persist importedProducts after complement import", e);
-      }
-
-      toast.success(`Importação complementar concluída: ${createdCount} novos produtos criados (sem mesclagem).`);
-      setComplementRowsCount(dataRows.length);
-      setComplementPreviewRows(dataRows.slice(0, 5));
-    } catch (err: any) {
-      console.error("Erro ao importar complemento:", err);
-      toast.error("Falha na importação complementar: " + (err?.message || err));
-    } finally {
-      setComplementImporting(false);
-    }
-  };
-
-  // Read full range and save as a base to Supabase via service
-  const handleSaveBase = async (name: string, type: StoredBase["type"]) => {
-    if (!name || name.trim().length === 0) {
-      toast.error("Informe um nome para a base");
-      return;
-    }
-
-    try {
-      // reuse existing read range function
-      const rangeToFetch = `${complementSheet || selectedSheet}!${complementRange}`;
-      const id = extractSpreadsheetId(spreadsheetLink) || spreadsheetId;
-      if (!id) {
-        toast.error("Id da planilha não encontrado. Carregue a planilha/aba primeiro.");
-        return;
-      }
-
-      setLoading(true);
-      const res = await googleClient.getSpreadsheetValues(accessToken!, id, rangeToFetch);
-      const values: any[][] = res.values || [];
-      if (values.length === 0) {
-        toast.error("Intervalo vazio");
-        setLoading(false);
-        return;
-      }
-      const headerRow = (values[0] || []).map((h: any) => String(h).trim());
-      const dataRows = values.slice(1);
-
-      const base: StoredBase = {
-        name: name.trim(),
-        type,
-        headers: headerRow,
-        rows: dataRows,
-        key_column: complementKeyColumn || null,
-        com_ids_column: complementComIdsColumn || null,
-        sem_ids_column: complementSemIdsColumn || null,
-      };
-
-      // Save to Supabase
-      const saved = await saveBase(base);
-      toast.success(`Base "${saved.name}" salva no servidor.`);
-      // refresh list locally
+      // refresh local list
       try {
         const list = await fetchBases();
         setBases(Array.isArray(list) ? list : []);
       } catch {}
+      // clear inputs
+      setNewBaseName("");
     } catch (err: any) {
-      console.error("save base failed", err);
-      toast.error("Falha ao salvar a base: " + (err?.message || err));
+      console.error("save imported base err", err);
+      toast.error("Falha ao salvar base: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
+  }
 
-  // Save selectedSheet as a product base
-  const handleSaveProductBase = async (name: string) => {
-    if (!selectedSheet && !complementSheet) {
-      toast.error("Selecione a aba antes de salvar a base de produtos.");
-      return;
-    }
-    if (!name || name.trim() === "") {
-      toast.error("Informe um nome para a base de produtos.");
-      return;
-    }
-    setLoading(true);
-    try {
-      const sheetToUse = selectedSheet || complementSheet!;
-      const id = extractSpreadsheetId(spreadsheetLink) || spreadsheetId;
-      if (!id) {
-        toast.error("Id da planilha não encontrado. Carregue a planilha/aba primeiro.");
-        setLoading(false);
-        return;
-      }
-      const rangeToFetch = `${sheetToUse}!A1:Z1000`;
-      const res = await googleClient.getSpreadsheetValues(accessToken!, id, rangeToFetch);
-      const values: any[][] = res.values || [];
-      if (values.length === 0) {
-        toast.error("A aba selecionada parece estar vazia.");
-        setLoading(false);
-        return;
-      }
-      const headerRow = (values[0] || []).map((h: any) => String(h).trim());
-      const dataRows = values.slice(1);
-      const base: StoredBase = {
-        name: name.trim(),
-        type: "product",
-        headers: headerRow,
-        rows: dataRows,
-        key_column: complementKeyColumn || null,
-      };
-
-      const saved = await saveBase(base);
-      toast.success(`Base de produtos "${saved.name}" salva no servidor.`);
-      const list = await fetchBases();
-      setBases(Array.isArray(list) ? list : []);
-    } catch (err: any) {
-      console.error("save product base failed", err);
-      toast.error("Falha ao salvar a base de produtos: " + (err?.message || err));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Save seller / UI settings to Supabase (and keep localStorage fallback)
-  const handleSaveSellerSettings = async () => {
+  async function handleSaveSellerSettings() {
     setLoading(true);
     try {
       await saveUserSettings({
@@ -704,41 +334,21 @@ export default function Settings() {
         seller_phone: sellerPhone || null,
         spreadsheet_link: spreadsheetLink || null,
         complement_range: complementRange || null,
-        complement_sheet: complementSheet || null,
-        complement_key_column: complementKeyColumn || null,
-        complement_com_ids_column: complementComIdsColumn || null,
-        complement_sem_ids_column: complementSemIdsColumn || null,
+        complement_sheet: selectedSheet || null,
       });
       toast.success("Configurações salvas no servidor.");
-    } catch (err) {
-      console.error("Failed to save user settings:", err);
-      toast.error("Falha ao salvar configurações no servidor.");
+      // refresh bases list
+      try {
+        const list = await fetchBases();
+        setBases(Array.isArray(list) ? list : []);
+      } catch {}
+    } catch (err: any) {
+      console.error("save user settings err", err);
+      toast.error("Falha ao salvar configurações: " + (err?.message || err));
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleClearSellerSettings = async () => {
-    setLoading(true);
-    try {
-      await saveUserSettings({
-        seller_name: "",
-        seller_role: "",
-        seller_email: "",
-        seller_phone: "",
-      });
-      setSellerName("");
-      setSellerRole("");
-      setSellerEmail("");
-      setSellerPhone("");
-      toast.success("Dados do vendedor removidos do servidor.");
-    } catch (err) {
-      console.error("Failed to clear user settings:", err);
-      toast.error("Falha ao limpar configurações no servidor.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -746,7 +356,7 @@ export default function Settings() {
         <div className="mb-6 flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Configurações</h1>
-            <p className="text-gray-600">Gerencie conexões e suas bases — agora persistidas no Supabase.</p>
+            <p className="text-gray-600">Conecte ao Google Sheets e importe bases diretamente para o Supabase.</p>
           </div>
 
           <div className="flex gap-2">
@@ -755,94 +365,233 @@ export default function Settings() {
           </div>
         </div>
 
-        {/* UI omitted for brevity — keep the rest unchanged (we only changed bases & settings persistence) */}
-        <div className="mb-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Bases salvas no servidor</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {bases.length === 0 ? (
-                <div className="text-sm text-muted-foreground">Nenhuma base salva no servidor.</div>
-              ) : (
-                <div className="space-y-2">
-                  {bases.map((b) => (
-                    <div key={String(b.id)} className="flex items-center justify-between border rounded px-3 py-2">
-                      <div>
-                        <div className="font-medium">{b.name}</div>
-                        <div className="text-sm text-muted-foreground">{Array.isArray(b.rows) ? b.rows.length : 0} linhas · {Array.isArray(b.headers) ? b.headers.length : 0} colunas</div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
+            {/* Google import card */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Importar base do Google Sheets</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                    <div className="md:col-span-2">
+                      <Label>Link da planilha ou ID</Label>
+                      <Input
+                        placeholder="Cole o link da planilha (https://docs.google.com/spreadsheets/...)"
+                        value={spreadsheetLink}
+                        onChange={(e) => setSpreadsheetLink(e.target.value)}
+                      />
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <Button onClick={handleConnect} disabled={loading}>
+                        {connected ? "Reconectar" : "Conectar ao Google"}
+                      </Button>
+
+                      <Button variant="outline" onClick={handleLoadSheets} disabled={loading || !spreadsheetLink}>
+                        Carregar abas
+                      </Button>
+                    </div>
+                  </div>
+
+                  {sheetTitles.length > 0 && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                      <div className="md:col-span-1">
+                        <Label>Escolha a aba</Label>
+                        <select
+                          className="w-full border rounded px-2 py-1"
+                          value={selectedSheet ?? ""}
+                          onChange={(e) => setSelectedSheet(e.target.value || null)}
+                        >
+                          <option value="">-- selecione --</option>
+                          {sheetTitles.map((t) => <option key={t} value={t}>{t}</option>)}
+                        </select>
                       </div>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => {
-                          const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `${(b.name || b.id).replace(/\s+/g, "-") || b.id}.json`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
-                          toast.success("Base exportada");
-                        }}>Exportar</Button>
+
+                      <div>
+                        <Label>Importar</Label>
+                        <div className="flex gap-2 items-center mt-1">
+                          <label className={`px-3 py-1 rounded cursor-pointer ${importMode === "sheet" ? "bg-gray-100" : "hover:bg-gray-50"}`}>
+                            <input type="radio" name="importMode" checked={importMode === "sheet"} onChange={() => setImportMode("sheet")} /> Aba inteira
+                          </label>
+                          <label className={`px-3 py-1 rounded cursor-pointer ${importMode === "range" ? "bg-gray-100" : "hover:bg-gray-50"}`}>
+                            <input type="radio" name="importMode" checked={importMode === "range"} onChange={() => setImportMode("range")} /> Intervalo
+                          </label>
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Tipo de base</Label>
+                        <div className="flex gap-2 items-center mt-1">
+                          <label className={`px-3 py-1 rounded cursor-pointer ${baseType === "product" ? "bg-gray-100" : "hover:bg-gray-50"}`}>
+                            <input type="radio" name="baseType" checked={baseType === "product"} onChange={() => setBaseType("product")} /> Base de Produtos
+                          </label>
+                          <label className={`px-3 py-1 rounded cursor-pointer ${baseType === "catalog" ? "bg-gray-100" : "hover:bg-gray-50"}`}>
+                            <input type="radio" name="baseType" checked={baseType === "catalog"} onChange={() => setBaseType("catalog")} /> Preços
+                          </label>
+                        </div>
                       </div>
                     </div>
-                  ))}
+                  )}
+
+                  {importMode === "range" && (
+                    <div>
+                      <Label>Intervalo (ex: A1:Z1000)</Label>
+                      <div className="flex gap-2 items-center">
+                        <Input value={complementRange} onChange={(e) => setComplementRange(e.target.value)} />
+                        <Button onClick={handleReadRange} disabled={!selectedSheet || !complementRange || !accessToken}>Ler intervalo</Button>
+                        <Button variant="outline" onClick={handleLoadHeaders} disabled={!selectedSheet || !accessToken}>Carregar cabeçalhos</Button>
+                      </div>
+
+                      {complementHeaders.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-sm text-muted-foreground mb-2">Cabeçalhos detectados:</div>
+                          <div className="flex flex-wrap gap-2">
+                            {complementHeaders.map((h, i) => (
+                              <div key={i} className="px-2 py-1 bg-gray-50 border rounded text-sm">{h || "(vazio)"}</div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {complementPreviewRows.length > 0 && (
+                        <div className="mt-3">
+                          <div className="text-sm text-muted-foreground mb-2">Pré-visualização (até 10 linhas)</div>
+                          <div className="overflow-auto border rounded">
+                            <table className="w-full text-sm">
+                              <thead className="bg-gray-50">
+                                <tr>
+                                  {complementHeaders.map((h, i) => <th key={i} className="px-2 py-1 text-left">{h || "(vazio)"}</th>)}
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {complementPreviewRows.map((r, ri) => (
+                                  <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                                    {complementHeaders.map((_, ci) => (
+                                      <td key={ci} className="px-2 py-1 align-top">{String(r[ci] ?? "")}</td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Base name + save */}
+                  {sheetTitles.length > 0 && (
+                    <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-2 items-end">
+                      <div className="md:col-span-2">
+                        <Label>Nome da base (será salvo no servidor)</Label>
+                        <Input value={newBaseName} onChange={(e) => setNewBaseName(e.target.value)} placeholder="Ex: Minha base de preços - Jan 2026" />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button onClick={handleSaveImportedBase} disabled={loading || !selectedSheet || !newBaseName}>
+                          Salvar base no Supabase
+                        </Button>
+                        <Button variant="outline" onClick={async () => {
+                          try {
+                            const list = await fetchBases();
+                            setBases(Array.isArray(list) ? list : []);
+                            toast.success("Lista de bases atualizada");
+                          } catch (err) {
+                            toast.error("Falha ao atualizar lista");
+                          }
+                        }}>Atualizar lista</Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
 
-        {/* Seller card (UI preserved) */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle>Dados do Vendedor (preenchidos no slide)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label>Nome do Vendedor</Label>
-                  <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
+            {/* Bases saved on server */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Bases salvas no servidor</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {bases.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Nenhuma base salva no servidor.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {bases.map((b) => (
+                      <div key={String(b.id)} className="flex items-center justify-between border rounded px-3 py-2">
+                        <div>
+                          <div className="font-medium">{b.name}</div>
+                          <div className="text-sm text-muted-foreground">{Array.isArray(b.rows) ? b.rows.length : 0} linhas · {Array.isArray(b.headers) ? b.headers.length : 0} colunas</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" variant="outline" onClick={() => {
+                            const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement("a");
+                            a.href = url;
+                            a.download = `${(b.name || b.id).replace(/\s+/g, "-") || b.id}.json`;
+                            document.body.appendChild(a);
+                            a.click();
+                            document.body.removeChild(a);
+                            URL.revokeObjectURL(url);
+                            toast.success("Base exportada");
+                          }}>Exportar</Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+
+          <aside className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Dados do Vendedor</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <div>
+                    <Label>Nome</Label>
+                    <Input value={sellerName} onChange={(e) => setSellerName(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Cargo</Label>
+                    <Input value={sellerRole} onChange={(e) => setSellerRole(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>E-mail</Label>
+                    <Input value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
+                  </div>
+                  <div>
+                    <Label>Telefone</Label>
+                    <Input value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
+                  </div>
+
+                  <div className="flex justify-end gap-2 mt-2">
+                    <Button onClick={handleSaveSellerSettings} disabled={loading}>{loading ? "Salvando..." : "Salvar"}</Button>
+                  </div>
                 </div>
+              </CardContent>
+            </Card>
 
-                <div>
-                  <Label>Cargo</Label>
-                  <Input value={sellerRole} onChange={(e) => setSellerRole(e.target.value)} />
-                </div>
-
-                <div>
-                  <Label>E-mail</Label>
-                  <Input value={sellerEmail} onChange={(e) => setSellerEmail(e.target.value)} />
-                </div>
-
-                <div>
-                  <Label>Telefone</Label>
-                  <Input value={sellerPhone} onChange={(e) => setSellerPhone(e.target.value)} />
-                </div>
-              </div>
-
-              <div className="flex justify-end gap-2 mt-4">
-                <Button onClick={handleSaveSellerSettings} disabled={loading}>{loading ? "Salvando..." : "Salvar"}</Button>
-                <Button variant="outline" onClick={handleClearSellerSettings}>Limpar</Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Ajuda rápida</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
-                <li>Planilha de Produtos: conecte a planilha que contém SKUs e descrições (usada na busca por código).</li>
-                <li>Base de Orçamentos: selecione aba + intervalo com preços (usar para salvar bases de valores que aparecem no Catálogo).</li>
-                <li>Ao salvar uma base escolha o tipo: <strong>catalog</strong> (valores) ou <strong>product</strong> (busca por código).</li>
-                <li>Você pode exportar ou remover bases a qualquer momento.</li>
-              </ul>
-            </CardContent>
-          </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Ajuda rápida</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <ul className="text-sm space-y-2 list-disc list-inside text-muted-foreground">
+                  <li>Cole o link da planilha, conecte ao Google e carregue as abas.</li>
+                  <li>Escolha a aba e selecione se deseja importar a aba inteira ou um intervalo.</li>
+                  <li>Escolha o tipo de base: "Base de Produtos" (busca por código) ou "Preços" (tabela de valores).</li>
+                  <li>Defina um nome e clique em "Salvar base no Supabase".</li>
+                </ul>
+              </CardContent>
+            </Card>
+          </aside>
         </div>
       </div>
     </div>
