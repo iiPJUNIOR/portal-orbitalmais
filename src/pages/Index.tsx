@@ -16,6 +16,7 @@ import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
 import { formatModelLabel } from "@/lib/formatters";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
+import ConfirmModal from "@/components/ConfirmModal";
 
 type QuoteItem = {
   id: string;
@@ -128,12 +129,37 @@ export default function Index() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
+
+  // Load persisted quote items from localStorage on init
+  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
+    try {
+      const raw = localStorage.getItem("quote_items");
+      if (!raw) return [];
+      const parsed = JSON.parse(raw) as QuoteItem[];
+      // Basic validation: ensure array and minimal shape
+      if (Array.isArray(parsed)) return parsed;
+      return [];
+    } catch (err) {
+      return [];
+    }
+  });
+
   const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
 
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
+
   const debounceRef = useRef<number | null>(null);
+
+  // Persist quoteItems to localStorage on change
+  useEffect(() => {
+    try {
+      localStorage.setItem("quote_items", JSON.stringify(quoteItems));
+    } catch (err) {
+      console.warn("Failed to persist quote_items", err);
+    }
+  }, [quoteItems]);
 
   const getImportedProducts = (): Product[] => {
     try {
@@ -232,10 +258,8 @@ export default function Index() {
         )
       );
     } else {
-      setQuoteItems((prev) => [
-        ...prev,
-        { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: defaultUnit },
-      ]);
+      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: defaultUnit };
+      setQuoteItems((prev) => [...prev, newItem]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
   };
@@ -261,6 +285,24 @@ export default function Index() {
 
   const handleUpdateUnitPrice = (id: string, unitPrice: number) => {
     setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, unitPrice: Number(isNaN(unitPrice) ? 0 : unitPrice) } : it)));
+  };
+
+  const handleRequestClear = () => {
+    // open confirmation modal
+    setConfirmClearOpen(true);
+  };
+
+  const handleConfirmClear = () => {
+    setQuoteItems([]);
+    try {
+      localStorage.removeItem("quote_items");
+    } catch {}
+    setConfirmClearOpen(false);
+    toast.success("Orçamento limpo");
+  };
+
+  const handleCancelClear = () => {
+    setConfirmClearOpen(false);
   };
 
   const openProposalForm = () => {
@@ -346,6 +388,9 @@ export default function Index() {
         URL.revokeObjectURL(url);
 
         setQuoteItems([]);
+        try {
+          localStorage.removeItem("quote_items");
+        } catch {}
         setProposalData(null);
         setStep("catalog");
       } catch (err: any) {
@@ -451,7 +496,7 @@ export default function Index() {
                     </div>
 
                     <div className="flex gap-2">
-                      <Button onClick={() => setQuoteItems([])} variant="outline" className="flex-1">Limpar</Button>
+                      <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
                       <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>
                         Gerar Proposta
                       </Button>
@@ -553,6 +598,34 @@ export default function Index() {
           </div>
         )}
       </div>
+
+      {/* Confirmation modal */}
+      <ConfirmModal
+        open={confirmClearOpen}
+        title="Limpar orçamento?"
+        description="Isso removerá todos os itens do orçamento atual. Deseja continuar?"
+        confirmLabel="Sim, limpar"
+        cancelLabel="Cancelar"
+        onConfirm={handleConfirmClear}
+        onCancel={handleCancelClear}
+      />
+
+      {/* Sticky bottom action bar when there are items */}
+      {quoteItems.length > 0 && (
+        <div className="fixed left-0 right-0 bottom-4 z-50 flex justify-center pointer-events-none px-4">
+          <div className="w-full max-w-3xl bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex items-center gap-3 pointer-events-auto">
+            <div className="flex-1">
+              <div className="text-sm text-muted-foreground">Itens: <span className="font-medium">{totalItemsCount}</span></div>
+              <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={handleRequestClear}>Limpar</Button>
+              <Button onClick={openProposalForm}>Gerar Proposta</Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <MadeWithDyad />
     </div>
