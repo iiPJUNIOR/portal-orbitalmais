@@ -110,18 +110,32 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     // proposalNumber: if provided use it; else try to extract from pipedriveUrl
     replacements["proposalNumber"] = data.proposalNumber || (data.pipedriveUrl ? extractIdFromPipedriveUrl(data.pipedriveUrl) + " V.1" : "");
 
-    // Build items_list textual representation (one line per item)
-    const itemsTextLines = (data.items || []).map((it) => {
+    // Build items textual representations.
+    // Important: items_list should contain ONLY the product descriptions (one per line) as requested.
+    const itemsDescriptions = (data.items || []).map((it) => {
+      return `${it.product.description}`;
+    });
+
+    // Keep a separate set of 'full' lines (description + qty + subtotal) in case templates use them explicitly.
+    const itemsFullLines = (data.items || []).map((it) => {
       const unit = it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m;
       const subtotal = unit * it.quantity;
-      // keep a compact line that includes description, qty and subtotal
       return `${it.product.description} — Qtd: ${it.quantity} — R$ ${subtotal.toFixed(2)}`;
     });
 
-    // Full list (multi-line) and also first/second as separate keys
-    replacements["items_list"] = itemsTextLines.join("\n");
-    replacements["items_list1"] = itemsTextLines[0] ?? "";
-    replacements["items_list2"] = itemsTextLines[1] ?? "";
+    // Set tokens:
+    // - items_list: only descriptions (one per line)
+    // - items_list1 / items_list2: first two descriptions
+    // - Also keep compatibility tokens 'descrição' etc (first three descriptions)
+    replacements["items_list"] = itemsDescriptions.join("\n");
+    replacements["items_list1"] = itemsDescriptions[0] ?? "";
+    replacements["items_list2"] = itemsDescriptions[1] ?? "";
+
+    // If you need the full formatted lines elsewhere, templates may reference these custom keys.
+    replacements["items_full_list"] = itemsFullLines.join("\n");
+    replacements["items_full_1"] = itemsFullLines[0] ?? "";
+    replacements["items_full_2"] = itemsFullLines[1] ?? "";
+
     // Keep compatibility with earlier Portuguese 'descrição' tokens (map first three descriptions)
     const firstThree = (data.items || []).slice(0, 3);
     replacements["descrição"] = firstThree[0]?.product?.description ?? "";
