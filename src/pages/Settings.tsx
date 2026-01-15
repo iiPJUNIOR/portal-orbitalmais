@@ -762,6 +762,7 @@ export default function Settings() {
 
           <div className="flex gap-2">
             <Button variant="outline" onClick={() => navigate("/")}>Voltar ao Orçamento</Button>
+            <Button variant="outline" onClick={() => navigate("/token-scan")}>Scanner de Tokens</Button>
           </div>
         </div>
 
