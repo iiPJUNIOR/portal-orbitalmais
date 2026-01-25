@@ -753,7 +753,7 @@ export default function Index() {
                     </div>
 
                     <div className="text-sm text-muted-foreground whitespace-nowrap">
-                      {loading ? "Carregando..." : \`Exibindo \${filteredProductsCount} de \${totalProductsCount} produtos\`}
+                      {loading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
                     </div>
                   </div>
 
