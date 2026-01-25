@@ -36,6 +36,7 @@ interface ProposalData {
   qtd1?: string;
   qtd2?: string;
   overrideTotal?: number | null;
+  includeApprovalPage?: boolean;
 }
 
 const MODEL_TO_SLIDE: Record<string, number> = {
@@ -56,7 +57,6 @@ export const calculateProposalSummary = (items: Array<any>) => {
   return { totalDevices };
 };
 
-// Extrai o ID do link do Pipedrive
 export const extractPipedriveId = (url: string): string | null => {
   if (!url) return null;
   const match = url.match(/\/deal\/(\d+)/);
@@ -116,32 +116,41 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
-    // Listagem individual de itens por linha
-    const mainItems: string[] = [];
-    const serviceItems: string[] = [];
-    const mechanicalItems: string[] = [];
+    const identificationItems: string[] = [];
+    const blockingItems: string[] = [];
+    const softwareServiceItems: string[] = [];
 
     data.items.forEach(it => {
       const line = `${it.product.description} – ${it.quantity} un`;
       const cat = it.product.category?.toLowerCase() || "";
       const model = it.product.model?.toLowerCase() || "";
-      if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
-        mechanicalItems.push(line);
-      } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
-        serviceItems.push(line);
+      const desc = it.product.description?.toLowerCase() || "";
+
+      // Lógica de Categorização baseada nos placeholders do template
+      if (model.includes("idblock") || model.includes("torniquete") || cat.includes("catraca") || cat.includes("torniquete")) {
+        // Bloqueio -> items_list1
+        blockingItems.push(line);
+      } else if (cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || model.includes("idpower")) {
+        // Software/Serviço -> items_list2
+        softwareServiceItems.push(line);
       } else {
-        mainItems.push(line);
+        // Identificação (iDFace, iDAccess, iDFlex, etc.) -> items_list
+        identificationItems.push(line);
       }
     });
 
-    replacements["items_list"] = mainItems.join("\n");
-    replacements["items_list1"] = serviceItems.join("\n");
-    replacements["items_list2"] = mechanicalItems.join("\n");
+    replacements["items_list"] = identificationItems.join("\n");
+    replacements["items_list1"] = blockingItems.join("\n");
+    replacements["items_list2"] = softwareServiceItems.join("\n");
 
-    // Mantém páginas iniciais, as de produtos selecionados e as últimas 2 páginas (54 e 55)
     const keepSlides = [1, 2, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55);
+
+    // Adiciona o slide 56 apenas se solicitado
+    if (data.includeApprovalPage) {
+      keepSlides.push(56);
+    }
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
@@ -168,7 +177,6 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   const margin = 20;
   let y = margin;
 
-  // Header
   doc.setFontSize(22);
   doc.setTextColor(0, 0, 0);
   doc.text("Proposta Comercial", margin, y);
@@ -179,7 +187,6 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 140, y);
   y += 15;
 
-  // Company Info
   doc.setFontSize(14);
   doc.setTextColor(0, 0, 0);
   doc.text("Dados do Cliente", margin, y);
@@ -194,7 +201,6 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.text(`Endereço: ${data.address}`, margin, y);
   y += 15;
 
-  // Items Table
   autoTable(doc, {
     startY: y,
     head: [['Descrição', 'Quantidade']],
@@ -206,7 +212,6 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
 
   y = (doc as any).lastAutoTable.finalY + 15;
 
-  // Summary & Totals
   const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
     ? Number(data.overrideTotal)
     : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
@@ -220,7 +225,6 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.setFont("helvetica", "normal");
   y += 20;
 
-  // Seller Info
   if (data.sellerName) {
     doc.setFontSize(12);
     doc.text("Atenciosamente,", margin, y);

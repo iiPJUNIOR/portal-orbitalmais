@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { generateProposalNumber } from "@/services/proposalService";
+import { Switch } from "@/components/ui/switch";
 
 interface WizardProps {
   initialSellerData: {
@@ -47,7 +48,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     qtd1: "0",
     qtd2: "0",
     selectedProducts: [] as any[],
-    totalPrice: 0
+    totalPrice: 0,
+    includeApprovalPage: true
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -69,11 +71,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     formData.selectedProducts.forEach(it => {
       const cat = (it.category || "").toLowerCase();
       const model = (it.name || "").toLowerCase();
+      const desc = (it.description || "").toLowerCase();
       const qty = Number(it.quantity) || 0;
-      if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
-        q2 += qty;
-      } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
+
+      if (model.includes("idblock") || model.includes("torniquete") || cat.includes("catraca") || cat.includes("torniquete")) {
         q1 += qty;
+      } else if (cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || model.includes("idpower")) {
+        q2 += qty;
       } else {
         q += qty;
       }
@@ -276,6 +280,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 />
               </div>
             </div>
+            
+            <div className="flex items-center justify-between p-4 border rounded-2xl bg-white shadow-sm">
+              <div className="space-y-0.5">
+                <Label className="text-base font-bold">Página de Aprovação</Label>
+                <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
+              </div>
+              <Switch 
+                checked={formData.includeApprovalPage} 
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, includeApprovalPage: checked }))} 
+              />
+            </div>
+
             <p className="text-sm text-muted-foreground text-center">Clique em um dos formatos abaixo para gerar e baixar sua proposta.</p>
           </div>
         );
