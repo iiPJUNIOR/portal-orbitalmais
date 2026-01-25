@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProductFilter } from "@/components/ProductFilter";
@@ -21,6 +21,22 @@ import { QuoteBuilder } from "@/components/QuoteBuilder";
 import ProductBasesTab from "@/components/ProductBasesTab";
 import { Input } from "@/components/ui/input";
 import { fetchBases } from "@/services/productBaseService";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  arrayMove,
+  horizontalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { SortableTab } from "@/components/SortableTab";
 
 /* --- Types & helpers (kept local for this page) --- */
 
@@ -57,6 +73,7 @@ type StoredBase = {
 };
 
 const NO_BASES_WARN_KEY = "no_bases_warning_shown";
+const TAB_ORDER_STORAGE_KEY = "product_base_tab_order";
 
 function normalizeImportedRow(row: any, idx: number): Product {
   const id = row.id || row.ID || row.sku || row.SKU || row.part_number || `imported-${idx}-${Date.now()}`;
@@ -225,11 +242,8 @@ function filterBaseRows(base: StoredBase, filters: Partial<Record<string, any>>)
 /* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
-  // Use a single state for network loading (fetching bases)
   const [baseLoading, setBaseLoading] = useState<boolean>(false);
-  // Removed filterLoading state
 
-  // persisted quote items
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
     try {
       const raw = localStorage.getItem("quote_items");
@@ -264,9 +278,27 @@ export default function Index() {
     }
   });
 
-  // New state for selected base ID and filtered rows
   const [selectedBaseId, setSelectedBaseId] = useState<string | null>(null);
   const [filteredRows, setFilteredRows] = useState<any[][]>([]);
+  const [tabOrder, setTabOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(TAB_ORDER_STORAGE_KEY);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8, // allow slight movement before drag to permit clicks
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   useEffect(() => {
     try {
@@ -284,25 +316,57 @@ export default function Index() {
     }
   }, [bases]);
 
-  // Helper to find the currently selected base object
+  const allBases = useMemo(() => {
+    const list = bases.filter(b => b.type === "catalog" || b.type === "product");
+    
+    // Sort based on tabOrder
+    if (tabOrder.length > 0) {
+      return [...list].sort((a, b) => {
+        const idxA = tabOrder.indexOf(a.id);
+        const idxB = tabOrder.indexOf(b.id);
+        
+        if (idxA === -1 && idxB === -1) return 0;
+        if (idxA === -1) return 1;
+        if (idxB === -1) return -1;
+        return idxA - idxB;
+      });
+    }
+    return list;
+  }, [bases, tabOrder]);
+
+  const handleTabDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (active.id !== over?.id) {
+      const oldIndex = allBases.findIndex((b) => b.id === active.id);
+      const newIndex = allBases.findIndex((b) => b.id === over?.id);
+
+      const newBases = arrayMove(allBases, oldIndex, newIndex);
+      const newOrder = newBases.map(b => b.id);
+      
+      setTabOrder(newOrder);
+      try {
+        localStorage.setItem(TAB_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
+      } catch (e) {
+        console.warn("Failed to save tab order", e);
+      }
+    }
+  };
+
   const selectedBase = selectedBaseId ? bases.find(b => b.id === selectedBaseId) : undefined;
 
-  // Effect to initialize selectedBaseId when bases change
   useEffect(() => {
-    const list = bases.filter(b => b.type === "catalog" || b.type === "product");
-    if (list.length > 0) {
-      if (!selectedBaseId || !list.find((b) => b.id === selectedBaseId)) {
-        setSelectedBaseId(list[0].id);
+    if (allBases.length > 0) {
+      if (!selectedBaseId || !allBases.find((b) => b.id === selectedBaseId)) {
+        setSelectedBaseId(allBases[0].id);
       }
     } else {
       setSelectedBaseId(null);
     }
-  }, [bases, selectedBaseId]);
+  }, [allBases, selectedBaseId]);
 
-  // Effect to apply filtering whenever selectedBaseId or currentFilters change
   useEffect(() => {
     if (selectedBase) {
-      // Debounce filtering logic
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
       }
@@ -315,7 +379,7 @@ export default function Index() {
           console.error("Error filtering base rows:", err);
           setFilteredRows(selectedBase.rows);
         }
-      }, 250); // Use a short debounce for filtering
+      }, 250);
 
       return () => {
         if (debounceRef.current) {
@@ -341,11 +405,10 @@ export default function Index() {
     };
   }, []);
 
-  // Try to load product bases from the server on mount (and persist to localStorage for backward-compat)
   useEffect(() => {
     let mounted = true;
     (async () => {
-      setBaseLoading(true); // Set loading state for network fetch
+      setBaseLoading(true);
       try {
         const serverBases = await fetchBases();
         if (!mounted) return;
@@ -356,22 +419,18 @@ export default function Index() {
           } catch {}
         }
       } catch (err) {
-        // non-fatal; keep existing local bases if any
         console.warn("Failed to fetch bases from server on mount", err);
       } finally {
-        if (mounted) setBaseLoading(false); // Clear loading state after network fetch
+        if (mounted) setBaseLoading(false);
       }
     })();
     return () => { mounted = false; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Listen for external changes to product_bases (e.g. deletion/save in Settings or ProductBasesTab)
   useEffect(() => {
     const handler = async () => {
       setBaseLoading(true);
       try {
-        // Prefer fetching fresh list from server (keeps authoritative copy)
         const serverBases = await fetchBases();
         const toSet = Array.isArray(serverBases) ? serverBases : [];
         setBases(toSet as StoredBase[]);
@@ -380,13 +439,12 @@ export default function Index() {
         } catch {}
       } catch (err) {
         console.warn("Failed to reload product_bases from server", err);
-        // Fallback: try to read from localStorage (legacy flow)
         try {
           const raw = localStorage.getItem("product_bases");
           const parsed = raw ? JSON.parse(raw) : [];
           setBases(Array.isArray(parsed) ? parsed : []);
         } catch (err2) {
-          console.warn("Failed to reload product_bases from storage after server fetch failed", err2);
+          console.warn("Failed to reload product_bases from storage", err2);
         }
       } finally {
         setBaseLoading(false);
@@ -399,22 +457,8 @@ export default function Index() {
     };
   }, []);
 
-  // Helper to show the no-bases warning only once per login/session
-  function showNoBasesWarning() {
-    try {
-      if (!sessionStorage.getItem(NO_BASES_WARN_KEY)) {
-        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
-        sessionStorage.setItem(NO_BASES_WARN_KEY, "1");
-      }
-    } catch (err) {
-      // fallback: still show toast if storage fails
-      toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
-    }
-  }
-
   const debouncedLoad = (filters?: any) => {
     setCurrentFilters(filters);
-    // Filtering is handled by the useEffect hook based on selectedBaseId and currentFilters
   };
 
   const reloadFromBases = () => {
@@ -426,8 +470,6 @@ export default function Index() {
     const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
     
     let unitPrice: number | undefined = undefined;
-    
-    // Find the base that provided this row (if possible, though this function is usually called from PriceBaseTable which uses the current base)
     const sourceBase = bases.find(b => b.headers === headers && b.rows.some(r => r === row));
     
     if (sourceBase) {
@@ -436,14 +478,10 @@ export default function Index() {
         
         if (comIdsCol) {
             const i = headers.indexOf(comIdsCol);
-            if (i >= 0) {
-                unitPrice = parseSpreadsheetNumber(row[i]);
-            }
+            if (i >= 0) unitPrice = parseSpreadsheetNumber(row[i]);
         } else if (semIdsCol) {
             const i = headers.indexOf(semIdsCol);
-            if (i >= 0) {
-                unitPrice = parseSpreadsheetNumber(row[i]);
-            }
+            if (i >= 0) unitPrice = parseSpreadsheetNumber(row[i]);
         }
     }
 
@@ -455,9 +493,8 @@ export default function Index() {
         ...prod,
         value_12m: prod.value_12m || (unitPrice ?? 0),
         value_24m: prod.value_24m || (unitPrice ?? 0),
-        // Attach complement metadata for ProductTable compatibility (although we are not using ProductTable anymore)
         complementMeta: headers.reduce((acc: any, h, i) => { acc[h] = row[i]; return acc; }, {}),
-        price_com_iDSecure: unitPrice, // Use unitPrice as a hint for the selected price
+        price_com_iDSecure: unitPrice,
         price_sem_iDSecure: unitPrice,
     };
 
@@ -466,7 +503,6 @@ export default function Index() {
 
   const handleAddToQuote = (product: Product, quantity: number, unitPrice?: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
-    
     const defaultUnit = product.value_12m || product.value_24m || 0;
     const chosenUnit = unitPrice ?? defaultUnit;
 
@@ -701,7 +737,6 @@ export default function Index() {
     }
   };
 
-  const allBases = bases.filter(b => b.type === "catalog" || b.type === "product");
   const currentBaseForDisplay = selectedBase ? {
     ...selectedBase,
     rows: filteredRows,
@@ -738,25 +773,37 @@ export default function Index() {
 
               <section className="bg-white p-4 rounded-md shadow-sm">
                 <div className="flex items-center justify-between mb-4 border-b pb-2">
-                  <div className="flex items-center gap-3 overflow-x-auto">
-                    {baseLoading ? (
-                      <div className="text-sm text-muted-foreground">Carregando bases...</div>
-                    ) : allBases.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
-                    ) : (
-                      allBases.map((b) => (
-                        <button
-                          key={b.id}
-                          className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap ${selectedBaseId === b.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-100 bg-gray-50 text-gray-700"}`}
-                          onClick={() => setSelectedBaseId(b.id)}
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleTabDragEnd}
+                  >
+                    <div className="flex items-center gap-3 overflow-x-auto pb-1">
+                      {baseLoading ? (
+                        <div className="text-sm text-muted-foreground">Carregando bases...</div>
+                      ) : allBases.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
+                      ) : (
+                        <SortableContext 
+                          items={allBases.map(b => b.id)} 
+                          strategy={horizontalListSortingStrategy}
                         >
-                          {b.name} <span className="text-xs opacity-70">({b.rows.length})</span>
-                        </button>
-                      ))
-                    )}
-                  </div>
+                          {allBases.map((b) => (
+                            <SortableTab
+                              key={b.id}
+                              id={b.id}
+                              isActive={selectedBaseId === b.id}
+                              onClick={() => setSelectedBaseId(b.id)}
+                              label={b.name}
+                              count={b.rows.length}
+                            />
+                          ))}
+                        </SortableContext>
+                      )}
+                    </div>
+                  </DndContext>
 
-                  <div className="text-sm text-muted-foreground whitespace-nowrap">
+                  <div className="text-sm text-muted-foreground whitespace-nowrap ml-4">
                     {baseLoading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
                   </div>
                 </div>
