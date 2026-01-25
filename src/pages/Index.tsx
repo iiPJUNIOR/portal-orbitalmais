@@ -225,7 +225,9 @@ function filterBaseRows(base: StoredBase, filters: Partial<Record<string, any>>)
 /* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState<boolean>(false);
+  // Use a separate state for base loading (fetching from server) vs filter loading (local debounce)
+  const [baseLoading, setBaseLoading] = useState<boolean>(false);
+  const [filterLoading, setFilterLoading] = useState<boolean>(false);
 
   // persisted quote items
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
@@ -300,7 +302,8 @@ export default function Index() {
   // Effect to apply filtering whenever selectedBaseId or currentFilters change
   useEffect(() => {
     if (selectedBase) {
-      setLoading(true);
+      setFilterLoading(true); // Indicate that filtering is starting
+      
       // Debounce filtering logic
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
@@ -314,7 +317,7 @@ export default function Index() {
           console.error("Error filtering base rows:", err);
           setFilteredRows(selectedBase.rows);
         } finally {
-          setLoading(false);
+          setFilterLoading(false); // Filtering finished
         }
       }, 250); // Use a short debounce for filtering
 
@@ -325,7 +328,7 @@ export default function Index() {
       };
     } else {
       setFilteredRows([]);
-      setLoading(false);
+      setFilterLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBaseId, currentFilters, bases]);
@@ -347,6 +350,7 @@ export default function Index() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      setBaseLoading(true); // Set loading state for network fetch
       try {
         const serverBases = await fetchBases();
         if (!mounted) return;
@@ -359,6 +363,8 @@ export default function Index() {
       } catch (err) {
         // non-fatal; keep existing local bases if any
         console.warn("Failed to fetch bases from server on mount", err);
+      } finally {
+        if (mounted) setBaseLoading(false); // Clear loading state after network fetch
       }
     })();
     return () => { mounted = false; };
@@ -368,6 +374,7 @@ export default function Index() {
   // Listen for external changes to product_bases (e.g. deletion/save in Settings or ProductBasesTab)
   useEffect(() => {
     const handler = async () => {
+      setBaseLoading(true);
       try {
         // Prefer fetching fresh list from server (keeps authoritative copy)
         const serverBases = await fetchBases();
@@ -386,6 +393,8 @@ export default function Index() {
         } catch (err2) {
           console.warn("Failed to reload product_bases from storage after server fetch failed", err2);
         }
+      } finally {
+        setBaseLoading(false);
       }
     };
 
@@ -737,7 +746,9 @@ export default function Index() {
                 <section className="bg-white p-4 rounded-md shadow-sm">
                   <div className="flex items-center justify-between mb-4 border-b pb-2">
                     <div className="flex items-center gap-3 overflow-x-auto">
-                      {allBases.length === 0 ? (
+                      {baseLoading ? (
+                        <div className="text-sm text-muted-foreground">Carregando bases...</div>
+                      ) : allBases.length === 0 ? (
                         <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
                       ) : (
                         allBases.map((b) => (
@@ -753,12 +764,12 @@ export default function Index() {
                     </div>
 
                     <div className="text-sm text-muted-foreground whitespace-nowrap">
-                      {loading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
+                      {filterLoading ? "Filtrando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
                     </div>
                   </div>
 
                   <div>
-                    {loading && !currentBaseForDisplay ? (
+                    {(baseLoading || filterLoading) && !currentBaseForDisplay ? (
                       <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                     ) : (
                       <>
