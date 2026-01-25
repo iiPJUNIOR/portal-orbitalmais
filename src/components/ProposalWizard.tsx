@@ -8,7 +8,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Search, Plus, Trash2, Info } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
-import { parseSpreadsheetNumber } from "@/lib/formatters";
 
 interface WizardProps {
   initialSellerData: {
@@ -25,7 +24,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const [currentStep, setCurrentStep] = useState(1);
   const [loadingBases, setLoadingBases] = useState(true);
   const [availableBases, setAvailableBases] = useState<StoredBase[]>([]);
-  const [selectedBaseId, setSelectedBaseId] = useState<string>("");
   const [productSearch, setProductSearch] = useState("");
   const lastFetchedCnpj = useRef<string>("");
   
@@ -56,7 +54,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       try {
         const bases = await fetchBases();
         setAvailableBases(bases);
-        if (bases.length > 0) setSelectedBaseId(bases[0].id || "");
       } finally {
         setLoadingBases(false);
       }
@@ -93,38 +90,40 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     }));
   }, [formData.selectedProducts]);
 
-  const currentBase = availableBases.find(b => b.id === selectedBaseId);
-  const productsFromBase = React.useMemo(() => {
-    if (!currentBase) return [];
-    const headers = currentBase.headers;
-    const nameCol = currentBase.name_column?.toLowerCase();
-    const descCol = currentBase.description_column?.toLowerCase();
-    const extraCols = (currentBase.extra_columns || []).map(c => c.toLowerCase());
+  // Agrega todos os produtos de todas as bases em uma única lista
+  const allProducts = React.useMemo(() => {
+    return availableBases.flatMap((base) => {
+      const headers = base.headers;
+      const nameCol = base.name_column?.toLowerCase();
+      const descCol = base.description_column?.toLowerCase();
+      const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
 
-    return currentBase.rows.map((row, idx) => {
-      const p: any = {};
-      headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
-      
-      const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
-      const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
-      
-      const extras = extraCols.map(col => ({
-        label: col,
-        value: String(p[col] || "").trim()
-      })).filter(ex => ex.value !== "");
-      
-      return {
-        id: `${currentBase.id}-${idx}`,
-        name: String(name || "Produto sem nome").trim(),
-        description: String(description).trim(),
-        extras: extras,
-        sku: p.sku || p["part number"] || p.pn || "",
-        category: p.categoria || p.category || "",
-      };
+      return base.rows.map((row, idx) => {
+        const p: any = {};
+        headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
+        
+        const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
+        const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
+        
+        const extras = extraCols.map(col => ({
+          label: col,
+          value: String(p[col] || "").trim()
+        })).filter(ex => ex.value !== "");
+        
+        return {
+          id: `${base.id}-${idx}`,
+          name: String(name || "Produto sem nome").trim(),
+          description: String(description).trim(),
+          extras: extras,
+          sku: p.sku || p["part number"] || p.pn || "",
+          category: p.categoria || p.category || "",
+          baseName: base.name
+        };
+      });
     });
-  }, [currentBase]);
+  }, [availableBases]);
 
-  const filteredProducts = productsFromBase.filter(p => 
+  const filteredProducts = allProducts.filter(p => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
     p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
     p.extras.some(ex => ex.value.toLowerCase().includes(productSearch.toLowerCase()))
@@ -202,23 +201,20 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       case 4:
         return (
           <div className="space-y-6">
-            <div className="space-y-2">
-              <Label>Base de Produtos</Label>
-              <select className="w-full border rounded p-2" value={selectedBaseId} onChange={e => setSelectedBaseId(e.target.value)}>
-                {availableBases.map(b => <option key={b.id} value={b.id!}>{b.name}</option>)}
-              </select>
-            </div>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar por nome, SKU ou qualquer info..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Buscar em todas as bases (nome, SKU, etc)..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
             </div>
-            <div className="max-h-80 overflow-y-auto border rounded-xl divide-y">
+            <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-white">
               {filteredProducts.map(p => {
                 const isSelected = formData.selectedProducts.some(sp => sp.baseId === p.id);
                 return (
                   <div key={p.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
                     <div className="flex-1">
-                      <div className="font-bold text-sm">{p.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">{p.name}</span>
+                        <span className="text-[9px] bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500 uppercase font-medium">{p.baseName}</span>
+                      </div>
                       <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
                       <div className="flex flex-wrap gap-1 mt-1">
                         {p.extras.map((ex, idx) => (
@@ -235,18 +231,23 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                   </div>
                 );
               })}
+              {filteredProducts.length === 0 && (
+                <div className="p-8 text-center text-muted-foreground text-sm">Nenhum produto encontrado nas bases.</div>
+              )}
             </div>
             <div className="space-y-3 pt-4 border-t">
               <Label className="font-bold">Itens Selecionados ({formData.selectedProducts.length})</Label>
-              {formData.selectedProducts.map(p => (
-                <Card key={p.baseId} className="p-3 bg-primary/5 flex items-center justify-between">
-                  <div className="text-xs font-bold truncate flex-1">{p.name}</div>
-                  <div className="flex items-center gap-2">
-                    <Input type="number" className="w-14 h-7 text-xs" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-3.5 w-3.5" /></Button>
-                  </div>
-                </Card>
-              ))}
+              <div className="grid grid-cols-1 gap-2">
+                {formData.selectedProducts.map(p => (
+                  <Card key={p.baseId} className="p-3 bg-primary/5 flex items-center justify-between border-primary/10">
+                    <div className="text-xs font-bold truncate flex-1">{p.name}</div>
+                    <div className="flex items-center gap-2">
+                      <Input type="number" className="w-14 h-7 text-xs bg-white" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
             </div>
           </div>
         );
@@ -257,7 +258,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <Label>VALOR TOTAL DA PROPOSTA</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl text-gray-500">R$</span>
-                <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
+                <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
               </div>
             </div>
             <div className="p-4 bg-gray-50 rounded-xl border border-dashed text-xs text-muted-foreground space-y-2">
