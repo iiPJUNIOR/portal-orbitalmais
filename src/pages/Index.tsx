@@ -631,7 +631,7 @@ export default function Index() {
       };
 
       const itemsToSave = quoteItems.map((it) => {
-        const unit = it.unitPrice ?? (it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
+        const unit = it.unitPrice ?? (item.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
         return {
           sku: it.product.sku,
           productDescription: it.product.description,
@@ -771,7 +771,7 @@ export default function Index() {
                 <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
               </section>
 
-              <section className="bg-white p-4 rounded-md shadow-sm">
+              <section className="bg-white p-4 rounded-md shadow-sm min-h-[calc(100vh-320px)] flex flex-col">
                 <div className="flex items-center justify-between mb-4 border-b pb-2">
                   <DndContext
                     sensors={sensors}
@@ -808,7 +808,7 @@ export default function Index() {
                   </div>
                 </div>
 
-                <div className="w-full">
+                <div className="w-full flex-1">
                   {baseLoading && !currentBaseForDisplay ? (
                     <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                   ) : (
@@ -830,7 +830,7 @@ export default function Index() {
             </main>
 
             <aside className="lg:col-span-1">
-              <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
+              <div className="sticky top-6 space-y-4 max-h-[85vh] overflow-auto">
                 <div className="bg-white p-4 rounded-md shadow-sm">
                   <h3 className="font-semibold mb-3">Itens adicionados</h3>
                   <div className="space-y-2 max-h-56 overflow-auto">
@@ -874,10 +874,6 @@ export default function Index() {
                       A proposta será gerada com os valores editados nos itens.
                     </div>
                   </div>
-                </div>
-
-                <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
-                  Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
                 </div>
               </div>
             </aside>
