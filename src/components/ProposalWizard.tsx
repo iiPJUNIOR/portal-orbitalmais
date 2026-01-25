@@ -54,6 +54,17 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // Helper to format CNPJ
+  const formatCnpj = (value: string) => {
+    const digits = value.replace(/\D/g, "");
+    let formatted = digits;
+    if (digits.length > 2) formatted = `${digits.substring(0, 2)}.${digits.substring(2)}`;
+    if (digits.length > 5) formatted = `${formatted.substring(0, 6)}.${digits.substring(5)}`;
+    if (digits.length > 8) formatted = `${formatted.substring(0, 10)}/${digits.substring(8)}`;
+    if (digits.length > 12) formatted = `${formatted.substring(0, 15)}-${digits.substring(12, 14)}`;
+    return formatted.substring(0, 18);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -200,7 +211,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <div className="space-y-2"><Label>Versão</Label><Input value={formData.version} onChange={e => setFormData(prev => ({ ...prev, version: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Data</Label><Input type="date" value={formData.date} onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))} /></div>
             </div>
-            <div className="space-y-2"><Label>CNPJ</Label><Input placeholder="00.000.000/0000-00" value={formData.cnpj} onChange={e => setFormData(prev => ({ ...prev, cnpj: e.target.value.replace(/\D/g, "").substring(0, 14) }))} /></div>
+            <div className="space-y-2">
+              <Label>CNPJ</Label>
+              <Input 
+                placeholder="00.000.000/0000-00" 
+                value={formData.cnpj} 
+                onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
+              />
+            </div>
             <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} /></div>
