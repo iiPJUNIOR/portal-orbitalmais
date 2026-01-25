@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
-import { generateProposalPPTX, generateProposalNumber } from "@/services/proposalService";
+import { generateProposalPPTX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
@@ -22,7 +22,6 @@ export default function Index() {
     phone: "",
   });
 
-  // Load seller info on mount
   useEffect(() => {
     const loadSettings = async () => {
       try {
@@ -43,27 +42,20 @@ export default function Index() {
   }, []);
 
   const handleWizardComplete = async (payload: any) => {
-    const loadToastId = toast.loading("Gerando proposta final...");
+    const loadToastId = toast.loading("Gerando e salvando proposta...");
     try {
-      // Usar o gerador de PPTX atualizado com as novas regras de slides
-      const blob = await generateProposalPPTX({
+      // 1. Gerar o arquivo para o download imediato do usuário
+      const proposalData = {
         ...payload,
         sellerName: sellerInfo.name,
         sellerRole: sellerInfo.role,
         sellerEmail: sellerInfo.email,
         sellerPhone: sellerInfo.phone,
-      });
+      };
+      
+      const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase
-      const itemsToSave = payload.items.map((it: any) => ({
-        sku: it.product.description,
-        productDescription: it.product.description,
-        quantity: it.quantity,
-        unitPrice: 0,
-        priceModel: payload.priceModel,
-        subtotal: 0,
-      }));
-
+      // 2. Salvar apenas os DADOS no Supabase (incluindo as configurações para regenerar)
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -78,13 +70,18 @@ export default function Index() {
           totalPrice: payload.totalPrice,
           status: "rascunho",
           observations: payload.observations || "",
+          settings: payload, // Salvamos o objeto completo do wizard aqui
         },
-        itemsToSave,
-        blob,
-        `proposta-${payload.proposalNumber}.pptx`
+        payload.items.map((it: any) => ({
+          sku: it.product.description,
+          productDescription: it.product.description,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice || 0,
+          priceModel: payload.priceModel,
+        }))
       );
 
-      // Download
+      // 3. Iniciar download
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -94,11 +91,11 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success("Proposta gerada com sucesso!");
+      toast.success("Proposta gerada e salva com sucesso!");
       setStep("welcome");
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao gerar a proposta.");
+      toast.error("Erro ao processar a proposta.");
     } finally {
       toast.dismiss(loadToastId);
     }
@@ -177,7 +174,7 @@ export default function Index() {
               <h2 className="text-3xl font-bold">Histórico de Propostas</h2>
               <Button variant="outline" onClick={() => setStep("welcome")}>Voltar</Button>
             </div>
-            <QuoteHistory onQuoteSelect={(q) => toast.info(`Selecionado: ${q.proposalNumber}`)} />
+            <QuoteHistory onQuoteSelect={(q) => toast.info(`Orçamento selecionado: ${q.proposalNumber}`)} />
           </div>
         )}
       </main>

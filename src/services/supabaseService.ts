@@ -1,43 +1,17 @@
-// Supabase-backed service for quotes.
-// If Supabase isn't configured, functions fallback to previous mock behavior.
-
 import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import type { Quote as QuoteType, QuoteItem as QuoteItemType } from "@/types/quote";
 
-// Helper to check if supabase is configured
-const SUPABASE_CONFIGURED =
-  typeof import.meta.env.VITE_SUPABASE_URL === "string" &&
-  import.meta.env.VITE_SUPABASE_URL !== "" &&
-  typeof import.meta.env.VITE_SUPABASE_ANON_KEY === "string" &&
-  import.meta.env.VITE_SUPABASE_ANON_KEY !== "";
-
+/**
+ * Salva o orçamento no banco de dados.
+ * Omitimos o upload de arquivo conforme solicitado, salvando apenas os dados e configurações.
+ */
 export const saveQuote = async (
-  quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt">,
-  items: Omit<QuoteItemType, "id" | "quoteId">[],
-  pptxBlob?: Blob,
-  pptxFileName?: string
+  quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt"> & { settings?: any },
+  items: any[]
 ): Promise<string> => {
-  if (!SUPABASE_CONFIGURED) {
-    console.warn("Supabase not configured — falling back to mock saveQuote");
-    // Return a mock ID
-    return `mock-quote-${Date.now()}`;
-  }
-
-  // Try real Supabase flow
   try {
-    // 1) Upload PPTX if provided
-    let pptxUrl: string | undefined = undefined;
-    if (pptxBlob && pptxFileName) {
-      try {
-        const uploadedUrl = await uploadPptxFile(pptxBlob, pptxFileName);
-        pptxUrl = uploadedUrl;
-      } catch (err) {
-        console.warn("PPTX upload failed:", err);
-      }
-    }
-
-    // 2) Insert quote record
+    // 1) Preparar payload do orçamento
     const insertPayload: any = {
       cnpj: quote.cnpj,
       company_name: quote.companyName,
@@ -51,21 +25,13 @@ export const saveQuote = async (
       total_price: quote.totalPrice,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",
-      pptx_url: pptxUrl ?? null,
-      // created_at and updated_at are handled server-side
+      settings: quote.settings || {}, // Salva o estado completo do wizard para regeneração
     };
 
-    // Attempt to set user_id if available (optional)
-    try {
-      // supabase.auth.getUser may be async depending on version; try to access current session
-      // @ts-ignore
-      const userResp = await supabase.auth.getUser?.();
-      const userId = userResp?.data?.user?.id;
-      if (userId) {
-        insertPayload.user_id = userId;
-      }
-    } catch {
-      // ignore
+    // Tenta obter o ID do usuário logado
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) {
+      insertPayload.user_id = userData.user.id;
     }
 
     const { data: quoteInsertData, error: quoteInsertError } = await supabase
@@ -74,45 +40,36 @@ export const saveQuote = async (
       .select()
       .single();
 
-    if (quoteInsertError) {
-      throw quoteInsertError;
-    }
+    if (quoteInsertError) throw quoteInsertError;
 
     const quoteId = quoteInsertData.id as string;
 
-    // 3) Insert items
+    // 2) Inserir itens do orçamento
     const itemsToInsert = items.map((it) => ({
       quote_id: quoteId,
-      sku: it.sku,
+      sku: it.sku || it.productDescription,
       product_description: it.productDescription,
       quantity: it.quantity,
-      unit_price: it.unitPrice,
-      price_model: it.priceModel,
-      subtotal: it.subtotal,
+      unit_price: it.unitPrice || 0,
+      price_model: it.priceModel || quote.priceModel,
+      subtotal: (it.unitPrice || 0) * it.quantity,
     }));
 
     const { error: itemsError } = await supabase.from("quote_items").insert(itemsToInsert);
     if (itemsError) {
-      console.warn("Warning: quote saved but items insertion failed", itemsError);
+      console.warn("Aviso: Orçamento salvo, mas houve erro ao inserir itens", itemsError);
     }
 
     return quoteId;
   } catch (err) {
-    console.error("Failed to save quote to Supabase:", err);
+    console.error("Erro ao salvar orçamento no Supabase:", err);
     throw err;
   }
 };
 
 export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
-  if (!SUPABASE_CONFIGURED) {
-    console.warn("Supabase not configured — falling back to mock getQuotesByCnpj");
-    return [];
-  }
-
   try {
-    // Exact match or normalized match (strip non-digit chars)
     const clean = cnpj.replace(/\D/g, "");
-    // Query quotes where cnpj ilike or equal
     const { data, error } = await supabase
       .from("quotes")
       .select("*")
@@ -120,56 +77,38 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    return (data || []) as QuoteType[];
+    
+    // Mapeia snake_case para camelCase para o frontend
+    return (data || []).map(q => ({
+      id: q.id,
+      cnpj: q.cnpj,
+      companyName: q.company_name,
+      contactName: q.contact_name,
+      email: q.email,
+      phone: q.phone,
+      address: q.address,
+      proposalDate: q.proposal_date,
+      proposalNumber: q.proposal_number,
+      priceModel: q.price_model,
+      totalPrice: q.total_price,
+      status: q.status,
+      observations: q.observations,
+      createdAt: q.created_at,
+      updatedAt: q.updated_at,
+      settings: q.settings
+    })) as QuoteType[];
   } catch (err) {
-    console.error("Failed to fetch quotes by CNPJ:", err);
+    console.error("Erro ao buscar orçamentos por CNPJ:", err);
     throw err;
   }
 };
 
 export const updateQuoteStatus = async (quoteId: string, status: QuoteType["status"]): Promise<void> => {
-  if (!SUPABASE_CONFIGURED) {
-    console.warn("Supabase not configured — falling back to mock updateQuoteStatus");
-    return;
-  }
-
   try {
     const { error } = await supabase.from("quotes").update({ status }).eq("id", quoteId);
     if (error) throw error;
   } catch (err) {
-    console.error("Failed to update quote status:", err);
-    throw err;
-  }
-};
-
-export const uploadPptxFile = async (file: Blob, fileName: string): Promise<string> => {
-  if (!SUPABASE_CONFIGURED) {
-    console.warn("Supabase not configured — falling back to mock uploadPptxFile");
-    return `https://mock-storage.local/${fileName}`;
-  }
-
-  try {
-    // Ensure bucket name 'proposals' is used. Use a uuid filename to avoid collisions.
-    const destFileName = `proposals/${uuidv4()}-${fileName}`;
-
-    // Convert Blob to File if necessary
-    const fileObj = new File([file], fileName, { type: file.type || "application/octet-stream" });
-
-    const { error: uploadError } = await supabase.storage
-      .from("proposals")
-      .upload(destFileName, fileObj, { upsert: true });
-
-    if (uploadError) {
-      throw uploadError;
-    }
-
-    // Get public URL (may require the bucket to be public or have appropriate policies)
-    const { data: publicUrlData } = supabase.storage.from("proposals").getPublicUrl(destFileName);
-    const publicUrl = publicUrlData.publicUrl;
-
-    return publicUrl;
-  } catch (err) {
-    console.error("Failed to upload PPTX to Supabase Storage:", err);
+    console.error("Erro ao atualizar status do orçamento:", err);
     throw err;
   }
 };
