@@ -56,6 +56,8 @@ type StoredBase = {
   semIdsColumn?: string | null;
 };
 
+const NO_BASES_WARN_KEY = "no_bases_warning_shown";
+
 function normalizeImportedRow(row: any, idx: number): Product {
   const id = row.id || row.ID || row.sku || row.SKU || row.part_number || `imported-${idx}-${Date.now()}`;
   const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
@@ -474,6 +476,19 @@ export default function Index() {
     };
   }, [loadProducts, currentFilters]);
 
+  // Helper to show the no-bases warning only once per login/session
+  function showNoBasesWarning() {
+    try {
+      if (!sessionStorage.getItem(NO_BASES_WARN_KEY)) {
+        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
+        sessionStorage.setItem(NO_BASES_WARN_KEY, "1");
+      }
+    } catch (err) {
+      // fallback: still show toast if storage fails
+      toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
+    }
+  }
+
   const debouncedLoad = (filters?: any, delay = 250) => {
     setCurrentFilters(filters);
 
@@ -489,7 +504,7 @@ export default function Index() {
       if (imported.length === 0) {
         setProducts([]);
         setLoading(false);
-        toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
+        showNoBasesWarning();
         return;
       } else {
         setProducts(imported.filter(p => p.status === "Ativo"));
@@ -501,7 +516,7 @@ export default function Index() {
     if (imported.length === 0) {
       setProducts([]);
       setLoading(false);
-      toast.error("Nenhuma base de orçamentos detectada — crie uma base em Configurações");
+      showNoBasesWarning();
       return;
     }
 
@@ -514,7 +529,7 @@ export default function Index() {
   const reloadFromBases = () => {
     const imported = getCatalogProductsFromBases();
     if (imported.length === 0) {
-      toast.error("Nenhuma base de orçamentos — vá em Configurações para criar uma base.");
+      showNoBasesWarning();
       setProducts([]);
       return;
     }

@@ -11,6 +11,8 @@ type SessionContextValue = {
 
 const SessionContext = createContext<SessionContextValue | undefined>(undefined);
 
+const NO_BASES_WARN_KEY = "no_bases_warning_shown";
+
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<any | null>(null);
   const [user, setUser] = useState<any | null>(null);
@@ -70,7 +72,10 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         // Handle INITIAL_SESSION to ensure we restore the session if Supabase provides it.
         // Some environments deliver the current session via this event rather than getSession.
         if (event === "INITIAL_SESSION") {
-          // only set session/user (do not force navigation here)
+          // Clear the one-time "no bases" warning flag so the app may show it once for this login
+          try {
+            sessionStorage.removeItem(NO_BASES_WARN_KEY);
+          } catch {}
           setSession(s);
           setUser(s?.user ?? null);
           return;
@@ -79,6 +84,13 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         // For other events, update session and user
         setSession(s);
         setUser(s?.user ?? null);
+
+        // When user signs in explicitly, clear the one-time warning flag so message may be shown once now
+        if (event === "SIGNED_IN") {
+          try {
+            sessionStorage.removeItem(NO_BASES_WARN_KEY);
+          } catch {}
+        }
 
         // Only auto-redirect on explicit sign-out events.
         if (event === "SIGNED_OUT") {
