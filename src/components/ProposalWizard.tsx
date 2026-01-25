@@ -62,7 +62,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   }, []);
 
   useEffect(() => {
-    let q = 0; q1 = 0; q2 = 0;
+    let q = 0;
+    let q1 = 0;
+    let q2 = 0;
+    
     formData.selectedProducts.forEach(it => {
       const cat = (it.category || "").toLowerCase();
       const model = (it.name || "").toLowerCase();
@@ -215,8 +218,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 {formData.selectedProducts.map(p => (
                   <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2"><span className="font-bold text-sm">{p.name}</span></div>
-                      <div className="text-[10px] text-muted-foreground">{p.sku}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">{p.name}</span>
+                        <span className="text-[9px] bg-white/50 border border-primary/10 px-1.5 py-0.5 rounded text-primary uppercase font-medium">{p.baseName}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {p.extras.map((ex: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-white/50 px-1.5 py-0.5 rounded border border-primary/10">
+                            <Info className="h-2.5 w-2.5" />
+                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <div className="flex items-center gap-3 ml-4">
                       <Input type="number" className="w-16 h-8 text-xs bg-white text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
