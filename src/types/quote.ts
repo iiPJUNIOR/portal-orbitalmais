@@ -15,6 +15,7 @@ export interface Quote {
   createdAt: string;
   updatedAt: string;
   pptxUrl?: string;
+  settings?: any; // Armazena o estado completo do wizard (JSON)
 }
 
 export interface QuoteItem {
