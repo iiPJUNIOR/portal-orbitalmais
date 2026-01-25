@@ -184,17 +184,21 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
   }
 
   // 2. Processa os arquivos de relacionamento (.rels) para substituir links (hyperlinks)
-  const relsFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(p));
+  const relsFiles = Object.keys(zip.files).filter((p) => /ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(p));
   for (const path of relsFiles) {
     let content = await zip.file(path)!.async("string");
     
-    // Substitui o token no atributo Target de qualquer Relationship do tipo hyperlink
     if (opts.replacements.approvalLink) {
       const link = String(opts.replacements.approvalLink);
-      // Procura por Target="{{approvalLink}}" ou variações com espaços
-      content = content.replace(/Target="{{\s*approvalLink\s*}}"/g, `Target="${link}"`);
-      // Fallback para caso o usuário tenha colocado o link manualmente como um placeholder no template
-      content = content.replace(/Target="https?:\/\/LINK_DA_PROPOSTA_PLACEHOLDER"/g, `Target="${link}"`);
+      
+      // Substituição robusta considerando que o PowerPoint pode codificar as chaves
+      // Tenta as variações: {{approvalLink}}, %7B%7BapprovalLink%7D%7D e %7b%7bapprovalLink%7d%7d
+      content = content.split('{{approvalLink}}').join(link);
+      content = content.split('%7B%7BapprovalLink%7D%7D').join(link);
+      content = content.split('%7b%7bapprovalLink%7d%7d').join(link);
+      
+      // Fallback para placeholder estático
+      content = content.split('https://LINK_DA_PROPOSTA_PLACEHOLDER').join(link);
     }
 
     zip.file(path, content);
