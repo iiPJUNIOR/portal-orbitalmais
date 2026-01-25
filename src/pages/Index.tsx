@@ -80,10 +80,16 @@ export default function Index() {
         }))
       );
 
+      // Formatação do nome do arquivo: Nome da empresa - Proposta Plano Premium Access v.XX_Mês-Ano
+      const dateObj = new Date(payload.date + "T12:00:00");
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      const fileName = `${payload.companyName} - Proposta Plano Premium Access v.${payload.version}_${month}-${year}.pptx`;
+
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `proposta-${payload.proposalNumber}.pptx`;
+      a.download = fileName;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
