@@ -235,18 +235,60 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 <div className="p-8 text-center text-muted-foreground text-sm">Nenhum produto encontrado nas bases.</div>
               )}
             </div>
-            <div className="space-y-3 pt-4 border-t">
-              <Label className="font-bold">Itens Selecionados ({formData.selectedProducts.length})</Label>
-              <div className="grid grid-cols-1 gap-2">
+            
+            <div className="space-y-3 pt-6 border-t">
+              <div className="flex items-center justify-between">
+                <Label className="font-bold text-lg">Itens Selecionados ({formData.selectedProducts.length})</Label>
+              </div>
+              <div className="grid grid-cols-1 gap-3">
                 {formData.selectedProducts.map(p => (
-                  <Card key={p.baseId} className="p-3 bg-primary/5 flex items-center justify-between border-primary/10">
-                    <div className="text-xs font-bold truncate flex-1">{p.name}</div>
-                    <div className="flex items-center gap-2">
-                      <Input type="number" className="w-14 h-7 text-xs bg-white" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
-                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-3.5 w-3.5" /></Button>
+                  <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-sm">{p.name}</span>
+                        <span className="text-[9px] bg-white/50 border border-primary/10 px-1.5 py-0.5 rounded text-primary uppercase font-medium">{p.baseName}</span>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {p.extras.map((ex: any, idx: number) => (
+                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-white/50 px-1.5 py-0.5 rounded border border-primary/10">
+                            <Info className="h-2.5 w-2.5" />
+                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  </Card>
+                    
+                    <div className="flex items-center gap-3 ml-4">
+                      <div className="flex flex-col items-center">
+                        <Label className="text-[9px] uppercase text-muted-foreground mb-1 font-bold">Qtd</Label>
+                        <Input 
+                          type="number" 
+                          className="w-16 h-8 text-xs bg-white text-center font-bold" 
+                          value={p.quantity} 
+                          onChange={e => setFormData(prev => ({ 
+                            ...prev, 
+                            selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) 
+                          }))} 
+                        />
+                      </div>
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full mt-4" 
+                        onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
                 ))}
+                
+                {formData.selectedProducts.length === 0 && (
+                  <div className="p-6 text-center text-muted-foreground text-xs border border-dashed rounded-xl bg-gray-50/50">
+                    Nenhum item adicionado ao orçamento.
+                  </div>
+                )}
               </div>
             </div>
           </div>
