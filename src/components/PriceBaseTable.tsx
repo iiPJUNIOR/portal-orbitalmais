@@ -46,13 +46,19 @@ const COLUMN_ORDER_STORAGE_KEY = "price_base_column_order_";
 function formatHeaderDisplay(header: string): string {
   if (!header) return "(vazio)";
   const h = header.toLowerCase();
-  if (h === "com idsecure" || h === "com ids") return "Com iDS";
-  if (h === "sem idsecure" || h === "sem ids") return "Sem iDS";
-  if (h.includes("valor total (com idsecure)")) return "Total (c/ iDS)";
-  if (h.includes("valor total (sem idsecure)")) return "Total (s/ iDS)";
+  
+  // Prioridade para totais
+  if (h.includes("valor total (com idsecure)") || h.includes("total com ids")) return "Total (c/ iDS)";
+  if (h.includes("valor total (sem idsecure)") || h.includes("total sem ids")) return "Total (s/ iDS)";
+  
+  // Detecção de variações longas de iDSecure
+  if (h.includes("com idsecure") || h.includes("com ids")) return "Com iDS";
+  if (h.includes("sem idsecure") || h.includes("sem ids")) return "Sem iDS";
+  
   if (h === "part number" || h === "part_number") return "P/N";
   if (h === "quantidade") return "Qtd";
   if (h === "descrição" || h === "description") return "Descrição";
+  
   return header;
 }
 
