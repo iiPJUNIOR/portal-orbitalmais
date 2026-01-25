@@ -150,7 +150,7 @@ function productFromBaseRow(headers: string[], row: any[], idx: number): Product
 /* --- Filtering helper --- */
 function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
   const filtered = products.filter((product) => {
-    if (filters.category && product.category !== product.category) return false;
+    if (filters.category && product.category !== filters.category) return false;
     if (filters.tipo) {
       const t = String(filters.tipo).toLowerCase();
       if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) return false;
@@ -712,265 +712,262 @@ export default function Index() {
 
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="container mx-auto py-8">
-        <header className="mb-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Plataforma de Cotação Control iD</h1>
-            <p className="text-gray-600 mt-1">Monte orçamentos rapidamente a partir das suas bases.</p>
-          </div>
+    <div className="min-h-screen bg-gray-50 p-6">
+      <header className="mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Gerador Acesso</h1>
+          <p className="text-gray-600 mt-1">Monte orçamentos rapidamente a partir das suas bases.</p>
+        </div>
 
-          <div className="flex gap-2">
-            <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
-            <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Gerenciar Bases</Button>
-            <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
-            <Button variant="outline" onClick={() => navigate("/settings")}>Configurações</Button>
-            <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
-            <Button onClick={openHistory}>Histórico</Button>
-          </div>
-        </header>
+        <div className="flex gap-2">
+          <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
+          <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Gerenciar Bases</Button>
+          <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
+          <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
+          <Button onClick={openHistory}>Histórico</Button>
+        </div>
+      </header>
 
-        {step === "catalog" && (
-          <>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <main className="lg:col-span-2 space-y-6">
-                <section className="bg-white p-4 rounded-md shadow-sm">
-                  <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
-                </section>
+      {step === "catalog" && (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <main className="lg:col-span-2 space-y-6">
+              <section className="bg-white p-4 rounded-md shadow-sm">
+                <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
+              </section>
 
-                <section className="bg-white p-4 rounded-md shadow-sm">
-                  <div className="flex items-center justify-between mb-4 border-b pb-2">
-                    <div className="flex items-center gap-3 overflow-x-auto">
-                      {baseLoading ? (
-                        <div className="text-sm text-muted-foreground">Carregando bases...</div>
-                      ) : allBases.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
-                      ) : (
-                        allBases.map((b) => (
-                          <button
-                            key={b.id}
-                            className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap ${selectedBaseId === b.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-100 bg-gray-50 text-gray-700"}`}
-                            onClick={() => setSelectedBaseId(b.id)}
-                          >
-                            {b.name} <span className="text-xs opacity-70">({b.rows.length})</span>
-                          </button>
-                        ))
-                      )}
-                    </div>
-
-                    <div className="text-sm text-muted-foreground whitespace-nowrap">
-                      {baseLoading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
-                    </div>
-                  </div>
-
-                  <div>
-                    {baseLoading && !currentBaseForDisplay ? (
-                      <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
+              <section className="bg-white p-4 rounded-md shadow-sm">
+                <div className="flex items-center justify-between mb-4 border-b pb-2">
+                  <div className="flex items-center gap-3 overflow-x-auto">
+                    {baseLoading ? (
+                      <div className="text-sm text-muted-foreground">Carregando bases...</div>
+                    ) : allBases.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
                     ) : (
-                      <>
-                        {currentBaseForDisplay ? (
-                          <PriceBaseTable
-                            base={currentBaseForDisplay as StoredBase}
-                            onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
-                          />
-                        ) : (
-                          <div className="p-6 text-sm text-muted-foreground text-center">
-                            Selecione ou importe uma base em Configurações.
-                          </div>
-                        )}
-                      </>
+                      allBases.map((b) => (
+                        <button
+                          key={b.id}
+                          className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap ${selectedBaseId === b.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-100 bg-gray-50 text-gray-700"}`}
+                          onClick={() => setSelectedBaseId(b.id)}
+                        >
+                          {b.name} <span className="text-xs opacity-70">({b.rows.length})</span>
+                        </button>
+                      ))
                     )}
                   </div>
-                </section>
-              </main>
 
-              <aside className="lg:col-span-1">
-                <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
-                  <div className="bg-white p-4 rounded-md shadow-sm">
-                    <h3 className="font-semibold mb-3">Itens adicionados</h3>
-                    <div className="space-y-2 max-h-56 overflow-auto">
-                      {quoteItems.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
-                      ) : (
-                        quoteItems.map((it) => (
-                          <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
-                            <div className="text-left">
-                              <div className="font-medium text-sm truncate">{it.product.description}</div>
-                              <div className="text-xs text-muted-foreground">Qtd: {it.quantity} · {it.product.part_number}</div>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
-                            </div>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-md shadow-sm">
-                    <div className="flex flex-col gap-3">
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">Itens</div>
-                        <div className="font-medium">{totalItemsCount}</div>
-                      </div>
-
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-muted-foreground">Total</div>
-                        <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
-                      </div>
-
-                      <div className="flex gap-2">
-                        <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
-                        <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
-                        <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>Gerar Proposta</Button>
-                      </div>
-
-                      <div className="text-xs text-muted-foreground text-center mt-1">
-                        A proposta será gerada com os valores editados nos itens.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
-                    Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
+                  <div className="text-sm text-muted-foreground whitespace-nowrap">
+                    {baseLoading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
                   </div>
                 </div>
-              </aside>
-            </div>
-          </>
-        )}
 
-        {step === "productBases" && (
-          <div className="bg-white p-6 rounded-md shadow-sm">
-            <ProductBasesTab onBack={() => setStep("catalog")} />
-          </div>
-        )}
-
-        {step === "productLookup" && (
-          <div className="bg-white p-6 rounded-md shadow-sm">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h2 className="text-2xl font-semibold">Pesquisar Código (Bases de Produtos)</h2>
-                <p className="text-sm text-muted-foreground">Pesquise em todas as bases do tipo "Base de Produtos" e adicione itens ao orçamento.</p>
-              </div>
-
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
-              </div>
-            </div>
-
-            <div className="flex gap-2 mb-4">
-              <Input placeholder="Digite SKU / código / parte do nome..." value={lookupQuery} onChange={(e) => setLookupQuery(e.target.value)} />
-              <Button onClick={runLookup} disabled={lookupLoading || !lookupQuery}>Buscar</Button>
-            </div>
-
-            <div>
-              {lookupLoading ? (
-                <div>Buscando...</div>
-              ) : (
-                <div className="space-y-3">
-                  {lookupResults.length === 0 ? (
-                    <div className="text-sm text-muted-foreground">Nenhum resultado. Verifique se você possui bases do tipo 'Base de Produtos' em Configurações.</div>
+                <div>
+                  {baseLoading && !currentBaseForDisplay ? (
+                    <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                   ) : (
-                    lookupResults.map((r, idx) => (
-                      <div key={idx} className="border rounded p-3">
-                        <div className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium">{r.base.name} — {r.base.headers.join(", ")}</div>
-                            <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.created_at).toLocaleDateString()}</div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button onClick={() => handleAddFromLookupRow(r.headers, r.row)}>Adicionar</Button>
-                          </div>
+                    <>
+                      {currentBaseForDisplay ? (
+                        <PriceBaseTable
+                          base={currentBaseForDisplay as StoredBase}
+                          onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
+                        />
+                      ) : (
+                        <div className="p-6 text-sm text-muted-foreground text-center">
+                          Selecione ou importe uma base em Configurações.
                         </div>
-
-                        <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                          {r.base.headers.map((h, i) => (
-                            <div key={i} className="flex flex-col">
-                              <div className="text-xs text-muted-foreground">{h}</div>
-                              <div className="font-medium">{String(r.row[i] ?? "")}</div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
+                      )}
+                    </>
                   )}
                 </div>
-              )}
-            </div>
-          </div>
-        )}
+              </section>
+            </main>
 
-        {step === "review" && (
-          <div className="space-y-6">
-            <div className="flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Revisar Itens do Orçamento</h2>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
-                <Button onClick={openProposalForm}>Continuar</Button>
+            <aside className="lg:col-span-1">
+              <div className="sticky top-6 space-y-4 max-h-[72vh] overflow-auto">
+                <div className="bg-white p-4 rounded-md shadow-sm">
+                  <h3 className="font-semibold mb-3">Itens adicionados</h3>
+                  <div className="space-y-2 max-h-56 overflow-auto">
+                    {quoteItems.length === 0 ? (
+                      <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
+                    ) : (
+                      quoteItems.map((it) => (
+                        <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
+                          <div className="text-left">
+                            <div className="font-medium text-sm truncate">{it.product.description}</div>
+                            <div className="text-xs text-muted-foreground">Qtd: {it.quantity} · {it.product.part_number}</div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-md shadow-sm">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">Itens</div>
+                      <div className="font-medium">{totalItemsCount}</div>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-muted-foreground">Total</div>
+                      <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
+                      <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
+                      <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>Gerar Proposta</Button>
+                    </div>
+
+                    <div className="text-xs text-muted-foreground text-center mt-1">
+                      A proposta será gerada com os valores editados nos itens.
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-3 rounded-md text-sm text-muted-foreground">
+                  Dica: Edite o valor unitário e a quantidade nos itens para ajustar sua proposta antes de gerar.
+                </div>
               </div>
+            </aside>
+          </div>
+        </>
+      )}
+
+      {step === "productBases" && (
+        <div className="bg-white p-6 rounded-md shadow-sm">
+          <ProductBasesTab onBack={() => setStep("catalog")} />
+        </div>
+      )}
+
+      {step === "productLookup" && (
+        <div className="bg-white p-6 rounded-md shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-2xl font-semibold">Pesquisar Código (Bases de Produtos)</h2>
+              <p className="text-sm text-muted-foreground">Pesquise em todas as bases do tipo "Base de Produtos" e adicione itens ao orçamento.</p>
             </div>
 
-            <div className="bg-white p-6 rounded shadow-sm">
-              <QuoteBuilder items={quoteItems.map(q => ({ id: q.id, product: q.product, quantity: q.quantity, priceModel: q.priceModel, unitPrice: q.unitPrice }))} onRemoveItem={(id) => handleRemoveItem(id)} onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)} onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)} onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)} onGenerateProposal={() => { if (quoteItems.length === 0) { toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta"); return; } setStep("form"); }} />
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
             </div>
           </div>
-        )}
 
-        {step === "form" && (
+          <div className="flex gap-2 mb-4">
+            <Input placeholder="Digite SKU / código / parte do nome..." value={lookupQuery} onChange={(e) => setLookupQuery(e.target.value)} />
+            <Button onClick={runLookup} disabled={lookupLoading || !lookupQuery}>Buscar</Button>
+          </div>
+
           <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Dados da Empresa</h2>
-                <p className="text-sm text-muted-foreground">Preencha os dados para gerar a proposta</p>
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setStep("catalog")}>Cancelar</Button>
-              </div>
-            </div>
+            {lookupLoading ? (
+              <div>Buscando...</div>
+            ) : (
+              <div className="space-y-3">
+                {lookupResults.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">Nenhum resultado. Verifique se você possui bases do tipo 'Base de Produtos' em Configurações.</div>
+                ) : (
+                  lookupResults.map((r, idx) => (
+                    <div key={idx} className="border rounded p-3">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">{r.base.name} — {r.base.headers.join(", ")}</div>
+                          <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.created_at).toLocaleDateString()}</div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button onClick={() => handleAddFromLookupRow(r.headers, r.row)}>Adicionar</Button>
+                        </div>
+                      </div>
 
-            <div className="bg-white p-6 rounded shadow-sm">
-              <ProposalForm onSubmit={(data) => onProposalSubmit(data)} onCancel={() => setStep("catalog")} />
+                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
+                        {r.base.headers.map((h, i) => (
+                          <div key={i} className="flex flex-col">
+                            <div className="text-xs text-muted-foreground">{h}</div>
+                            <div className="font-medium">{String(r.row[i] ?? "")}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {step === "review" && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-2xl font-semibold">Revisar Itens do Orçamento</h2>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
+              <Button onClick={openProposalForm}>Continuar</Button>
             </div>
           </div>
-        )}
 
-        {step === "summary" && proposalData && (
-          <div>
-            <div className="mb-6 flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-semibold">Resumo da Proposta</h2>
-                <p className="text-sm text-muted-foreground">Confirme antes de gerar o arquivo</p>
-              </div>
+          <div className="bg-white p-6 rounded shadow-sm">
+            <QuoteBuilder items={quoteItems.map(q => ({ id: q.id, product: q.product, quantity: q.quantity, priceModel: q.priceModel, unitPrice: q.unitPrice }))} onRemoveItem={(id) => handleRemoveItem(id)} onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)} onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)} onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)} onGenerateProposal={() => { if (quoteItems.length === 0) { toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta"); return; } setStep("form"); }} />
+          </div>
+        </div>
+      )}
+
+      {step === "form" && (
+        <div>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">Dados da Empresa</h2>
+              <p className="text-sm text-muted-foreground">Preencha os dados para gerar a proposta</p>
             </div>
-
-            <div className="bg-white p-6 rounded shadow-sm">
-              <ProposalSummary items={quoteItems} proposalData={proposalData} onConfirm={onConfirmAndGenerate} onBack={onSummaryBack} />
-              <div className="mt-4">
-                <Button onClick={onConfirmAndGenerate} disabled={saving}>{saving ? "Gerando e Salvando..." : "Confirmar e Salvar"}</Button>
-              </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setStep("catalog")}>Cancelar</Button>
             </div>
           </div>
-        )}
 
-        {step === "history" && (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
-              <h2 className="text-2xl font-semibold">Histórico de Orçamentos</h2>
-              <Button variant="outline" onClick={backToCatalog}>Voltar</Button>
-            </div>
+          <div className="bg-white p-6 rounded shadow-sm">
+            <ProposalForm onSubmit={(data) => onProposalSubmit(data)} onCancel={() => setStep("catalog")} />
+          </div>
+        </div>
+      )}
 
-            <div className="bg-white p-6 rounded shadow-sm">
-              <QuoteHistory onQuoteSelect={(q) => toast.info("Abrir orçamento selecionado: " + q.proposalNumber)} />
+      {step === "summary" && proposalData && (
+        <div>
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-semibold">Resumo da Proposta</h2>
+              <p className="text-sm text-muted-foreground">Confirme antes de gerar o arquivo</p>
             </div>
           </div>
-        )}
-      </div>
+
+          <div className="bg-white p-6 rounded shadow-sm">
+            <ProposalSummary items={quoteItems} proposalData={proposalData} onConfirm={onConfirmAndGenerate} onBack={onSummaryBack} />
+            <div className="mt-4">
+              <Button onClick={onConfirmAndGenerate} disabled={saving}>{saving ? "Gerando e Salvando..." : "Confirmar e Salvar"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {step === "history" && (
+        <div>
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-2xl font-semibold">Histórico de Orçamentos</h2>
+            <Button variant="outline" onClick={backToCatalog}>Voltar</Button>
+          </div>
+
+          <div className="bg-white p-6 rounded shadow-sm">
+            <QuoteHistory onQuoteSelect={(q) => toast.info("Abrir orçamento selecionado: " + q.proposalNumber)} />
+          </div>
+        </div>
+      )}
 
       <ConfirmModal open={confirmClearOpen} title="Limpar orçamento?" description="Isso removerá todos os itens do orçamento atual. Deseja continuar?" confirmLabel="Sim, limpar" cancelLabel="Cancelar" onConfirm={handleConfirmClear} onCancel={handleCancelClear} />
 
       {quoteItems.length > 0 && (
-        <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none">
+        <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none ml-[var(--sidebar-width)]">
           <div className="w-full max-w-3xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
             <div className="flex-1">
               <div className="text-sm text-muted-foreground">Itens: <span className="font-medium">{totalItemsCount}</span></div>

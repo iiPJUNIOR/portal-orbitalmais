@@ -9,9 +9,36 @@ import Settings from "./pages/Settings";
 import TokenScanner from "./pages/TokenScanner";
 import Login from "./pages/Login";
 import { SessionProvider } from "@/contexts/SessionProvider";
-import UserMenu from "@/components/UserMenu";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { AppSidebar } from "@/components/AppSidebar";
 
 const queryClient = new QueryClient();
+
+const AppContent = () => (
+  <Routes>
+    <Route path="/login" element={<Login />} />
+    <Route 
+      path="/*" 
+      element={
+        <div className="flex min-h-screen w-full">
+          <AppSidebar />
+          <main className="flex-1 overflow-auto bg-gray-50">
+            <div className="p-4 flex items-center border-b bg-white sticky top-0 z-40 lg:hidden">
+              <SidebarTrigger />
+              <span className="ml-4 font-semibold">Menu</span>
+            </div>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="/token-scan" element={<TokenScanner />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </main>
+        </div>
+      } 
+    />
+  </Routes>
+);
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -20,19 +47,9 @@ const App = () => (
       <Sonner />
       <BrowserRouter>
         <SessionProvider>
-          {/* Global user menu fixed in the top-right corner */}
-          <div className="fixed top-4 right-4 z-50">
-            <UserMenu />
-          </div>
-
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<Index />} />
-            <Route path="/settings" element={<Settings />} />
-            <Route path="/token-scan" element={<TokenScanner />} />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <SidebarProvider>
+            <AppContent />
+          </SidebarProvider>
         </SessionProvider>
       </BrowserRouter>
     </TooltipProvider>
