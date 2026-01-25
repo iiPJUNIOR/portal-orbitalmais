@@ -100,10 +100,7 @@ export const generateProposalNumber = (dealId?: string, version?: string | numbe
 export const formatDateForProposal = (dateStr?: string | null): string => {
   try {
     if (!dateStr) return new Date().toLocaleDateString('pt-BR');
-    // Handle DD/MM/AAAA or AAAA-MM-DD
-    if (dateStr.includes("/")) {
-      return dateStr;
-    }
+    if (dateStr.includes("/")) return dateStr;
     let dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
     return dt.toLocaleDateString('pt-BR');
   } catch { return dateStr || ""; }
@@ -133,15 +130,21 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       ? Number(data.overrideTotal)
       : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
     
-    replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(computedTotal);
+    // Formatação de número sem o R$ para evitar duplicação (o template geralmente já tem o R$)
+    const formattedNumber = new Intl.NumberFormat("pt-BR", { 
+      minimumFractionDigits: 2, 
+      maximumFractionDigits: 2 
+    }).format(computedTotal);
+    
+    replacements["totalPrice"] = formattedNumber;
 
-    // Listas de itens (multilinhas)
     const mainItems: string[] = [];
     const serviceItems: string[] = [];
     const mechanicalItems: string[] = [];
 
     data.items.forEach(it => {
-      const line = `${it.product.description} – ${it.quantity} un – ${it.product.model}`;
+      // Ajuste na linha: apenas descrição e quantidade para evitar redundância
+      const line = `${it.product.description} – ${it.quantity} un`;
       const cat = it.product.category?.toLowerCase() || "";
       const model = it.product.model?.toLowerCase() || "";
       
@@ -158,9 +161,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = serviceItems.join("\n");
     replacements["items_list2"] = mechanicalItems.join("\n");
 
-    // Lógica de seleção de slides
     const keepSlides = [1, 2, 3, 4];
-    for (let i = 5; i <= 18; i++) keepSlides.push(i); // Slides fixos
+    for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 55);
 
     let hasCatraca = false;
@@ -172,11 +174,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
-      
-      // Encontrar slide do produto
       let foundSlide = MODEL_TO_SLIDE[modelLower];
       if (!foundSlide) {
-        // Busca parcial se não houver exata
         const key = Object.keys(MODEL_TO_SLIDE).find(k => modelLower.includes(k));
         if (key) foundSlide = MODEL_TO_SLIDE[key];
       }
@@ -186,7 +185,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
         if (foundSlide >= 30 && foundSlide <= 42) hasCatraca = true;
       }
 
-      // Regras de slides condicionais
       const install = it.installationData;
       if (modelLower.includes("idface pro")) {
         if (install?.entryTech === 'facial' && install?.exitTech === 'botoeira') hasIdFaceProForSlide47 = true;
