@@ -56,7 +56,8 @@ export default function Index() {
         ? await generateProposalPPTX(proposalData)
         : await generateProposalPDF(proposalData);
 
-      // Salvar no Supabase (apenas uma vez)
+      // Salvar no Supabase (apenas uma vez para cada proposta)
+      // O backend gerencia o conflito se necessário ou cria nova entrada
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -91,13 +92,11 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Proposta ${format.toUpperCase()} gerada com sucesso!`);
-      setStep("welcome");
+      toast.success(`Proposta ${format.toUpperCase()} gerada com sucesso!`, { id: loadToastId });
+      // Não resetamos mais o passo aqui para que o Wizard mostre a tela final (passo 6)
     } catch (err) {
       console.error(err);
-      toast.error(`Erro ao gerar ${format.toUpperCase()}.`);
-    } finally {
-      toast.dismiss(loadToastId);
+      toast.error(`Erro ao gerar ${format.toUpperCase()}.`, { id: loadToastId });
     }
   };
 

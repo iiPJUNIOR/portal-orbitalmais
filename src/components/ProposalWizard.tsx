@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 
 interface WizardProps {
@@ -27,11 +27,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const [productSearch, setProductSearch] = useState("");
   const lastFetchedCnpj = useRef<string>("");
   
-  const [formData, setFormData] = useState({
+  const initialFormState = {
     pipedriveUrl: "",
     dealId: "",
     version: "1",
-    // Usar formato YYYY-MM-DD para o input de data e compatibilidade com o banco
     date: new Date().toISOString().split('T')[0],
     companyName: "",
     contactName: "",
@@ -48,7 +47,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     qtd2: "0",
     selectedProducts: [] as any[],
     totalPrice: 0
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormState);
 
   useEffect(() => {
     const loadData = async () => {
@@ -144,6 +145,38 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     });
   };
 
+  const handleReset = () => {
+    setFormData(initialFormState);
+    setCurrentStep(1);
+    lastFetchedCnpj.current = "";
+    toast.info("Iniciando novo orçamento.");
+  };
+
+  const handleFinish = (format: 'pptx' | 'pdf') => {
+    onComplete({
+      ...formData,
+      proposalNumber: `P${Math.floor(Math.random() * 10000)} V${formData.version}`,
+      items: formData.selectedProducts.map(p => ({
+        product: { 
+          id: p.id,
+          description: p.name, 
+          model: p.name, 
+          category: p.category,
+          part_number: p.sku
+        },
+        quantity: p.quantity,
+        unitPrice: 0,
+      })),
+      proposalDate: formData.date,
+      totalPrice: formData.totalPrice
+    }, format);
+    
+    // Se estiver no passo 5, avança para o passo 6 (Conclusão)
+    if (currentStep === 5) {
+      setCurrentStep(6);
+    }
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -228,30 +261,36 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
               </div>
             </div>
+            <p className="text-sm text-muted-foreground text-center">Clique em um dos formatos abaixo para gerar e baixar sua proposta.</p>
+          </div>
+        );
+      case 6:
+        return (
+          <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95 duration-500">
+            <div className="p-4 bg-green-100 rounded-full">
+              <CheckCircle2 className="h-16 w-16 text-green-600" />
+            </div>
+            <div className="space-y-2">
+              <h2 className="text-3xl font-black text-neutral-900">Proposta Gerada!</h2>
+              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado. Você pode baixar em outro formato ou iniciar um novo processo.</p>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-4 w-full">
+              <Button variant="outline" className="h-14 rounded-2xl" onClick={() => handleFinish('pdf')}>
+                <FileDown className="mr-2 h-5 w-5" /> Baixar PDF
+              </Button>
+              <Button variant="outline" className="h-14 rounded-2xl" onClick={() => handleFinish('pptx')}>
+                <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX
+              </Button>
+            </div>
+            
+            <Button className="w-full h-14 rounded-2xl bg-neutral-900 hover:bg-neutral-800" onClick={handleReset}>
+              <RefreshCw className="mr-2 h-5 w-5" /> Iniciar Novo Orçamento
+            </Button>
           </div>
         );
       default: return null;
     }
-  };
-
-  const handleFinish = (format: 'pptx' | 'pdf') => {
-    onComplete({
-      ...formData,
-      proposalNumber: `P${Math.floor(Math.random() * 10000)} V${formData.version}`,
-      items: formData.selectedProducts.map(p => ({
-        product: { 
-          id: p.id,
-          description: p.name, 
-          model: p.name, 
-          category: p.category,
-          part_number: p.sku
-        },
-        quantity: p.quantity,
-        unitPrice: 0,
-      })),
-      proposalDate: formData.date, // Garantir campo correto
-      totalPrice: formData.totalPrice
-    }, format);
   };
 
   if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
@@ -259,24 +298,48 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   return (
     <Card className="max-w-2xl mx-auto shadow-2xl rounded-3xl overflow-hidden border-none">
       <CardHeader className="bg-neutral-900 text-white p-8">
-        <CardTitle className="text-2xl font-black">Passo {currentStep}</CardTitle>
-        <CardDescription className="text-gray-400">Gerenciando {formData.selectedProducts.length} itens no orçamento.</CardDescription>
+        <div className="flex justify-between items-center">
+          <div>
+            <CardTitle className="text-2xl font-black">
+              {currentStep === 6 ? "Concluído" : `Passo ${currentStep}`}
+            </CardTitle>
+            <CardDescription className="text-gray-400">
+              {currentStep === 6 ? "Ações disponíveis" : `Gerenciando ${formData.selectedProducts.length} itens no orçamento.`}
+            </CardDescription>
+          </div>
+          {currentStep < 6 && (
+            <div className="text-xs bg-white/10 px-3 py-1 rounded-full text-white/70">
+              {currentStep}/5
+            </div>
+          )}
+        </div>
       </CardHeader>
       <CardContent className="p-8">
         {renderStep()}
-        <div className="flex justify-between mt-10">
-          <Button variant="ghost" onClick={currentStep === 1 ? onCancel : () => setCurrentStep(prev => prev - 1)}>{currentStep === 1 ? "Cancelar" : "Voltar"}</Button>
-          <div className="flex gap-2">
-            {currentStep === 5 ? (
-              <>
-                <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}><FileDown className="mr-2 h-4 w-4" /> Gerar PDF</Button>
-                <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}><Presentation className="mr-2 h-4 w-4" /> Gerar PPTX</Button>
-              </>
-            ) : (
-              <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>Próximo <ArrowRight className="ml-2 h-4 w-4" /></Button>
-            )}
+        
+        {currentStep < 6 && (
+          <div className="flex justify-between mt-10">
+            <Button variant="ghost" onClick={currentStep === 1 ? onCancel : () => setCurrentStep(prev => prev - 1)}>
+              {currentStep === 1 ? "Cancelar" : "Voltar"}
+            </Button>
+            <div className="flex gap-2">
+              {currentStep === 5 ? (
+                <>
+                  <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}>
+                    <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
+                  </Button>
+                  <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}>
+                    <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
+                  </Button>
+                </>
+              ) : (
+                <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>
+                  Próximo <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </CardContent>
     </Card>
   );
