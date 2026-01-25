@@ -99,11 +99,21 @@ export const generateProposalNumber = (dealId?: string, version?: string | numbe
 
 export const formatDateForProposal = (dateStr?: string | null): string => {
   try {
-    if (!dateStr) return new Date().toLocaleDateString('pt-BR');
-    if (dateStr.includes("/")) return dateStr;
-    let dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
-    return dt.toLocaleDateString('pt-BR');
-  } catch { return dateStr || ""; }
+    let dt: Date;
+    if (!dateStr) {
+      dt = new Date();
+    } else if (dateStr.includes("/")) {
+      const [d, m, y] = dateStr.split("/");
+      dt = new Date(Number(y), Number(m) - 1, Number(d));
+    } else {
+      dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
+    }
+    
+    // Retorna a data com o mês por extenso: "25 de Janeiro de 2026"
+    return new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(dt);
+  } catch { 
+    return dateStr || ""; 
+  }
 };
 
 export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
