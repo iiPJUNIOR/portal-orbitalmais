@@ -51,9 +51,9 @@ type StoredBase = {
   headers: string[];
   rows: any[][];
   createdAt: string;
-  keyColumn?: string | null;
-  comIdsColumn?: string | null;
-  semIdsColumn?: string | null;
+  key_column?: string | null;
+  com_ids_column?: string | null;
+  sem_ids_column?: string | null;
 };
 
 const NO_BASES_WARN_KEY = "no_bases_warning_shown";
@@ -119,8 +119,8 @@ function productFromBaseRow(headers: string[], row: any[], idx: number): Product
       }
     }
     return "";
-  };
-
+    }
+    
   const sku = safe(["sku", "SKU", "part_number", "part number", "partnumber", "id", "code"]);
   const description = safe(["description", "Description", "descrição", "Descrição", "product", "Produto", "nome"]) || sku || `item-${idx}`;
   const model = safe(["model", "Model", "modelo", "Modelo"]) || description;
@@ -201,10 +201,30 @@ function applyFiltersToProducts(products: Product[], filters: Partial<Record<str
   return filtered;
 }
 
+// New helper to filter raw rows based on ProductFilters
+function filterBaseRows(base: StoredBase, filters: Partial<Record<string, any>>): any[][] {
+  if (!filters || Object.keys(filters).length === 0) {
+    return base.rows;
+  }
+
+  const products = base.rows.map((row, idx) => {
+    // Convert raw row to Product structure for filtering compatibility
+    const prod = productFromBaseRow(base.headers, row, idx);
+    // Attach original row data for later reconstruction
+    (prod as any)._originalRow = row;
+    return prod;
+  });
+
+  const filteredProducts = applyFiltersToProducts(products, filters);
+
+  // Return the original rows corresponding to the filtered products
+  return filteredProducts.map(p => (p as any)._originalRow);
+}
+
+
 /* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
-  const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
 
   // persisted quote items
@@ -230,17 +250,7 @@ export default function Index() {
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const debounceRef = useRef<number | null>(null);
 
-  const [catalogTab, setCatalogTab] = useState<"prices" | "products">("prices");
   const [currentFilters, setCurrentFilters] = useState<Partial<Record<string, any>> | undefined>(undefined);
-  const [productBasesCount, setProductBasesCount] = useState<number>(0);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem("quote_items", JSON.stringify(quoteItems));
-    } catch (err) {
-      console.warn("Failed to persist quote_items", err);
-    }
-  }, [quoteItems]);
 
   const [bases, setBases] = useState<StoredBase[]>(() => {
     try {
@@ -252,6 +262,18 @@ export default function Index() {
     }
   });
 
+  // New state for selected base ID and filtered rows
+  const [selectedBaseId, setSelectedBaseId] = useState<string | null>(null);
+  const [filteredRows, setFilteredRows] = useState<any[][]>([]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem("quote_items", JSON.stringify(quoteItems));
+    } catch (err) {
+      console.warn("Failed to persist quote_items", err);
+    }
+  }, [quoteItems]);
+
   useEffect(() => {
     try {
       localStorage.setItem("product_bases", JSON.stringify(bases));
@@ -260,135 +282,53 @@ export default function Index() {
     }
   }, [bases]);
 
-  // Build catalog products from saved 'catalog' bases and legacy importedProducts
-  const getCatalogProductsFromBases = (): Product[] => {
-    const out: Product[] = [];
+  // Helper to find the currently selected base object
+  const selectedBase = selectedBaseId ? bases.find(b => b.id === selectedBaseId) : undefined;
 
-    try {
-      const raw = localStorage.getItem("importedProducts");
-      if (raw) {
-        const parsed = JSON.parse(raw) as any[];
-        if (Array.isArray(parsed)) {
-          parsed.forEach((p, idx) => {
-            try {
-              out.push(normalizeImportedRow(p, idx));
-            } catch {}
-          });
-        }
-      }
-    } catch {}
-
-    bases.filter(b => b.type === "catalog").forEach((b) => {
-      b.rows.forEach((r, idx) => {
-        try {
-          const prod = productFromBaseRow(b.headers, r, idx);
-
-          // Attach complement metadata exactly as headers -> raw cell (preserve header text)
-          const complementMeta: Record<string, any> = {};
-          b.headers.forEach((h, i) => {
-            complementMeta[h] = r[i];
-          });
-          (prod as any).complementMeta = complementMeta;
-
-          // Preserve base metadata references
-          (prod as any)._baseId = b.id;
-          (prod as any)._baseName = b.name;
-          (prod as any)._baseKeyColumn = b.keyColumn ?? null;
-          (prod as any)._baseComIdsColumn = b.comIdsColumn ?? null;
-          (prod as any)._baseSemIdsColumn = b.semIdsColumn ?? null;
-
-          // If the base specified columns for 'com' and 'sem' iDSecure prices, extract them as numeric hints
-          if (b.comIdsColumn) {
-            const i = b.headers.indexOf(b.comIdsColumn);
-            if (i >= 0) {
-              const rawVal = r[i];
-              const parsed = parseSpreadsheetNumber(rawVal);
-              if (parsed > 0) {
-                (prod as any).price_com_iDSecure = parsed;
-                if (!prod.value_12m || prod.value_12m === 0) prod.value_12m = parsed;
-              }
-            }
-          }
-
-          if (b.semIdsColumn) {
-            const i = b.headers.indexOf(b.semIdsColumn);
-            if (i >= 0) {
-              const rawVal = r[i];
-              const parsed = parseSpreadsheetNumber(rawVal);
-              if (parsed > 0) {
-                (prod as any).price_sem_iDSecure = parsed;
-                if (!prod.value_24m || prod.value_24m === 0) prod.value_24m = parsed;
-              }
-            }
-          }
-
-          // If keyColumn provided, map sku/part_number
-          if (b.keyColumn) {
-            const i = b.headers.indexOf(b.keyColumn);
-            if (i >= 0) {
-              const rawKey = r[i];
-              const keyVal = rawKey !== undefined && rawKey !== null ? String(rawKey) : "";
-              if (keyVal) {
-                prod.sku = keyVal;
-                prod.part_number = keyVal;
-              }
-            }
-          }
-
-          out.push(prod);
-        } catch {}
-      });
-    });
-
-    return out;
-  };
-
-  const getProductsFromProductBases = (): Product[] => {
-    const out: Product[] = [];
-    bases.filter(b => b.type === "product").forEach((b) => {
-      b.rows.forEach((r, idx) => {
-        try {
-          const prod = productFromBaseRow(b.headers, r, idx);
-          (prod as any)._baseId = b.id;
-          (prod as any)._baseName = b.name;
-          out.push(prod);
-        } catch {}
-      });
-    });
-    return out;
-  };
-
+  // Effect to initialize selectedBaseId when bases change
   useEffect(() => {
-    try {
-      const all = getProductsFromProductBases();
-      const filtered = currentFilters && Object.keys(currentFilters).length > 0
-        ? applyFiltersToProducts(all, currentFilters)
-        : all.filter(p => p.status === "Ativo");
-      setProductBasesCount(filtered.length);
-    } catch {
-      setProductBasesCount(0);
-    }
-  }, [bases, currentFilters]);
-
-  const loadProducts = useCallback(async (filters?: Partial<Record<string, any>>) => {
-    setLoading(true);
-    try {
-      const imported = getCatalogProductsFromBases();
-
-      if (filters && Object.keys(filters).length > 0) {
-        const filtered = applyFiltersToProducts(imported, filters);
-        setProducts(filtered);
-      } else {
-        setProducts(imported.filter((p) => p.status === "Ativo"));
+    const list = bases.filter(b => b.type === "catalog" || b.type === "product");
+    if (list.length > 0) {
+      if (!selectedBaseId || !list.find((b) => b.id === selectedBaseId)) {
+        setSelectedBaseId(list[0].id);
       }
-    } catch (err) {
-      console.error("Erro ao carregar produtos:", err);
-      toast.error("Erro ao carregar produtos");
-      setProducts([]);
-    } finally {
+    } else {
+      setSelectedBaseId(null);
+    }
+  }, [bases, selectedBaseId]);
+
+  // Effect to apply filtering whenever selectedBaseId or currentFilters change
+  useEffect(() => {
+    if (selectedBase) {
+      setLoading(true);
+      // Debounce filtering logic
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+      }
+      
+      debounceRef.current = window.setTimeout(() => {
+        try {
+          const rows = filterBaseRows(selectedBase, currentFilters);
+          setFilteredRows(rows);
+        } catch (err) {
+          console.error("Error filtering base rows:", err);
+          setFilteredRows(selectedBase.rows);
+        } finally {
+          setLoading(false);
+        }
+      }, 250); // Use a short debounce for filtering
+
+      return () => {
+        if (debounceRef.current) {
+          window.clearTimeout(debounceRef.current);
+        }
+      };
+    } else {
+      setFilteredRows([]);
       setLoading(false);
     }
-  }, [bases]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedBaseId, currentFilters, bases]);
 
   useEffect(() => {
     return () => {
@@ -403,10 +343,6 @@ export default function Index() {
     };
   }, []);
 
-  useEffect(() => {
-    loadProducts();
-  }, [loadProducts, bases]);
-
   // Try to load product bases from the server on mount (and persist to localStorage for backward-compat)
   useEffect(() => {
     let mounted = true;
@@ -419,12 +355,6 @@ export default function Index() {
           try {
             localStorage.setItem("product_bases", JSON.stringify(serverBases));
           } catch {}
-          // refresh products after loading bases
-          setTimeout(() => {
-            try {
-              loadProducts(currentFilters);
-            } catch {}
-          }, 0);
         }
       } catch (err) {
         // non-fatal; keep existing local bases if any
@@ -446,12 +376,6 @@ export default function Index() {
         try {
           localStorage.setItem("product_bases", JSON.stringify(toSet));
         } catch {}
-        // refresh products using current filters
-        setTimeout(() => {
-          try {
-            loadProducts(currentFilters);
-          } catch {}
-        }, 0);
       } catch (err) {
         console.warn("Failed to reload product_bases from server", err);
         // Fallback: try to read from localStorage (legacy flow)
@@ -459,11 +383,6 @@ export default function Index() {
           const raw = localStorage.getItem("product_bases");
           const parsed = raw ? JSON.parse(raw) : [];
           setBases(Array.isArray(parsed) ? parsed : []);
-          setTimeout(() => {
-            try {
-              loadProducts(currentFilters);
-            } catch {}
-          }, 0);
         } catch (err2) {
           console.warn("Failed to reload product_bases from storage after server fetch failed", err2);
         }
@@ -474,7 +393,7 @@ export default function Index() {
     return () => {
       window.removeEventListener("product_bases_changed", handler);
     };
-  }, [loadProducts, currentFilters]);
+  }, []);
 
   // Helper to show the no-bases warning only once per login/session
   function showNoBasesWarning() {
@@ -489,57 +408,62 @@ export default function Index() {
     }
   }
 
-  const debouncedLoad = (filters?: any, delay = 250) => {
+  const debouncedLoad = (filters?: any) => {
     setCurrentFilters(filters);
-
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-    }
-
-    const search = (filters?.search ?? "").toString().trim();
-    const otherFiltersExist = Object.keys(filters || {}).some((k) => k !== "search" && filters[k] !== undefined && filters[k] !== "");
-    const imported = getCatalogProductsFromBases();
-
-    if (!search && !otherFiltersExist) {
-      if (imported.length === 0) {
-        setProducts([]);
-        setLoading(false);
-        showNoBasesWarning();
-        return;
-      } else {
-        setProducts(imported.filter(p => p.status === "Ativo"));
-        setLoading(false);
-        return;
-      }
-    }
-
-    if (imported.length === 0) {
-      setProducts([]);
-      setLoading(false);
-      showNoBasesWarning();
-      return;
-    }
-
-    debounceRef.current = window.setTimeout(() => {
-      loadProducts(filters);
-      debounceRef.current = null;
-    }, delay);
+    // Filtering is handled by the useEffect hook based on selectedBaseId and currentFilters
   };
 
   const reloadFromBases = () => {
-    const imported = getCatalogProductsFromBases();
-    if (imported.length === 0) {
-      showNoBasesWarning();
-      setProducts([]);
-      return;
+    toast.success("Recarregando bases...");
+    window.dispatchEvent(new Event("product_bases_changed"));
+  };
+
+  const handleAddFromLookupRow = (headers: string[], row: any[], quantity = 1) => {
+    const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
+    
+    let unitPrice: number | undefined = undefined;
+    
+    // Find the base that provided this row (if possible, though this function is usually called from PriceBaseTable which uses the current base)
+    const sourceBase = bases.find(b => b.headers === headers && b.rows.some(r => r === row));
+    
+    if (sourceBase) {
+        const comIdsCol = sourceBase.com_ids_column;
+        const semIdsCol = sourceBase.sem_ids_column;
+        
+        if (comIdsCol) {
+            const i = headers.indexOf(comIdsCol);
+            if (i >= 0) {
+                unitPrice = parseSpreadsheetNumber(row[i]);
+            }
+        } else if (semIdsCol) {
+            const i = headers.indexOf(semIdsCol);
+            if (i >= 0) {
+                unitPrice = parseSpreadsheetNumber(row[i]);
+            }
+        }
     }
-    loadProducts();
-    toast.success("Catálogo recarregado a partir das bases");
+
+    if (unitPrice === undefined || unitPrice === 0) {
+        unitPrice = prod.value_12m || prod.value_24m;
+    }
+
+    const productWithPrices: Product = {
+        ...prod,
+        value_12m: prod.value_12m || (unitPrice ?? 0),
+        value_24m: prod.value_24m || (unitPrice ?? 0),
+        // Attach complement metadata for ProductTable compatibility (although we are not using ProductTable anymore)
+        complementMeta: headers.reduce((acc: any, h, i) => { acc[h] = row[i]; return acc; }, {}),
+        price_com_iDSecure: unitPrice, // Use unitPrice as a hint for the selected price
+        price_sem_iDSecure: unitPrice,
+    };
+
+    handleAddToQuote(productWithPrices, quantity, unitPrice);
   };
 
   const handleAddToQuote = (product: Product, quantity: number, unitPrice?: number) => {
     const existing = quoteItems.find((it) => it.product.id === product.id);
-    const defaultUnit = product.value_12m;
+    
+    const defaultUnit = product.value_12m || product.value_24m || 0;
     const chosenUnit = unitPrice ?? defaultUnit;
 
     if (existing) {
@@ -550,27 +474,11 @@ export default function Index() {
         ]
       );
     } else {
-      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: "12m", unitPrice: chosenUnit };
+      const priceModel: '12m' | '24m' = (product as any).priceModel || '12m';
+      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel, unitPrice: chosenUnit };
       setQuoteItems((prev) => [newItem, ...prev]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
-  };
-
-  const handleAddFromLookupRow = (headers: string[], row: any[], quantity = 1) => {
-    const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
-    const skuCandidates = [prod.sku, prod.part_number].filter(Boolean).map(String);
-    let foundPrice: number | undefined = undefined;
-
-    const catalogProducts = getCatalogProductsFromBases();
-    for (const candidate of skuCandidates) {
-      const found = catalogProducts.find(p => String(p.sku) === candidate || String(p.part_number) === candidate);
-      if (found) {
-        foundPrice = found.value_12m || found.value_24m;
-        break;
-      }
-    }
-
-    handleAddToQuote(prod, quantity, foundPrice);
   };
 
   const handleRemoveItem = (id: string) => {
@@ -789,36 +697,15 @@ export default function Index() {
     }
   };
 
-  const productBasesProductsAll = getProductsFromProductBases();
-  const productBasesProductsFiltered = currentFilters && Object.keys(currentFilters).length > 0
-    ? applyFiltersToProducts(productBasesProductsAll, currentFilters)
-    : productBasesProductsAll.filter(p => p.status === "Ativo");
+  const allBases = bases.filter(b => b.type === "catalog" || b.type === "product");
+  const currentBaseForDisplay = selectedBase ? {
+    ...selectedBase,
+    rows: filteredRows,
+  } : undefined;
 
-  const productBasesList = bases.filter(b => b.type === "product");
-  const [selectedProductBaseId, setSelectedProductBaseId] = useState<string | null>(productBasesList[0]?.id ?? null);
-  const [baseRowQuantities, setBaseRowQuantities] = useState<Record<number, number>>({});
+  const filteredProductsCount = filteredRows.length;
+  const totalProductsCount = selectedBase ? selectedBase.rows.length : 0;
 
-  useEffect(() => {
-    const list = bases.filter(b => b.type === "product");
-    if (list.length === 0) {
-      setSelectedProductBaseId(null);
-    } else {
-      if (!selectedProductBaseId || !list.find((b) => b.id === selectedProductBaseId)) {
-        setSelectedProductBaseId(list[0].id);
-      }
-    }
-  }, [bases]);
-
-  useEffect(() => setBaseRowQuantities({}), [selectedProductBaseId]);
-
-  const setQuantityForRow = (rowIndex: number, qty: number) => {
-    setBaseRowQuantities((prev) => ({ ...prev, [rowIndex]: Math.max(1, Math.min(999, Number(isNaN(qty) ? 1 : qty))) }));
-  };
-
-  const selectedBase: StoredBase | undefined = selectedProductBaseId ? bases.find(b => b.id === selectedProductBaseId) : undefined;
-
-  // Determine first catalog base to display exactly as preview (most recent catalog)
-  const firstCatalogBase = bases.find((b) => b.type === "catalog");
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -831,9 +718,9 @@ export default function Index() {
 
           <div className="flex gap-2">
             <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
-            <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Base de Produtos</Button>
+            <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Gerenciar Bases</Button>
             <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
-            <Button variant="outline" onClick={() => navigate("/settings")}>Configurações / Bases</Button>
+            <Button variant="outline" onClick={() => navigate("/settings")}>Configurações</Button>
             <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
             <Button onClick={openHistory}>Histórico</Button>
           </div>
@@ -848,158 +735,42 @@ export default function Index() {
                 </section>
 
                 <section className="bg-white p-4 rounded-md shadow-sm">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <button
-                        className={`px-3 py-1 rounded-md text-sm font-medium ${catalogTab === "prices" ? "bg-gray-100" : "hover:bg-gray-50"}`}
-                        onClick={() => setCatalogTab("prices")}
-                      >
-                        Preços {loading ? "" : <span className="text-muted-foreground text-sm">({products.length})</span>}
-                      </button>
-
-                      <button
-                        className={`px-3 py-1 rounded-md text-sm font-medium ${catalogTab === "products" ? "bg-gray-100" : "hover:bg-gray-50"}`}
-                        onClick={() => setCatalogTab("products")}
-                      >
-                        Base de Produtos {<span className="text-muted-foreground text-sm">({productBasesCount})</span>}
-                      </button>
+                  <div className="flex items-center justify-between mb-4 border-b pb-2">
+                    <div className="flex items-center gap-3 overflow-x-auto">
+                      {allBases.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
+                      ) : (
+                        allBases.map((b) => (
+                          <button
+                            key={b.id}
+                            className={`px-3 py-1 rounded-md text-sm font-medium whitespace-nowrap ${selectedBaseId === b.id ? "bg-primary text-primary-foreground" : "hover:bg-gray-100 bg-gray-50 text-gray-700"}`}
+                            onClick={() => setSelectedBaseId(b.id)}
+                          >
+                            {b.name} <span className="text-xs opacity-70">({b.rows.length})</span>
+                          </button>
+                        ))
+                      )}
                     </div>
 
-                    <div className="text-sm text-muted-foreground">{loading ? "Carregando..." : `${catalogTab === "prices" ? `${products.length} produtos` : `${productBasesProductsFiltered.length} produtos`}`}</div>
+                    <div className="text-sm text-muted-foreground whitespace-nowrap">
+                      {loading ? "Carregando..." : \`Exibindo \${filteredProductsCount} de \${totalProductsCount} produtos\`}
+                    </div>
                   </div>
 
                   <div>
-                    {loading && catalogTab === "prices" ? (
-                      <div className="p-8 text-center text-muted-foreground">Carregando produtos...</div>
+                    {loading && !currentBaseForDisplay ? (
+                      <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                     ) : (
                       <>
-                        {catalogTab === "prices" ? (
-                          // If we have at least one catalog base, render it exactly as saved (preview fidelity).
-                          firstCatalogBase ? (
-                            <PriceBaseTable
-                              base={firstCatalogBase}
-                              onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
-                            />
-                          ) : (
-                            <ProductTable products={products} onAddToQuote={handleAddToQuote} />
-                          )
+                        {currentBaseForDisplay ? (
+                          <PriceBaseTable
+                            base={currentBaseForDisplay as StoredBase}
+                            onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
+                          />
                         ) : (
-                          <>
-                            {productBasesList.length === 0 ? (
-                              <div className="p-6 text-sm text-muted-foreground">
-                                Nenhuma base de produtos encontrada. Crie/importe uma base em <strong>Configurações</strong>.
-                              </div>
-                            ) : (
-                              <div>
-                                <div className="mb-4 flex items-center gap-3">
-                                  <label className="text-sm text-muted-foreground">Base:</label>
-                                  <select
-                                    className="border rounded px-2 py-1"
-                                    value={selectedProductBaseId ?? ""}
-                                    onChange={(e) => setSelectedProductBaseId(e.target.value || null)}
-                                  >
-                                    {productBasesList.map((b) => (
-                                      <option key={b.id} value={b.id}>
-                                        {b.name} ({b.rows.length})
-                                      </option>
-                                    ))}
-                                  </select>
-
-                                  <Button variant="outline" onClick={() => {
-                                    try {
-                                      const raw = localStorage.getItem("product_bases");
-                                      if (!raw) {
-                                        setBases([]);
-                                        toast.info("Bases recarregadas (nenhuma encontrada)");
-                                        return;
-                                      }
-                                      const parsed = JSON.parse(raw) as StoredBase[];
-                                      setBases(Array.isArray(parsed) ? parsed : []);
-                                      toast.success("Bases recarregadas");
-                                    } catch (err) {
-                                      console.warn("failed reload bases", err);
-                                      toast.error("Falha ao recarregar bases");
-                                    }
-                                  }}>Recarregar bases</Button>
-                                </div>
-
-                                {selectedBase ? (
-                                  <div className="overflow-auto border rounded">
-                                    <table className="w-full text-sm">
-                                      <thead className="bg-gray-50">
-                                        <tr>
-                                          {selectedBase.headers.map((h, hi) => (
-                                            <th key={hi} className="text-left px-2 py-2 align-top">{h || "(vazio)"}</th>
-                                          ))}
-                                          <th className="text-left px-2 py-2">Quantidade</th>
-                                          <th className="text-left px-2 py-2">Ações</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {selectedBase.rows.length === 0 ? (
-                                          <tr>
-                                            <td colSpan={selectedBase.headers.length + 2} className="py-8 text-center text-muted-foreground">
-                                              Esta base não contém linhas.
-                                            </td>
-                                          </tr>
-                                        ) : (
-                                          selectedBase.rows.map((row, ri) => (
-                                            <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                                              {selectedBase.headers.map((_, ci) => (
-                                                <td key={ci} className="px-2 py-2 align-top break-words">{String(row[ci] ?? "")}</td>
-                                              ))}
-
-                                              <td className="px-2 py-2">
-                                                <Input
-                                                  type="number"
-                                                  min={1}
-                                                  value={baseRowQuantities[ri] ?? 1}
-                                                  onChange={(e) => setQuantityForRow(ri, parseInt(e.target.value || "1", 10))}
-                                                  className="w-24"
-                                                />
-                                              </td>
-
-                                              <td className="px-2 py-2">
-                                                <div className="flex gap-2">
-                                                  <Button onClick={() => handleAddFromLookupRow(selectedBase.headers, row, baseRowQuantities[ri] ?? 1)}>
-                                                    Adicionar
-                                                  </Button>
-
-                                                  <Button variant="outline" onClick={() => {
-                                                    try {
-                                                      const payload = selectedBase.headers.reduce((acc: any, h, idx) => {
-                                                        acc[h] = row[idx];
-                                                        return acc;
-                                                      }, {});
-                                                      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-                                                      const url = URL.createObjectURL(blob);
-                                                      const a = document.createElement("a");
-                                                      a.href = url;
-                                                      a.download = `row-${selectedBase.name.replace(/\s+/g, "-") || selectedBase.id}-${ri}.json`;
-                                                      document.body.appendChild(a);
-                                                      a.click();
-                                                      document.body.removeChild(a);
-                                                      URL.revokeObjectURL(url);
-                                                      toast.success("Linha exportada");
-                                                    } catch (err) {
-                                                      console.error("export row failed", err);
-                                                      toast.error("Falha ao exportar linha");
-                                                    }
-                                                  }}>Exportar</Button>
-                                                </div>
-                                              </td>
-                                            </tr>
-                                          ))
-                                        )}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                ) : (
-                                  <div className="p-6 text-sm text-muted-foreground">Selecione uma base para visualizar as colunas e linhas.</div>
-                                )}
-                              </div>
-                            )}
-                          </>
+                          <div className="p-6 text-sm text-muted-foreground text-center">
+                            Selecione ou importe uma base em Configurações.
+                          </div>
                         )}
                       </>
                     )}
@@ -1100,7 +871,7 @@ export default function Index() {
                         <div className="flex justify-between items-start">
                           <div>
                             <div className="font-medium">{r.base.name} — {r.base.headers.join(", ")}</div>
-                            <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.createdAt).toLocaleDateString()}</div>
+                            <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.created_at).toLocaleDateString()}</div>
                           </div>
                           <div className="flex gap-2">
                             <Button onClick={() => handleAddFromLookupRow(r.headers, r.row)}>Adicionar</Button>
