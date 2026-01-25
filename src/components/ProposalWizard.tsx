@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
@@ -49,7 +49,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     qtd2: "0",
     selectedProducts: [] as any[],
     totalPrice: 0,
-    includeApprovalPage: true
+    includeApprovalPage: true,
+    approvalLink: ""
   };
 
   const [formData, setFormData] = useState(initialFormState);
@@ -299,15 +300,33 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </div>
             </div>
             
-            <div className="flex items-center justify-between p-4 border rounded-2xl bg-white shadow-sm">
-              <div className="space-y-0.5">
-                <Label className="text-base font-bold">Página de Aprovação</Label>
-                <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-4 border rounded-2xl bg-white shadow-sm">
+                <div className="space-y-0.5">
+                  <Label className="text-base font-bold">Página de Aprovação</Label>
+                  <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
+                </div>
+                <Switch 
+                  checked={formData.includeApprovalPage} 
+                  onCheckedChange={(checked) => setFormData(prev => ({ ...prev, includeApprovalPage: checked }))} 
+                />
               </div>
-              <Switch 
-                checked={formData.includeApprovalPage} 
-                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, includeApprovalPage: checked }))} 
-              />
+
+              {formData.includeApprovalPage && (
+                <div className="p-4 border border-dashed rounded-2xl bg-neutral-50 space-y-3 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2 text-primary">
+                    <LinkIcon className="h-4 w-4" />
+                    <Label className="font-bold">Link de Aprovação</Label>
+                  </div>
+                  <Input 
+                    placeholder="Cole aqui o link (ex: formulário ou link do Pipedrive)" 
+                    value={formData.approvalLink}
+                    onChange={e => setFormData(prev => ({ ...prev, approvalLink: e.target.value }))}
+                    className="bg-white"
+                  />
+                  <p className="text-[10px] text-muted-foreground">O link será incorporado no botão de aprovação da proposta.</p>
+                </div>
+              )}
             </div>
 
             <p className="text-sm text-muted-foreground text-center">Clique em um dos formatos abaixo para gerar e baixar sua proposta.</p>

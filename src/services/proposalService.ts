@@ -38,6 +38,7 @@ interface ProposalData {
   totalPrice?: number;
   overrideTotal?: number | null;
   includeApprovalPage?: boolean;
+  approvalLink?: string;
 }
 
 const MODEL_TO_SLIDE: Record<string, number> = {
@@ -102,6 +103,7 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       users: data.users || 0,
       devices: data.devices || 0,
       totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
+      approvalLink: data.approvalLink || "",
     };
 
     replacements["items_list"] = data.items[0] ? data.items[0].product.description : "";
@@ -281,7 +283,17 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     doc.rect(0, 0, width, height, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(30);
-    doc.text("CLIQUE AQUI PARA APROVAR SUA PROPOSTA", width / 2, height / 2, { align: 'center' });
+    const approvalText = "CLIQUE AQUI PARA APROVAR SUA PROPOSTA";
+    
+    if (data.approvalLink) {
+      doc.text(approvalText, width / 2, height / 2, { align: 'center' });
+      // Adiciona o link sobre o texto
+      doc.link(width / 2 - 100, height / 2 - 10, 200, 20, { url: data.approvalLink });
+      doc.setFontSize(12);
+      doc.text(data.approvalLink, width / 2, height / 2 + 15, { align: 'center' });
+    } else {
+      doc.text(approvalText, width / 2, height / 2, { align: 'center' });
+    }
   }
 
   return doc.output('blob');
