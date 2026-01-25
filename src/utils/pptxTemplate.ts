@@ -39,38 +39,38 @@ function loadPlainMapping(): Record<string, string> {
 /**
  * PowerPoint often splits tokens with XML tags like:
  * {{<a:t>companyName</a:t>}}
- * This function "heals" these split tokens by finding the pattern and merging them
- * into a single clean text run before replacement.
+ * This function safely "heals" these split tokens by concatenating text runs
+ * within a paragraph without breaking the XML tag structure.
  */
 function healTokensInXml(xml: string): string {
-  // 1. First, handle the most common case: tokens split across multiple <a:t> nodes
-  // This finds paragraphs <a:p> and tries to simplify their runs
+  // Encontra blocos de parágrafo <a:p>
   const paragraphRegex = /<a:p>([\s\S]*?)<\/a:p>/gi;
   
   return xml.replace(paragraphRegex, (pMatch, pContent) => {
-    // Extract all text content from <a:t> tags within this paragraph
-    const textNodeRegex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
-    const runs: string[] = [];
+    // Regex para capturar tags <a:t> mantendo abertura, conteúdo e fechamento
+    const textNodeRegex = /(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi;
+    const runs: { open: string; text: string; close: string }[] = [];
+    
     let match;
     while ((match = textNodeRegex.exec(pContent)) !== null) {
-      runs.push(match[1]);
+      runs.push({ open: match[1], text: match[2], close: match[3] });
     }
 
-    const fullText = runs.join("");
-    // If there's no potential token, don't touch it
-    if (!fullText.includes("{{")) return pMatch;
+    if (runs.length === 0) return pMatch;
 
-    // If we find a token, we rebuild the first <a:t> with the full content
-    // and empty out the others to maintain structure but allow regex to work
-    let replaced = false;
-    const healedContent = pContent.replace(textNodeRegex, (tFull, tOpen, tClose) => {
-      if (!replaced) {
-        replaced = true;
-        // Inject the full concatenated text into the first node
-        return tOpen.replace(/>([\s\S]*)$/, `>${fullText}`);
+    const fullText = runs.map(r => r.text).join("");
+    // Se não houver chance de ter um token aqui, não mexemos no XML original
+    if (!fullText.includes("{{") && !fullText.includes("}}")) return pMatch;
+
+    // Reconstrói o conteúdo do parágrafo: coloca todo o texto no primeiro run e esvazia os outros
+    // Isso mantém o estilo original e cura tokens quebrados sem corromper as tags
+    let runIndex = 0;
+    const healedContent = pContent.replace(textNodeRegex, () => {
+      const r = runs[runIndex++];
+      if (runIndex === 1) {
+        return r.open + fullText + r.close;
       }
-      // Empty subsequent nodes
-      return tOpen.replace(/>([\s\S]*)$/, `>`);
+      return r.open + r.close; // Tag vazia mas válida
     });
 
     return `<a:p>${healedContent}</a:p>`;
@@ -80,22 +80,23 @@ function healTokensInXml(xml: string): string {
 function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   
-  // 1. Heal split tokens first
+  // 1. Cura os tokens fragmentados (Essencial para PowerPoint)
   out = healTokensInXml(out);
 
-  // 2. Apply main replacements
+  // 2. Aplica as substituições principais
   for (const [key, val] of Object.entries(replacements || {})) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Regex flexível para espaços dentro das chaves
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     out = out.replace(regex, String(val ?? ""));
   }
 
-  // 3. Apply manual mappings from TokenScanner
+  // 3. Aplica os mapeamentos manuais salvos no localStorage (TokenScanner)
   const plainMap = loadPlainMapping();
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
-    // Use split/join for fixed string replacement
+    // Substituição literal exata conforme detectada pelo scanner
     out = out.split(sourceText).join(val);
   }
 
@@ -108,6 +109,7 @@ async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
       const resp = await fetch(url);
       if (!resp.ok) continue;
       const buffer = await resp.arrayBuffer();
+      // Valida assinatura de arquivo ZIP (PK...)
       const view = new Uint8Array(buffer.slice(0, 4));
       if (view[0] === 0x50 && view[1] === 0x4b) return buffer;
     } catch {
