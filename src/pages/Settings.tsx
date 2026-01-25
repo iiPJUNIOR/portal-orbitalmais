@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings } from "@/services/settingsService";
@@ -139,6 +139,23 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          <Card className="border-primary/20 shadow-lg">
+            <CardHeader className="bg-primary/5">
+              <CardTitle className="flex items-center gap-2">
+                <ScanText className="h-5 w-5" />
+                Mapeamento de Tokens do Template
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground mb-4">
+                Se campos como <strong>Razão Social</strong> ou <strong>CNPJ</strong> não estiverem saindo na proposta, use esta ferramenta para sincronizar os nomes das variáveis do seu arquivo PPTX com o sistema.
+              </p>
+              <Button onClick={() => navigate("/token-scan")} className="w-full h-12 text-lg font-bold">
+                Mapear Variáveis do Template
+              </Button>
+            </CardContent>
+          </Card>
+
           <Card>
             <CardHeader><CardTitle>Importar Nova Base</CardTitle></CardHeader>
             <CardContent className="space-y-4">

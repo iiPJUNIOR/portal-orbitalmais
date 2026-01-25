@@ -37,85 +37,69 @@ function loadPlainMapping(): Record<string, string> {
 }
 
 /**
- * Replaces tokens in the provided XML string with a more aggressive approach.
+ * PowerPoint often splits tokens with XML tags like:
+ * {{<a:t>companyName</a:t>}}
+ * This function "heals" these split tokens by finding the pattern and merging them
+ * into a single clean text run before replacement.
  */
+function healTokensInXml(xml: string): string {
+  // 1. First, handle the most common case: tokens split across multiple <a:t> nodes
+  // This finds paragraphs <a:p> and tries to simplify their runs
+  const paragraphRegex = /<a:p>([\s\S]*?)<\/a:p>/gi;
+  
+  return xml.replace(paragraphRegex, (pMatch, pContent) => {
+    // Extract all text content from <a:t> tags within this paragraph
+    const textNodeRegex = /<a:t[^>]*>([\s\S]*?)<\/a:t>/gi;
+    const runs: string[] = [];
+    let match;
+    while ((match = textNodeRegex.exec(pContent)) !== null) {
+      runs.push(match[1]);
+    }
+
+    const fullText = runs.join("");
+    // If there's no potential token, don't touch it
+    if (!fullText.includes("{{")) return pMatch;
+
+    // If we find a token, we rebuild the first <a:t> with the full content
+    // and empty out the others to maintain structure but allow regex to work
+    let replaced = false;
+    const healedContent = pContent.replace(textNodeRegex, (tFull, tOpen, tClose) => {
+      if (!replaced) {
+        replaced = true;
+        // Inject the full concatenated text into the first node
+        return tOpen.replace(/>([\s\S]*)$/, `>${fullText}`);
+      }
+      // Empty subsequent nodes
+      return tOpen.replace(/>([\s\S]*)$/, `>`);
+    });
+
+    return `<a:p>${healedContent}</a:p>`;
+  });
+}
+
 function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   
-  // 1. Apply replacements from the main object
+  // 1. Heal split tokens first
+  out = healTokensInXml(out);
+
+  // 2. Apply main replacements
   for (const [key, val] of Object.entries(replacements || {})) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Regex matches {{key}}, {{ key }}, {{  key  }}, etc. Case insensitive.
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     out = out.replace(regex, String(val ?? ""));
-    
-    // Fallback for common synonyms if the user uses a different token in the template
-    if (key === 'companyName') {
-      out = out.replace(/{{\s*(razaoSocial|razãoSocial|empresa)\s*}}/gi, String(val ?? ""));
-    }
   }
 
-  // 2. Apply manual mappings from TokenScanner
+  // 3. Apply manual mappings from TokenScanner
   const plainMap = loadPlainMapping();
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
-    // sourceText is exactly what was found in the scanner (e.g. "{{companyName}}")
+    // Use split/join for fixed string replacement
     out = out.split(sourceText).join(val);
   }
 
   return out;
-}
-
-/**
- * Deeply processes <a:t> nodes to handle tokens split across multiple runs.
- * PowerPoint often splits text like {{companyName}} into <a:t>{{</a:t><a:t>companyName</a:t><a:t>}}</a:t>
- */
-function processTxBodyBlock(blockContent: string, replacements: Record<string, string | number>) {
-  const textNodeRegex = /(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi;
-  const runs: { full: string; open: string; text: string; close: string }[] = [];
-  
-  let match;
-  while ((match = textNodeRegex.exec(blockContent)) !== null) {
-    runs.push({ 
-      full: match[0], 
-      open: match[1], 
-      text: match[2], 
-      close: match[3] 
-    });
-  }
-  
-  if (runs.length === 0) return blockContent;
-
-  const fullText = runs.map(r => r.text).join("");
-  let modifiedFullText = fullText;
-
-  // Replace all available tokens in the concatenated text using regex
-  for (const [key, val] of Object.entries(replacements)) {
-    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
-    modifiedFullText = modifiedFullText.replace(regex, String(val ?? ""));
-    
-    // Add common synonyms here too for robustness
-    if (key === 'companyName') {
-      modifiedFullText = modifiedFullText.replace(/{{\s*(razaoSocial|razãoSocial|empresa)\s*}}/gi, String(val ?? ""));
-    }
-  }
-
-  // If we changed anything, we clear the other runs and put everything in the first one
-  // to maintain style as much as possible without breaking the logic.
-  if (modifiedFullText !== fullText) {
-    let replaced = false;
-    return blockContent.replace(textNodeRegex, (full, open, text, close) => {
-      if (!replaced) {
-        replaced = true;
-        return open + modifiedFullText + close;
-      }
-      return open + "" + close;
-    });
-  }
-
-  return blockContent;
 }
 
 async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
@@ -200,15 +184,7 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
-    
-    // First pass: handle split tokens within text bodies
-    const txBodyRegex = /(<a:txBody[^>]*>)([\s\S]*?)(<\/a:txBody>)/gi;
-    let modifiedContent = content.replace(txBodyRegex, (fm, ot, body, ct) => {
-      return ot + processTxBodyBlock(body, opts.replacements) + ct;
-    });
-    
-    // Second pass: handle any global replacements (non-split or outside txBody)
-    modifiedContent = applyGlobalStringReplacements(modifiedContent, opts.replacements);
+    const modifiedContent = applyGlobalStringReplacements(content, opts.replacements);
     zip.file(path, modifiedContent);
   }
 
