@@ -43,11 +43,9 @@ function loadPlainMapping(): Record<string, string> {
  * within a paragraph without breaking the XML tag structure.
  */
 function healTokensInXml(xml: string): string {
-  // Encontra blocos de parágrafo <a:p>
   const paragraphRegex = /<a:p>([\s\S]*?)<\/a:p>/gi;
   
   return xml.replace(paragraphRegex, (pMatch, pContent) => {
-    // Regex para capturar tags <a:t> mantendo abertura, conteúdo e fechamento
     const textNodeRegex = /(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi;
     const runs: { open: string; text: string; close: string }[] = [];
     
@@ -59,18 +57,15 @@ function healTokensInXml(xml: string): string {
     if (runs.length === 0) return pMatch;
 
     const fullText = runs.map(r => r.text).join("");
-    // Se não houver chance de ter um token aqui, não mexemos no XML original
     if (!fullText.includes("{{") && !fullText.includes("}}")) return pMatch;
 
-    // Reconstrói o conteúdo do parágrafo: coloca todo o texto no primeiro run e esvazia os outros
-    // Isso mantém o estilo original e cura tokens quebrados sem corromper as tags
     let runIndex = 0;
     const healedContent = pContent.replace(textNodeRegex, () => {
       const r = runs[runIndex++];
       if (runIndex === 1) {
         return r.open + fullText + r.close;
       }
-      return r.open + r.close; // Tag vazia mas válida
+      return r.open + r.close;
     });
 
     return `<a:p>${healedContent}</a:p>`;
@@ -80,23 +75,21 @@ function healTokensInXml(xml: string): string {
 function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   
-  // 1. Cura os tokens fragmentados (Essencial para PowerPoint)
+  // 1. Cura os tokens fragmentados
   out = healTokensInXml(out);
 
   // 2. Aplica as substituições principais
   for (const [key, val] of Object.entries(replacements || {})) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Regex flexível para espaços dentro das chaves
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     out = out.replace(regex, String(val ?? ""));
   }
 
-  // 3. Aplica os mapeamentos manuais salvos no localStorage (TokenScanner)
+  // 3. Aplica os mapeamentos manuais
   const plainMap = loadPlainMapping();
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
-    // Substituição literal exata conforme detectada pelo scanner
     out = out.split(sourceText).join(val);
   }
 
@@ -109,7 +102,6 @@ async function fetchTemplateArrayBufferFromCandidates(candidateUrls: string[]) {
       const resp = await fetch(url);
       if (!resp.ok) continue;
       const buffer = await resp.arrayBuffer();
-      // Valida assinatura de arquivo ZIP (PK...)
       const view = new Uint8Array(buffer.slice(0, 4));
       if (view[0] === 0x50 && view[1] === 0x4b) return buffer;
     } catch {
@@ -183,11 +175,29 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
     await pruneSlides(zip, opts.keepSlidesOverride);
   }
 
+  // 1. Processa os arquivos de slide (.xml) para substituir textos
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
     const modifiedContent = applyGlobalStringReplacements(content, opts.replacements);
     zip.file(path, modifiedContent);
+  }
+
+  // 2. Processa os arquivos de relacionamento (.rels) para substituir links (hyperlinks)
+  const relsFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/_rels\/slide\d+\.xml\.rels$/.test(p));
+  for (const path of relsFiles) {
+    let content = await zip.file(path)!.async("string");
+    
+    // Substitui o token no atributo Target de qualquer Relationship do tipo hyperlink
+    if (opts.replacements.approvalLink) {
+      const link = String(opts.replacements.approvalLink);
+      // Procura por Target="{{approvalLink}}" ou variações com espaços
+      content = content.replace(/Target="{{\s*approvalLink\s*}}"/g, `Target="${link}"`);
+      // Fallback para caso o usuário tenha colocado o link manualmente como um placeholder no template
+      content = content.replace(/Target="https?:\/\/LINK_DA_PROPOSTA_PLACEHOLDER"/g, `Target="${link}"`);
+    }
+
+    zip.file(path, content);
   }
 
   return await zip.generateAsync({ type: "blob" });
