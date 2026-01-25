@@ -55,7 +55,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   };
 
   const [formData, setFormData] = useState(initialFormState);
-  const [displayTotal, setDisplayTotal] = useState("0,00");
 
   // Helper to format CNPJ
   const formatCnpj = (value: string) => {
@@ -98,10 +97,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     });
     setFormData(prev => ({ ...prev, qtd: String(q), qtd1: String(q1), qtd2: String(q2), devices: q + q1 + q2 }));
   }, [formData.selectedProducts]);
-
-  useEffect(() => {
-    setDisplayTotal(new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(formData.totalPrice));
-  }, [formData.totalPrice]);
 
   const allProducts = React.useMemo(() => {
     return availableBases.flatMap((base) => {
@@ -201,12 +196,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     }
   };
 
-  const handleTotalChange = (val: string) => {
-    setDisplayTotal(val);
-    const numeric = parseSpreadsheetNumber(val);
-    setFormData(prev => ({ ...prev, totalPrice: numeric }));
-  };
-
   const renderStep = () => {
     switch (currentStep) {
       case 1:
@@ -303,11 +292,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl text-gray-500">R$</span>
                 <Input 
-                  type="text" 
-                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" 
-                  value={displayTotal} 
-                  onChange={e => handleTotalChange(e.target.value)} 
+                  type="number" 
+                  step="0.01"
+                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                  value={formData.totalPrice || ""} 
+                  onChange={e => {
+                    const val = parseFloat(e.target.value || "0");
+                    setFormData(prev => ({ ...prev, totalPrice: val }));
+                  }} 
                 />
+              </div>
+              <div className="mt-2 text-sm text-gray-400 font-medium">
+                Visualização: {formatCurrencyBRL(formData.totalPrice)}
               </div>
             </div>
             
