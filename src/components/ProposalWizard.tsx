@@ -31,7 +31,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     pipedriveUrl: "",
     dealId: "",
     version: "1",
-    date: new Date().toLocaleDateString('pt-BR'),
+    // Usar formato YYYY-MM-DD para o input de data e compatibilidade com o banco
+    date: new Date().toISOString().split('T')[0],
     companyName: "",
     contactName: "",
     cnpj: "",
@@ -62,10 +63,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   }, []);
 
   useEffect(() => {
-    let q = 0;
-    let q1 = 0;
-    let q2 = 0;
-    
+    let q = 0; let q1 = 0; let q2 = 0;
     formData.selectedProducts.forEach(it => {
       const cat = (it.category || "").toLowerCase();
       const model = (it.name || "").toLowerCase();
@@ -154,7 +152,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             <div className="space-y-2"><Label>URL Pipedrive</Label><Input value={formData.pipedriveUrl} onChange={e => setFormData(prev => ({ ...prev, pipedriveUrl: e.target.value }))} /></div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Versão</Label><Input value={formData.version} onChange={e => setFormData(prev => ({ ...prev, version: e.target.value }))} /></div>
-              <div className="space-y-2"><Label>Data</Label><Input value={formData.date} onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Data</Label><Input type="date" value={formData.date} onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))} /></div>
             </div>
             <div className="space-y-2"><Label>CNPJ</Label><Input value={formData.cnpj} onChange={e => setFormData(prev => ({ ...prev, cnpj: e.target.value.replace(/\D/g, "").substring(0, 14) }))} /></div>
             <div className="space-y-2"><Label>Empresa</Label><Input value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
@@ -196,14 +194,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                         <span className="text-[9px] bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500 uppercase font-medium">{p.baseName}</span>
                       </div>
                       <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {p.extras.map((ex, idx) => (
-                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
-                            <Info className="h-2.5 w-2.5" />
-                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
-                          </div>
-                        ))}
-                      </div>
                     </div>
                     <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-8 w-8 p-0 rounded-full" onClick={() => handleProductToggle(p)}>
                       {isSelected ? <Trash2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -217,21 +207,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <div className="grid grid-cols-1 gap-3">
                 {formData.selectedProducts.map(p => (
                   <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm">{p.name}</span>
-                        <span className="text-[9px] bg-white/50 border border-primary/10 px-1.5 py-0.5 rounded text-primary uppercase font-medium">{p.baseName}</span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {p.extras.map((ex: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-white/50 px-1.5 py-0.5 rounded border border-primary/10">
-                            <Info className="h-2.5 w-2.5" />
-                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                    <div className="flex-1"><span className="font-bold text-sm">{p.name}</span></div>
                     <div className="flex items-center gap-3 ml-4">
                       <Input type="number" className="w-16 h-8 text-xs bg-white text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
                       <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
@@ -263,11 +239,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       ...formData,
       proposalNumber: `P${Math.floor(Math.random() * 10000)} V${formData.version}`,
       items: formData.selectedProducts.map(p => ({
-        product: { description: p.name, model: p.name, category: p.category },
+        product: { 
+          id: p.id,
+          description: p.name, 
+          model: p.name, 
+          category: p.category,
+          part_number: p.sku
+        },
         quantity: p.quantity,
         unitPrice: 0,
       })),
-      overrideTotal: formData.totalPrice
+      proposalDate: formData.date, // Garantir campo correto
+      totalPrice: formData.totalPrice
     }, format);
   };
 
@@ -283,21 +266,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         {renderStep()}
         <div className="flex justify-between mt-10">
           <Button variant="ghost" onClick={currentStep === 1 ? onCancel : () => setCurrentStep(prev => prev - 1)}>{currentStep === 1 ? "Cancelar" : "Voltar"}</Button>
-          
           <div className="flex gap-2">
             {currentStep === 5 ? (
               <>
-                <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}>
-                  <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
-                </Button>
-                <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}>
-                  <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
-                </Button>
+                <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}><FileDown className="mr-2 h-4 w-4" /> Gerar PDF</Button>
+                <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}><Presentation className="mr-2 h-4 w-4" /> Gerar PPTX</Button>
               </>
             ) : (
-              <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>
-                Próximo <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
+              <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>Próximo <ArrowRight className="ml-2 h-4 w-4" /></Button>
             )}
           </div>
         </div>
