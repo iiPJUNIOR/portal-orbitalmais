@@ -4,9 +4,8 @@ import React from "react";
 import { 
   LayoutTemplate, 
   Settings, 
-  History, 
-  Search,
-  FileText
+  FileText,
+  LogOut
 } from "lucide-react";
 import {
   Sidebar,
@@ -82,17 +81,20 @@ export function AppSidebar() {
       <SidebarFooter className="p-4 border-t">
         {user && (
           <div className="space-y-3">
-            <div className="text-xs text-muted-foreground truncate">
+            <div className="text-xs text-muted-foreground truncate px-2">
               {user.email}
             </div>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              className="w-full justify-start gap-2" 
-              onClick={handleLogout}
-            >
-              <span>Sair da conta</span>
-            </Button>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton 
+                  onClick={handleLogout}
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                >
+                  <LogOut className="h-4 w-4" />
+                  <span>Sair</span>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
           </div>
         )}
       </SidebarFooter>
