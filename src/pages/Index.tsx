@@ -21,6 +21,7 @@ import { QuoteBuilder } from "@/components/QuoteBuilder";
 import ProductBasesTab from "@/components/ProductBasesTab";
 import { Input } from "@/components/ui/input";
 import { fetchBases } from "@/services/productBaseService";
+import { getUserSettings } from "@/services/settingsService";
 import {
   DndContext,
   closestCenter,
@@ -38,7 +39,7 @@ import {
 } from "@dnd-kit/sortable";
 import { SortableTab } from "@/components/SortableTab";
 
-/* --- Types & helpers (kept local for this page) --- */
+/* --- Types & helpers --- */
 
 type QuoteItem = {
   id: string;
@@ -72,57 +73,9 @@ type StoredBase = {
   sem_ids_column?: string | null;
 };
 
-const NO_BASES_WARN_KEY = "no_bases_warning_shown";
 const TAB_ORDER_STORAGE_KEY = "product_base_tab_order";
 
-function normalizeImportedRow(row: any, idx: number): Product {
-  const id = row.id || row.ID || row.sku || row.SKU || row.part_number || `imported-${idx}-${Date.now()}`;
-  const sku = row.sku || row.SKU || row.part_number || row["Part Number"] || id;
-  const description = row.description || row.Description || row.Descrição || row["Product"] || sku || String(sku);
-  const modelRaw = row.model || row.Modelo || row.Model || "Importado";
-  const model = formatModelLabel(String(modelRaw));
-  const category = (row.category || row.Categoria || "Controladores Porta") as Product["category"];
-  const colorsRaw = row.colors || row.Colors || row.Cor || "";
-  const colors = typeof colorsRaw === "string"
-    ? colorsRaw.split(",").map((c: string) => c.trim()).filter(Boolean)
-    : Array.isArray(colorsRaw) ? colorsRaw : [];
-  const biometrics = String(row.biometrics || row.Biometria || row.biometric || "").toLowerCase() === "true";
-  const facialRaw = row.facial || row.Facial || "None";
-  const facial = (facialRaw === "None" || facialRaw === "none" || facialRaw === "") ? "None" : String(facialRaw);
-  const proximityRaw = row.proximity || row.Proximity || "None";
-  const proximity = (proximityRaw === "None" || proximityRaw === "none" || proximityRaw === "") ? "None" : String(proximityRaw);
-  const urn = String(row.urn || row.Urna || row.urna || "").toLowerCase() === "true";
-  const qr = String(row.qr || row.QR || row.qrcode || "").toLowerCase() === "true";
-
-  const parseNumber = (v: any) => {
-    return parseSpreadsheetNumber(v);
-  };
-
-  const value_12m = parseNumber(row.value_12m || row["value_12m"] || row["Valor12m"] || row["12m"] || row.value_12m);
-  const value_24m = parseNumber(row.value_24m || row["value_24m"] || row["Valor24m"] || row["24m"] || row.value_24m);
-  const part_number = row.part_number || row["Part Number"] || sku;
-  const status = (row.status || row.Status || "Ativo") as "Ativo" | "Inativo";
-
-  return {
-    id: String(id),
-    sku: String(sku),
-    category,
-    model,
-    colors,
-    biometrics,
-    facial: facial as any,
-    proximity: proximity as any,
-    urn,
-    qr,
-    description: String(description),
-    value_12m,
-    value_24m,
-    part_number: String(part_number),
-    status,
-  };
-}
-
-/* --- Product-from-base helper (keeps complementMeta) --- */
+/* --- Product-from-base helper --- */
 function productFromBaseRow(headers: string[], row: any[], idx: number): Product {
   const map: Record<string, any> = {};
   headers.forEach((h, i) => {
@@ -136,7 +89,7 @@ function productFromBaseRow(headers: string[], row: any[], idx: number): Product
       }
     }
     return "";
-    }
+  }
     
   const sku = safe(["sku", "SKU", "part_number", "part number", "partnumber", "id", "code"]);
   const description = safe(["description", "Description", "descrição", "Descrição", "product", "Produto", "nome"]) || sku || `item-${idx}`;
@@ -204,68 +157,48 @@ function applyFiltersToProducts(products: Product[], filters: Partial<Record<str
     return product.status === "Ativo";
   });
 
-  // If user is searching, ensure complementary items appear first (legacy behavior).
-  const searchTerm = String(filters.search ?? "").trim();
-  if (searchTerm.length > 0) {
-    filtered.sort((a, b) => {
-      const aIsComplement = !!((a as any)._complementSource || (a as any).complementMeta);
-      const bIsComplement = !!((b as any)._complementSource || (b as any).complementMeta);
-      if (aIsComplement === bIsComplement) return 0;
-      return aIsComplement ? -1 : 1;
-    });
-  }
-
   return filtered;
 }
 
-// New helper to filter raw rows based on ProductFilters
 function filterBaseRows(base: StoredBase, filters: Partial<Record<string, any>>): any[][] {
   if (!filters || Object.keys(filters).length === 0) {
     return base.rows;
   }
-
   const products = base.rows.map((row, idx) => {
-    // Convert raw row to Product structure for filtering compatibility
     const prod = productFromBaseRow(base.headers, row, idx);
-    // Attach original row data for later reconstruction
     (prod as any)._originalRow = row;
     return prod;
   });
-
   const filteredProducts = applyFiltersToProducts(products, filters);
-
-  // Return the original rows corresponding to the filtered products
   return filteredProducts.map(p => (p as any)._originalRow);
 }
 
-
-/* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
   const [baseLoading, setBaseLoading] = useState<boolean>(false);
+  const [sellerInfo, setSellerInfo] = useState<{
+    name: string;
+    role: string;
+    email: string;
+    phone: string;
+  } | null>(null);
 
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
     try {
       const raw = localStorage.getItem("quote_items");
       if (!raw) return [];
       const parsed = JSON.parse(raw) as QuoteItem[];
-      if (Array.isArray(parsed)) return parsed;
-      return [];
+      return Array.isArray(parsed) ? parsed : [];
     } catch {
       return [];
     }
   });
 
-  const prevQuoteRef = useRef<QuoteItem[] | null>(null);
-  const undoTimeoutRef = useRef<number | null>(null);
-
   const [step, setStep] = useState<"catalog" | "review" | "form" | "summary" | "history" | "productLookup" | "productBases">("catalog");
   const [proposalData, setProposalData] = useState<ProposalFormData | null>(null);
   const [saving, setSaving] = useState<boolean>(false);
-
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const debounceRef = useRef<number | null>(null);
-
   const [currentFilters, setCurrentFilters] = useState<Partial<Record<string, any>> | undefined>(undefined);
 
   const [bases, setBases] = useState<StoredBase[]>(() => {
@@ -290,14 +223,8 @@ export default function Index() {
   });
 
   const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8, // allow slight movement before drag to permit clicks
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
 
   useEffect(() => {
@@ -316,15 +243,38 @@ export default function Index() {
     }
   }, [bases]);
 
+  // Load seller info on mount
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const s = await getUserSettings();
+        if (s) {
+          const info = {
+            name: s.seller_name || "",
+            role: s.seller_role || "",
+            email: s.seller_email || "",
+            phone: s.seller_phone || "",
+          };
+          setSellerInfo(info);
+          // Also sync to localStorage for proposalService fallback
+          localStorage.setItem("seller_name", info.name);
+          localStorage.setItem("seller_role", info.role);
+          localStorage.setItem("seller_email", info.email);
+          localStorage.setItem("seller_phone", info.phone);
+        }
+      } catch (err) {
+        console.warn("Failed to load seller settings", err);
+      }
+    };
+    loadSettings();
+  }, []);
+
   const allBases = useMemo(() => {
     const list = bases.filter(b => b.type === "catalog" || b.type === "product");
-    
-    // Sort based on tabOrder
     if (tabOrder.length > 0) {
       return [...list].sort((a, b) => {
         const idxA = tabOrder.indexOf(a.id);
         const idxB = tabOrder.indexOf(b.id);
-        
         if (idxA === -1 && idxB === -1) return 0;
         if (idxA === -1) return 1;
         if (idxB === -1) return -1;
@@ -336,20 +286,13 @@ export default function Index() {
 
   const handleTabDragEnd = (event: DragEndEvent) => {
     const { active, over } = event;
-
     if (active.id !== over?.id) {
       const oldIndex = allBases.findIndex((b) => b.id === active.id);
       const newIndex = allBases.findIndex((b) => b.id === over?.id);
-
       const newBases = arrayMove(allBases, oldIndex, newIndex);
       const newOrder = newBases.map(b => b.id);
-      
       setTabOrder(newOrder);
-      try {
-        localStorage.setItem(TAB_ORDER_STORAGE_KEY, JSON.stringify(newOrder));
-      } catch (e) {
-        console.warn("Failed to save tab order", e);
-      }
+      try { localStorage.setItem(TAB_ORDER_STORAGE_KEY, JSON.stringify(newOrder)); } catch {}
     }
   };
 
@@ -367,43 +310,20 @@ export default function Index() {
 
   useEffect(() => {
     if (selectedBase) {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-      }
-      
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
       debounceRef.current = window.setTimeout(() => {
         try {
           const rows = filterBaseRows(selectedBase, currentFilters);
           setFilteredRows(rows);
         } catch (err) {
-          console.error("Error filtering base rows:", err);
           setFilteredRows(selectedBase.rows);
         }
       }, 250);
-
-      return () => {
-        if (debounceRef.current) {
-          window.clearTimeout(debounceRef.current);
-        }
-      };
+      return () => { if (debounceRef.current) window.clearTimeout(debounceRef.current); };
     } else {
       setFilteredRows([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBaseId, currentFilters, bases]);
-
-  useEffect(() => {
-    return () => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-      if (undoTimeoutRef.current) {
-        window.clearTimeout(undoTimeoutRef.current);
-        undoTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -414,9 +334,7 @@ export default function Index() {
         if (!mounted) return;
         if (Array.isArray(serverBases) && serverBases.length > 0) {
           setBases(serverBases as StoredBase[]);
-          try {
-            localStorage.setItem("product_bases", JSON.stringify(serverBases));
-          } catch {}
+          try { localStorage.setItem("product_bases", JSON.stringify(serverBases)); } catch {}
         }
       } catch (err) {
         console.warn("Failed to fetch bases from server on mount", err);
@@ -434,48 +352,27 @@ export default function Index() {
         const serverBases = await fetchBases();
         const toSet = Array.isArray(serverBases) ? serverBases : [];
         setBases(toSet as StoredBase[]);
-        try {
-          localStorage.setItem("product_bases", JSON.stringify(toSet));
-        } catch {}
       } catch (err) {
-        console.warn("Failed to reload product_bases from server", err);
-        try {
-          const raw = localStorage.getItem("product_bases");
-          const parsed = raw ? JSON.parse(raw) : [];
-          setBases(Array.isArray(parsed) ? parsed : []);
-        } catch (err2) {
-          console.warn("Failed to reload product_bases from storage", err2);
-        }
+        console.warn("Failed to reload product_bases", err);
       } finally {
         setBaseLoading(false);
       }
     };
-
     window.addEventListener("product_bases_changed", handler);
-    return () => {
-      window.removeEventListener("product_bases_changed", handler);
-    };
+    return () => { window.removeEventListener("product_bases_changed", handler); };
   }, []);
 
   const debouncedLoad = (filters?: any) => {
     setCurrentFilters(filters);
   };
 
-  const reloadFromBases = () => {
-    toast.success("Recarregando bases...");
-    window.dispatchEvent(new Event("product_bases_changed"));
-  };
-
   const handleAddFromLookupRow = (headers: string[], row: any[], quantity = 1) => {
     const prod = productFromBaseRow(headers, row, Math.floor(Math.random() * 100000));
-    
     let unitPrice: number | undefined = undefined;
     const sourceBase = bases.find(b => b.headers === headers && b.rows.some(r => r === row));
-    
     if (sourceBase) {
         const comIdsCol = sourceBase.com_ids_column;
         const semIdsCol = sourceBase.sem_ids_column;
-        
         if (comIdsCol) {
             const i = headers.indexOf(comIdsCol);
             if (i >= 0) unitPrice = parseSpreadsheetNumber(row[i]);
@@ -484,11 +381,9 @@ export default function Index() {
             if (i >= 0) unitPrice = parseSpreadsheetNumber(row[i]);
         }
     }
-
     if (unitPrice === undefined || unitPrice === 0) {
         unitPrice = prod.value_12m || prod.value_24m;
     }
-
     const productWithPrices: Product = {
         ...prod,
         value_12m: prod.value_12m || (unitPrice ?? 0),
@@ -497,7 +392,6 @@ export default function Index() {
         price_com_iDSecure: unitPrice,
         price_sem_iDSecure: unitPrice,
     };
-
     handleAddToQuote(productWithPrices, quantity, unitPrice);
   };
 
@@ -505,7 +399,6 @@ export default function Index() {
     const existing = quoteItems.find((it) => it.product.id === product.id);
     const defaultUnit = product.value_12m || product.value_24m || 0;
     const chosenUnit = unitPrice ?? defaultUnit;
-
     if (existing) {
       setQuoteItems((prev) =>
         [
@@ -514,8 +407,7 @@ export default function Index() {
         ]
       );
     } else {
-      const priceModel: '12m' | '24m' = (product as any).priceModel || '12m';
-      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel, unitPrice: chosenUnit };
+      const newItem: QuoteItem = { id: `${product.id}-${Date.now()}`, product, quantity, priceModel: '12m', unitPrice: chosenUnit };
       setQuoteItems((prev) => [newItem, ...prev]);
     }
     toast.success(`${product.description} adicionado ao orçamento`);
@@ -544,52 +436,11 @@ export default function Index() {
     setQuoteItems((prev) => prev.map((it) => (it.id === id ? { ...it, unitPrice: Number(isNaN(unitPrice) ? 0 : unitPrice) } : it)));
   };
 
-  const handleRequestClear = () => setConfirmClearOpen(true);
-
   const handleConfirmClear = () => {
-    prevQuoteRef.current = quoteItems.length > 0 ? [...quoteItems] : null;
     setQuoteItems([]);
     try { localStorage.removeItem("quote_items"); } catch {}
     setConfirmClearOpen(false);
-
-    toast("Orçamento limpo", {
-      action: {
-        label: "Desfazer",
-        onClick: () => {
-          if (prevQuoteRef.current) {
-            setQuoteItems(prevQuoteRef.current);
-            try { localStorage.setItem("quote_items", JSON.stringify(prevQuoteRef.current)); } catch {}
-            prevQuoteRef.current = null;
-            if (undoTimeoutRef.current) {
-              window.clearTimeout(undoTimeoutRef.current);
-              undoTimeoutRef.current = null;
-            }
-            toast.success("Orçamento restaurado");
-          } else {
-            toast.error("Nada para restaurar");
-          }
-        },
-      },
-    });
-
-    if (undoTimeoutRef.current) {
-      window.clearTimeout(undoTimeoutRef.current);
-      undoTimeoutRef.current = null;
-    }
-    undoTimeoutRef.current = window.setTimeout(() => {
-      prevQuoteRef.current = null;
-      undoTimeoutRef.current = null;
-    }, 10000) as unknown as number;
-  };
-
-  const handleCancelClear = () => setConfirmClearOpen(false);
-
-  const openProposalForm = () => {
-    if (quoteItems.length === 0) {
-      toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta");
-      return;
-    }
-    setStep("form");
+    toast.success("Orçamento limpo");
   };
 
   const onProposalSubmit = (data: ProposalFormData) => {
@@ -597,23 +448,28 @@ export default function Index() {
     setStep("summary");
   };
 
-  const onSummaryBack = () => setStep("form");
-
-  const computeTotalPrice = () => quoteItems.reduce((sum, item) => {
-    const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
-    return sum + unit * item.quantity;
-  }, 0);
-
   const onConfirmAndGenerate = async () => {
     if (!proposalData) return;
     setSaving(true);
     const proposalNumber = generateProposalNumber();
-
     const loadToastId = toast.loading("Gerando proposta...");
     try {
-      const proposalPayload = { ...proposalData, items: quoteItems, proposalNumber } as any;
+      // Include seller info in the payload
+      const proposalPayload = { 
+        ...proposalData, 
+        items: quoteItems, 
+        proposalNumber,
+        sellerName: sellerInfo?.name,
+        sellerRole: sellerInfo?.role,
+        sellerEmail: sellerInfo?.email,
+        sellerPhone: sellerInfo?.phone,
+      } as any;
+      
       const blob = await generateProposalPPTX(proposalPayload);
-      const totalPrice = computeTotalPrice();
+      const totalPrice = quoteItems.reduce((sum, item) => {
+        const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
+        return sum + unit * item.quantity;
+      }, 0);
 
       const quotePayload: any = {
         cnpj: proposalData.cnpj,
@@ -631,7 +487,7 @@ export default function Index() {
       };
 
       const itemsToSave = quoteItems.map((it) => {
-        const unit = it.unitPrice ?? (item.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
+        const unit = it.unitPrice ?? (it.priceModel === "12m" ? it.product.value_12m : it.product.value_24m);
         return {
           sku: it.product.sku,
           productDescription: it.product.description,
@@ -642,109 +498,41 @@ export default function Index() {
         };
       });
 
-      try {
-        const savingToastId = toast.loading("Salvando proposta no servidor...");
-        const savedQuoteId = await saveQuote(quotePayload, itemsToSave, blob, `proposta-${proposalNumber}.pptx`);
-        toast.dismiss(savingToastId);
-        toast.success("Proposta salva com sucesso (ID: " + savedQuoteId + ")");
+      await saveQuote(quotePayload, itemsToSave, blob, `proposta-${proposalNumber}.pptx`);
+      toast.success("Proposta gerada e salva com sucesso");
 
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `proposta-${proposalNumber}.pptx`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `proposta-${proposalNumber}.pptx`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
 
-        setQuoteItems([]);
-        try { localStorage.removeItem("quote_items"); } catch {}
-        setProposalData(null);
-        setStep("catalog");
-      } catch (err: any) {
-        toast.dismiss(loadToastId);
-        console.error("Erro ao salvar proposta:", err);
-
-        try {
-          const url = URL.createObjectURL((await generateProposalPPTX(proposalPayload)) as any);
-          const a = document.createElement("a");
-          a.href = url;
-          a.download = `proposta-${proposalNumber}.pptx`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(url);
-          toast.error("Falha ao salvar no servidor; proposta gerada localmente.");
-        } catch (downloadErr) {
-          console.error("Erro ao iniciar download:", downloadErr);
-          toast.error("Falha ao salvar e ao gerar download.");
-        }
-      } finally {
-        toast.dismiss(loadToastId);
-      }
+      setQuoteItems([]);
+      try { localStorage.removeItem("quote_items"); } catch {}
+      setProposalData(null);
+      setStep("catalog");
     } catch (err) {
       console.error("Erro ao gerar proposta:", err);
       toast.error("Erro ao gerar proposta");
     } finally {
+      toast.dismiss(loadToastId);
       setSaving(false);
     }
   };
 
-  const openHistory = () => setStep("history");
-  const backToCatalog = () => setStep("catalog");
-
   const totalItemsCount = quoteItems.reduce((s, it) => s + it.quantity, 0);
-  const totalPrice = computeTotalPrice();
-
-  const [lookupQuery, setLookupQuery] = useState("");
-  const [lookupResults, setLookupResults] = useState<Array<{ base: StoredBase; headers: string[]; row: any[] }>>([]);
-  const [lookupLoading, setLookupLoading] = useState(false);
-
-  const runLookup = () => {
-    const q = String(lookupQuery || "").trim().toLowerCase();
-    if (!q) {
-      setLookupResults([]);
-      return;
-    }
-    setLookupLoading(true);
-    try {
-      const productBases = bases.filter(b => b.type === "product");
-      const results: Array<{ base: StoredBase; headers: string[]; row: any[] }> = [];
-      productBases.forEach((b) => {
-        b.rows.forEach((r) => {
-          const rowStr = r.map((c) => String(c ?? "").toLowerCase()).join(" ");
-          const headersStr = b.headers.join(" ").toLowerCase();
-          if (rowStr.includes(q) || headersStr.includes(q)) {
-            results.push({ base: b, headers: b.headers, row: r });
-          } else {
-            const candidate = b.headers.find(h => /sku|part|code|id/i.test(h));
-            if (candidate) {
-              const idx = b.headers.indexOf(candidate);
-              const val = String(r[idx] ?? "").toLowerCase();
-              if (val.includes(q)) {
-                results.push({ base: b, headers: b.headers, row: r });
-              }
-            }
-          }
-        });
-      });
-      setLookupResults(results.slice(0, 200));
-    } catch (err) {
-      console.error("lookup failed", err);
-      toast.error("Erro na busca de código");
-    } finally {
-      setLookupLoading(false);
-    }
-  };
+  const totalPrice = quoteItems.reduce((sum, item) => {
+    const unit = item.unitPrice ?? (item.priceModel === "12m" ? item.product.value_12m : item.product.value_24m);
+    return sum + unit * item.quantity;
+  }, 0);
 
   const currentBaseForDisplay = selectedBase ? {
     ...selectedBase,
     rows: filteredRows,
   } : undefined;
-
-  const filteredProductsCount = filteredRows.length;
-  const totalProductsCount = selectedBase ? selectedBase.rows.length : 0;
-
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
@@ -758,274 +546,112 @@ export default function Index() {
           <Button variant={step === "catalog" ? "default" : "outline"} onClick={() => setStep("catalog")}>Catálogo</Button>
           <Button variant={step === "productBases" ? "default" : "outline"} onClick={() => setStep("productBases")}>Gerenciar Bases</Button>
           <Button variant={step === "productLookup" ? "default" : "outline"} onClick={() => setStep("productLookup")}>Pesquisar Código</Button>
-          <Button variant="outline" onClick={reloadFromBases}>Recarregar bases</Button>
-          <Button onClick={openHistory}>Histórico</Button>
+          <Button variant="outline" onClick={() => window.dispatchEvent(new Event("product_bases_changed"))}>Recarregar bases</Button>
+          <Button onClick={() => setStep("history")}>Histórico</Button>
         </div>
       </header>
 
       {step === "catalog" && (
-        <>
-          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-            <main className="lg:col-span-3 space-y-6">
-              <section className="bg-white p-4 rounded-md shadow-sm">
-                <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
-              </section>
-
-              <section className="bg-white p-4 rounded-md shadow-sm min-h-[calc(100vh-320px)] flex flex-col">
-                <div className="flex items-center justify-between mb-4 border-b pb-2">
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleTabDragEnd}
-                  >
-                    <div className="flex items-center gap-3 overflow-x-auto pb-1">
-                      {baseLoading ? (
-                        <div className="text-sm text-muted-foreground">Carregando bases...</div>
-                      ) : allBases.length === 0 ? (
-                        <div className="text-sm text-muted-foreground">Nenhuma base salva.</div>
-                      ) : (
-                        <SortableContext 
-                          items={allBases.map(b => b.id)} 
-                          strategy={horizontalListSortingStrategy}
-                        >
-                          {allBases.map((b) => (
-                            <SortableTab
-                              key={b.id}
-                              id={b.id}
-                              isActive={selectedBaseId === b.id}
-                              onClick={() => setSelectedBaseId(b.id)}
-                              label={b.name}
-                              count={b.rows.length}
-                            />
-                          ))}
-                        </SortableContext>
-                      )}
-                    </div>
-                  </DndContext>
-
-                  <div className="text-sm text-muted-foreground whitespace-nowrap ml-4">
-                    {baseLoading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
-                  </div>
-                </div>
-
-                <div className="w-full flex-1">
-                  {baseLoading && !currentBaseForDisplay ? (
-                    <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
-                  ) : (
-                    <>
-                      {currentBaseForDisplay ? (
-                        <PriceBaseTable
-                          base={currentBaseForDisplay as StoredBase}
-                          onAddRow={(headers, row, qty) => handleAddFromLookupRow(headers, row, qty)}
-                        />
-                      ) : (
-                        <div className="p-6 text-sm text-muted-foreground text-center">
-                          Selecione ou importe uma base em Configurações.
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </section>
-            </main>
-
-            <aside className="lg:col-span-1">
-              <div className="sticky top-6 space-y-4 max-h-[85vh] overflow-auto">
-                <div className="bg-white p-4 rounded-md shadow-sm">
-                  <h3 className="font-semibold mb-3">Itens adicionados</h3>
-                  <div className="space-y-2 max-h-56 overflow-auto">
-                    {quoteItems.length === 0 ? (
-                      <div className="text-sm text-muted-foreground">Nenhum item adicionado</div>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+          <main className="lg:col-span-3 space-y-6">
+            <section className="bg-white p-4 rounded-md shadow-sm">
+              <ProductFilter onFilterChange={debouncedLoad} selectedBase={selectedBase as any} />
+            </section>
+            <section className="bg-white p-4 rounded-md shadow-sm min-h-[calc(100vh-320px)] flex flex-col">
+              <div className="flex items-center justify-between mb-4 border-b pb-2">
+                <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleTabDragEnd}>
+                  <div className="flex items-center gap-3 overflow-x-auto pb-1">
+                    {baseLoading ? (
+                      <div className="text-sm text-muted-foreground">Carregando bases...</div>
                     ) : (
-                      quoteItems.map((it) => (
-                        <div key={it.id} className="flex items-center justify-between border rounded px-3 py-2">
-                          <div className="text-left">
-                            <div className="font-medium text-sm truncate">{it.product.description}</div>
-                            <div className="text-xs text-muted-foreground">Qtd: {it.quantity} · {it.product.part_number}</div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Button variant="outline" size="sm" onClick={() => handleRemoveItem(it.id)}>Remover</Button>
-                          </div>
-                        </div>
-                      ))
+                      <SortableContext items={allBases.map(b => b.id)} strategy={horizontalListSortingStrategy}>
+                        {allBases.map((b) => (
+                          <SortableTab
+                            key={b.id}
+                            id={b.id}
+                            isActive={selectedBaseId === b.id}
+                            onClick={() => setSelectedBaseId(b.id)}
+                            label={b.name}
+                            count={b.rows.length}
+                          />
+                        ))}
+                      </SortableContext>
                     )}
                   </div>
-                </div>
-
-                <div className="bg-white p-4 rounded-md shadow-sm">
-                  <div className="flex flex-col gap-3">
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Itens</div>
-                      <div className="font-medium">{totalItemsCount}</div>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-muted-foreground">Total</div>
-                      <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
-                    </div>
-
-                    <div className="flex gap-2">
-                      <Button onClick={handleRequestClear} variant="outline" className="flex-1">Limpar</Button>
-                      <Button variant="outline" onClick={() => setStep("review")} className="flex-1">Revisar Itens</Button>
-                      <Button onClick={openProposalForm} className="flex-1" disabled={quoteItems.length === 0}>Gerar Proposta</Button>
-                    </div>
-
-                    <div className="text-xs text-muted-foreground text-center mt-1">
-                      A proposta será gerada com os valores editados nos itens.
-                    </div>
-                  </div>
+                </DndContext>
+                <div className="text-sm text-muted-foreground ml-4">
+                  {selectedBase ? `Exibindo ${filteredRows.length} de ${selectedBase.rows.length} produtos` : "Nenhuma base selecionada"}
                 </div>
               </div>
-            </aside>
-          </div>
-        </>
-      )}
-
-      {step === "productBases" && (
-        <div className="bg-white p-6 rounded-md shadow-sm">
-          <ProductBasesTab onBack={() => setStep("catalog")} />
-        </div>
-      )}
-
-      {step === "productLookup" && (
-        <div className="bg-white p-6 rounded-md shadow-sm">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-2xl font-semibold">Pesquisar Código (Bases de Produtos)</h2>
-              <p className="text-sm text-muted-foreground">Pesquise em todas as bases do tipo "Base de Produtos" e adicione itens ao orçamento.</p>
-            </div>
-
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
-            </div>
-          </div>
-
-          <div className="flex gap-2 mb-4">
-            <Input placeholder="Digite SKU / código / parte do nome..." value={lookupQuery} onChange={(e) => setLookupQuery(e.target.value)} />
-            <Button onClick={runLookup} disabled={lookupLoading || !lookupQuery}>Buscar</Button>
-          </div>
-
-          <div>
-            {lookupLoading ? (
-              <div>Buscando...</div>
-            ) : (
-              <div className="space-y-3">
-                {lookupResults.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">Nenhum resultado. Verifique se você possui bases do tipo 'Base de Produtos' em Configurações.</div>
+              <div className="w-full flex-1">
+                {currentBaseForDisplay ? (
+                  <PriceBaseTable
+                    base={currentBaseForDisplay as any}
+                    onAddRow={handleAddFromLookupRow}
+                  />
                 ) : (
-                  lookupResults.map((r, idx) => (
-                    <div key={idx} className="border rounded p-3">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <div className="font-medium">{r.base.name} — {r.base.headers.join(", ")}</div>
-                          <div className="text-sm text-muted-foreground">Base criada em {new Date(r.base.created_at).toLocaleDateString()}</div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button onClick={() => handleAddFromLookupRow(r.headers, r.row)}>Adicionar</Button>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-                        {r.base.headers.map((h, i) => (
-                          <div key={i} className="flex flex-col">
-                            <div className="text-xs text-muted-foreground">{h}</div>
-                            <div className="font-medium">{String(r.row[i] ?? "")}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))
+                  <div className="p-6 text-sm text-muted-foreground text-center">Selecione uma base acima.</div>
                 )}
               </div>
-            )}
-          </div>
+            </section>
+          </main>
+          <aside className="lg:col-span-1">
+            <div className="bg-white p-4 rounded-md shadow-sm sticky top-6 space-y-4">
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">Itens</div>
+                        <div className="font-medium">{totalItemsCount}</div>
+                    </div>
+                    <div className="flex items-center justify-between">
+                        <div className="text-sm text-muted-foreground">Total</div>
+                        <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button onClick={() => setConfirmClearOpen(true)} variant="outline" className="flex-1">Limpar</Button>
+                        <Button onClick={() => setStep("review")} className="flex-1">Revisar</Button>
+                        <Button onClick={() => quoteItems.length > 0 ? setStep("form") : toast.error("Adicione itens")} className="flex-1" disabled={quoteItems.length === 0}>Gerar</Button>
+                    </div>
+                </div>
+            </div>
+          </aside>
         </div>
       )}
 
+      {step === "productBases" && <ProductBasesTab onBack={() => setStep("catalog")} />}
+      
       {step === "review" && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-semibold">Revisar Itens do Orçamento</h2>
+            <h2 className="text-2xl font-semibold">Revisar Itens</h2>
             <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep("catalog")}>Voltar ao Catálogo</Button>
-              <Button onClick={openProposalForm}>Continuar</Button>
+              <Button variant="outline" onClick={() => setStep("catalog")}>Voltar</Button>
+              <Button onClick={() => setStep("form")}>Continuar</Button>
             </div>
           </div>
-
-          <div className="bg-white p-6 rounded shadow-sm">
-            <QuoteBuilder items={quoteItems.map(q => ({ id: q.id, product: q.product, quantity: q.quantity, priceModel: q.priceModel, unitPrice: q.unitPrice }))} onRemoveItem={(id) => handleRemoveItem(id)} onUpdateQuantity={(id, quantity) => handleUpdateQuantity(id, quantity)} onUpdatePriceModel={(id, model) => handleUpdatePriceModel(id, model)} onUpdateUnitPrice={(id, unitPrice) => handleUpdateUnitPrice(id, unitPrice)} onGenerateProposal={() => { if (quoteItems.length === 0) { toast.error("Adicione ao menos 1 item ao orçamento antes de gerar a proposta"); return; } setStep("form"); }} />
-          </div>
+          <QuoteBuilder items={quoteItems as any} onRemoveItem={handleRemoveItem} onUpdateQuantity={handleUpdateQuantity} onUpdatePriceModel={handleUpdatePriceModel} onUpdateUnitPrice={handleUpdateUnitPrice} onGenerateProposal={() => setStep("form")} />
         </div>
       )}
 
       {step === "form" && (
-        <div>
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold">Dados da Empresa</h2>
-              <p className="text-sm text-muted-foreground">Preencha os dados para gerar a proposta</p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setStep("catalog")}>Cancelar</Button>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded shadow-sm">
-            <ProposalForm onSubmit={(data) => onProposalSubmit(data)} onCancel={() => setStep("catalog")} />
-          </div>
+        <div className="bg-white p-6 rounded shadow-sm">
+          <ProposalForm onSubmit={onProposalSubmit} onCancel={() => setStep("catalog")} />
         </div>
       )}
 
       {step === "summary" && proposalData && (
-        <div>
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <h2 className="text-2xl font-semibold">Resumo da Proposta</h2>
-              <p className="text-sm text-muted-foreground">Confirme antes de gerar o arquivo</p>
-            </div>
-          </div>
-
-          <div className="bg-white p-6 rounded shadow-sm">
-            <ProposalSummary items={quoteItems} proposalData={proposalData} onConfirm={onConfirmAndGenerate} onBack={onSummaryBack} />
-            <div className="mt-4">
-              <Button onClick={onConfirmAndGenerate} disabled={saving}>{saving ? "Gerando e Salvando..." : "Confirmar e Salvar"}</Button>
-            </div>
-          </div>
+        <div className="bg-white p-6 rounded shadow-sm">
+          <ProposalSummary items={quoteItems as any} proposalData={proposalData} onConfirm={onConfirmAndGenerate} onBack={() => setStep("form")} />
         </div>
       )}
 
       {step === "history" && (
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-2xl font-semibold">Histórico de Orçamentos</h2>
-            <Button variant="outline" onClick={backToCatalog}>Voltar</Button>
-          </div>
-
-          <div className="bg-white p-6 rounded shadow-sm">
-            <QuoteHistory onQuoteSelect={(q) => toast.info("Abrir orçamento selecionado: " + q.proposalNumber)} />
-          </div>
+        <div className="bg-white p-6 rounded shadow-sm">
+          <QuoteHistory onQuoteSelect={(q) => toast.info("Orçamento: " + q.proposalNumber)} />
+          <Button className="mt-4" variant="outline" onClick={() => setStep("catalog")}>Voltar</Button>
         </div>
       )}
 
-      <ConfirmModal open={confirmClearOpen} title="Limpar orçamento?" description="Isso removerá todos os itens do orçamento atual. Deseja continuar?" confirmLabel="Sim, limpar" cancelLabel="Cancelar" onConfirm={handleConfirmClear} onCancel={handleCancelClear} />
-
-      {quoteItems.length > 0 && (
-        <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none ml-[var(--sidebar-width)]">
-          <div className="w-full max-w-5xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
-            <div className="flex-1">
-              <div className="text-sm text-muted-foreground">Itens: <span className="font-medium">{totalItemsCount}</span></div>
-              <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
-            </div>
-
-            <div className="flex md:flex-row flex-col gap-2 w-full md:w-auto">
-              <Button variant="outline" onClick={handleRequestClear} className="w-full md:w-auto">Limpar</Button>
-              <Button variant="outline" onClick={() => setStep("review")} className="w-full md:w-auto">Revisar</Button>
-              <Button onClick={openProposalForm} className="w-full md:w-auto">Gerar Proposta</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
+      <ConfirmModal open={confirmClearOpen} onConfirm={handleConfirmClear} onCancel={() => setConfirmClearOpen(false)} />
       <MadeWithDyad />
     </div>
   );
