@@ -1,6 +1,7 @@
 import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
-import PptxGenJS from "pptxgenjs";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { parseISO } from "date-fns";
 
 interface QuoteItem {
@@ -9,7 +10,6 @@ interface QuoteItem {
   quantity: number;
   priceModel: '12m' | '24m';
   unitPrice?: number;
-  // Metadata for conditional slides
   installationData?: {
     entryTech?: 'facial' | 'biometria' | 'botoeira';
     exitTech?: 'facial' | 'biometria' | 'botoeira';
@@ -53,35 +53,17 @@ interface ProposalData {
   overrideTotal?: number | null;
 }
 
-// Mapeamento exato de slides conforme solicitado
 const MODEL_TO_SLIDE: Record<string, number> = {
-  "idface pro": 19,
-  "idface max": 20,
-  "idaccess nano": 21,
-  "idflex ip65": 22,
-  "idflex pro": 23,
-  "idaccess": 24,
-  "idfit 4x2": 25,
-  "idaccess pro": 26,
-  "secbox": 27,
-  "iduhf": 28,
-  "iduhf lite": 29,
-  "idblock next facial": 30,
-  "idblock next biometria digital": 31,
-  "idblock facial inox": 32,
-  "idblock facial preta": 33,
-  "idblock facial mini preta": 34,
-  "idblock facial mini inox": 35,
-  "idblock inox biométrica": 36,
-  "idblock preta biométrica": 37,
-  "idblock braço articulado inox": 38,
-  "idblock braço articulado preta": 39,
-  "idblock balcão": 40,
-  "idblock pne": 41,
-  "torniquete fet 100": 42,
-  "idpower": 43,
-  "idprox usb": 44,
-  "idbio": 45,
+  "idface pro": 19, "idface max": 20, "idaccess nano": 21, "idflex ip65": 22,
+  "idflex pro": 23, "idaccess": 24, "idfit 4x2": 25, "idaccess pro": 26,
+  "secbox": 27, "iduhf": 28, "iduhf lite": 29, "idblock next facial": 30,
+  "idblock next biometria digital": 31, "idblock facial inox": 32,
+  "idblock facial preta": 33, "idblock facial mini preta": 34,
+  "idblock facial mini inox": 35, "idblock inox biométrica": 36,
+  "idblock preta biométrica": 37, "idblock braço articulado inox": 38,
+  "idblock braço articulado preta": 39, "idblock balcão": 40,
+  "idblock pne": 41, "torniquete fet 100": 42, "idpower": 43,
+  "idprox usb": 44, "idbio": 45,
 };
 
 export const calculateProposalSummary = (items: Array<any>) => {
@@ -108,8 +90,6 @@ export const formatDateForProposal = (dateStr?: string | null): string => {
     } else {
       dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
     }
-    
-    // Retorna a data com o mês por extenso: "25 de Janeiro de 2026"
     return new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(dt);
   } catch { 
     return dateStr || ""; 
@@ -131,21 +111,16 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       endereço: data.address || "",
       users: data.users || 0,
       devices: data.devices || 0,
-      qtd: data.qtd || "",
-      qtd1: data.qtd1 || "",
-      qtd2: data.qtd2 || "",
+      qtd: data.qtd || "0",
+      qtd1: data.qtd1 || "0",
+      qtd2: data.qtd2 || "0",
     };
 
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
       : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
     
-    const formattedNumber = new Intl.NumberFormat("pt-BR", { 
-      minimumFractionDigits: 2, 
-      maximumFractionDigits: 2 
-    }).format(computedTotal);
-    
-    replacements["totalPrice"] = formattedNumber;
+    replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
     const mainItems: string[] = [];
     const serviceItems: string[] = [];
@@ -155,7 +130,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       const line = `${it.product.description} – ${it.quantity} un`;
       const cat = it.product.category?.toLowerCase() || "";
       const model = it.product.model?.toLowerCase() || "";
-      
       if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
         mechanicalItems.push(line);
       } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
@@ -169,17 +143,9 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = serviceItems.join("\n");
     replacements["items_list2"] = mechanicalItems.join("\n");
 
-    // Lógica de exclusão do slide 2
-    const keepSlides = [1, 3, 4]; // Pulando o 2 explicitamente
+    const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 55);
-
-    let hasCatraca = false;
-    let hasIdFaceProForSlide47 = false;
-    let hasIdFaceProForSlide48 = false;
-    let hasIdAccessNanoForSlide49 = false;
-    let hasIdFlexProForSlide51 = false;
-    let hasIdFlexProForSlide52 = false;
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
@@ -188,32 +154,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
         const key = Object.keys(MODEL_TO_SLIDE).find(k => modelLower.includes(k));
         if (key) foundSlide = MODEL_TO_SLIDE[key];
       }
-
-      if (foundSlide) {
-        keepSlides.push(foundSlide);
-        if (foundSlide >= 30 && foundSlide <= 42) hasCatraca = true;
-      }
-
-      const install = it.installationData;
-      if (modelLower.includes("idface pro")) {
-        if (install?.entryTech === 'facial' && install?.exitTech === 'botoeira') hasIdFaceProForSlide47 = true;
-        if (install?.entryTech === 'facial' && install?.exitTech === 'facial') hasIdFaceProForSlide48 = true;
-      }
-      if (modelLower.includes("idaccess nano")) {
-        if (install?.entryTech === 'biometria' && install?.exitTech === 'botoeira') hasIdAccessNanoForSlide49 = true;
-      }
-      if (modelLower.includes("idflex pro")) {
-        if (install?.entryTech === 'facial' && install?.exitTech === 'botoeira') hasIdFlexProForSlide51 = true;
-        if (install?.doorType === 'vidro') hasIdFlexProForSlide52 = true;
-      }
+      if (foundSlide) keepSlides.push(foundSlide);
     });
-
-    if (hasIdFaceProForSlide47) keepSlides.push(47);
-    if (hasIdFaceProForSlide48) keepSlides.push(48);
-    if (hasIdAccessNanoForSlide49) keepSlides.push(49);
-    if (hasIdFlexProForSlide51) keepSlides.push(51);
-    if (hasIdFlexProForSlide52) keepSlides.push(52);
-    if (hasCatraca) keepSlides.push(53);
 
     return await generatePptxFromTemplate({
       replacements,
@@ -223,4 +165,90 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     console.error("Erro na geração do PPTX:", err);
     throw err;
   }
+};
+
+export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => {
+  const doc = new jsPDF();
+  const margin = 20;
+  let y = margin;
+
+  // Header
+  doc.setFontSize(22);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Proposta Comercial", margin, y);
+  y += 10;
+  doc.setFontSize(12);
+  doc.setTextColor(100, 100, 100);
+  doc.text(`Número: ${data.proposalNumber || "N/A"}`, margin, y);
+  doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 140, y);
+  y += 15;
+
+  // Company Info
+  doc.setFontSize(14);
+  doc.setTextColor(0, 0, 0);
+  doc.text("Dados do Cliente", margin, y);
+  y += 7;
+  doc.setFontSize(10);
+  doc.text(`Empresa: ${data.companyName}`, margin, y);
+  y += 5;
+  doc.text(`CNPJ: ${data.cnpj}`, margin, y);
+  y += 5;
+  doc.text(`Responsável: ${data.contactName}`, margin, y);
+  y += 5;
+  doc.text(`Endereço: ${data.address}`, margin, y);
+  y += 15;
+
+  // Items Table
+  autoTable(doc, {
+    startY: y,
+    head: [['Descrição', 'Quantidade']],
+    body: data.items.map(it => [it.product.description, it.quantity]),
+    theme: 'striped',
+    headStyles: { fillColor: [30, 30, 30] },
+    margin: { left: margin, right: margin }
+  });
+
+  y = (doc as any).lastAutoTable.finalY + 15;
+
+  // Summary & Totals
+  const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
+    ? Number(data.overrideTotal)
+    : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
+
+  doc.setFontSize(14);
+  doc.text("Resumo Financeiro", margin, y);
+  y += 8;
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
+  doc.text(`VALOR TOTAL: R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, margin, y);
+  doc.setFont("helvetica", "normal");
+  y += 20;
+
+  // Seller Info
+  if (data.sellerName) {
+    doc.setFontSize(12);
+    doc.text("Atenciosamente,", margin, y);
+    y += 10;
+    doc.setFont("helvetica", "bold");
+    doc.text(data.sellerName, margin, y);
+    y += 5;
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.text(data.sellerRole || "", margin, y);
+    y += 5;
+    doc.text(data.sellerEmail || "", margin, y);
+    y += 5;
+    doc.text(data.sellerPhone || "", margin, y);
+  }
+
+  if (data.observations) {
+    y += 15;
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("Observações:", margin, y);
+    y += 5;
+    doc.text(data.observations, margin, y, { maxWidth: 170 });
+  }
+
+  return doc.output('blob');
 };

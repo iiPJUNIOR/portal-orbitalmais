@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 
 interface WizardProps {
@@ -16,7 +16,7 @@ interface WizardProps {
     email: string;
     phone: string;
   };
-  onComplete: (data: any) => void;
+  onComplete: (data: any, format: 'pptx' | 'pdf') => void;
   onCancel: () => void;
 }
 
@@ -61,17 +61,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     loadData();
   }, []);
 
-  // Efeito para calcular quantidades automáticas sempre que os produtos mudarem
   useEffect(() => {
-    let q = 0;   // Principal
-    let q1 = 0;  // Serviços
-    let q2 = 0;  // Mecânicos
-
+    let q = 0; q1 = 0; q2 = 0;
     formData.selectedProducts.forEach(it => {
       const cat = (it.category || "").toLowerCase();
       const model = (it.name || "").toLowerCase();
       const qty = Number(it.quantity) || 0;
-
       if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
         q2 += qty;
       } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
@@ -80,36 +75,21 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         q += qty;
       }
     });
-
-    setFormData(prev => ({
-      ...prev,
-      qtd: String(q),
-      qtd1: String(q1),
-      qtd2: String(q2),
-      devices: q + q1 + q2
-    }));
+    setFormData(prev => ({ ...prev, qtd: String(q), qtd1: String(q1), qtd2: String(q2), devices: q + q1 + q2 }));
   }, [formData.selectedProducts]);
 
-  // Agrega todos os produtos de todas as bases em uma única lista
   const allProducts = React.useMemo(() => {
     return availableBases.flatMap((base) => {
       const headers = base.headers;
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
       const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
-
       return base.rows.map((row, idx) => {
         const p: any = {};
         headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
-        
         const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
         const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
-        
-        const extras = extraCols.map(col => ({
-          label: col,
-          value: String(p[col] || "").trim()
-        })).filter(ex => ex.value !== "");
-        
+        const extras = extraCols.map(col => ({ label: col, value: String(p[col] || "").trim() })).filter(ex => ex.value !== "");
         return {
           id: `${base.id}-${idx}`,
           name: String(name || "Produto sem nome").trim(),
@@ -159,10 +139,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       if (exists) {
         return { ...prev, selectedProducts: prev.selectedProducts.filter(p => p.baseId !== product.id) };
       }
-      return { 
-        ...prev, 
-        selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1 }] 
-      };
+      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1 }] };
     });
   };
 
@@ -203,7 +180,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
           <div className="space-y-6">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar em todas as bases (nome, SKU, etc)..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
             </div>
             <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-white">
               {filteredProducts.map(p => {
@@ -231,64 +208,22 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                   </div>
                 );
               })}
-              {filteredProducts.length === 0 && (
-                <div className="p-8 text-center text-muted-foreground text-sm">Nenhum produto encontrado nas bases.</div>
-              )}
             </div>
-            
             <div className="space-y-3 pt-6 border-t">
-              <div className="flex items-center justify-between">
-                <Label className="font-bold text-lg">Itens Selecionados ({formData.selectedProducts.length})</Label>
-              </div>
+              <Label className="font-bold text-lg">Itens Selecionados ({formData.selectedProducts.length})</Label>
               <div className="grid grid-cols-1 gap-3">
                 {formData.selectedProducts.map(p => (
                   <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm">{p.name}</span>
-                        <span className="text-[9px] bg-white/50 border border-primary/10 px-1.5 py-0.5 rounded text-primary uppercase font-medium">{p.baseName}</span>
-                      </div>
-                      <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">
-                        {p.extras.map((ex: any, idx: number) => (
-                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-white/50 px-1.5 py-0.5 rounded border border-primary/10">
-                            <Info className="h-2.5 w-2.5" />
-                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
-                          </div>
-                        ))}
-                      </div>
+                      <div className="flex items-center gap-2"><span className="font-bold text-sm">{p.name}</span></div>
+                      <div className="text-[10px] text-muted-foreground">{p.sku}</div>
                     </div>
-                    
                     <div className="flex items-center gap-3 ml-4">
-                      <div className="flex flex-col items-center">
-                        <Label className="text-[9px] uppercase text-muted-foreground mb-1 font-bold">Qtd</Label>
-                        <Input 
-                          type="number" 
-                          className="w-16 h-8 text-xs bg-white text-center font-bold" 
-                          value={p.quantity} 
-                          onChange={e => setFormData(prev => ({ 
-                            ...prev, 
-                            selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) 
-                          }))} 
-                        />
-                      </div>
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
-                        className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-full mt-4" 
-                        onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      <Input type="number" className="w-16 h-8 text-xs bg-white text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
+                      <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 ))}
-                
-                {formData.selectedProducts.length === 0 && (
-                  <div className="p-6 text-center text-muted-foreground text-xs border border-dashed rounded-xl bg-gray-50/50">
-                    Nenhum item adicionado ao orçamento.
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -309,7 +244,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     }
   };
 
-  const handleFinish = () => {
+  const handleFinish = (format: 'pptx' | 'pdf') => {
     onComplete({
       ...formData,
       proposalNumber: `P${Math.floor(Math.random() * 10000)} V${formData.version}`,
@@ -319,7 +254,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         unitPrice: 0,
       })),
       overrideTotal: formData.totalPrice
-    });
+    }, format);
   };
 
   if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
@@ -334,9 +269,23 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         {renderStep()}
         <div className="flex justify-between mt-10">
           <Button variant="ghost" onClick={currentStep === 1 ? onCancel : () => setCurrentStep(prev => prev - 1)}>{currentStep === 1 ? "Cancelar" : "Voltar"}</Button>
-          <Button className="rounded-full px-8" onClick={currentStep === 5 ? handleFinish : () => setCurrentStep(prev => prev + 1)}>
-            {currentStep === 5 ? "Gerar PPTX" : "Próximo"} <ArrowRight className="ml-2 h-4 w-4" />
-          </Button>
+          
+          <div className="flex gap-2">
+            {currentStep === 5 ? (
+              <>
+                <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}>
+                  <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
+                </Button>
+                <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}>
+                  <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
+                </Button>
+              </>
+            ) : (
+              <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>
+                Próximo <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>
