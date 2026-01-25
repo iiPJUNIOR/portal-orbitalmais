@@ -151,10 +151,10 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
   };
 
   return (
-    <div className="border rounded-md overflow-x-auto">
-      <div className="mb-2 px-2 py-2 flex items-center justify-between">
+    <div className="w-full border rounded-md overflow-x-auto bg-white">
+      <div className="mb-2 px-4 py-3 flex items-center justify-between border-b">
         <div>
-          <div className="font-medium">{base.name}</div>
+          <div className="font-bold text-lg">{base.name}</div>
           <div className="text-sm text-muted-foreground">{base.rows.length} linhas · criado em {new Date(base.createdAt).toLocaleDateString()}</div>
         </div>
       </div>
@@ -164,9 +164,9 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
         collisionDetection={closestCenter}
         onDragEnd={handleDragEnd}
       >
-        <table className="w-full text-sm">
+        <table className="w-full min-w-full text-sm">
           <thead>
-            <tr className="bg-gray-50">
+            <tr className="bg-gray-50/50">
               <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
                 {columnOrder.map((headerName) => (
                   <SortableHeader key={headerName} id={headerName}>
@@ -174,47 +174,46 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
                   </SortableHeader>
                 ))}
               </SortableContext>
-              <th className="text-left px-2 py-2">Qtd</th>
-              <th className="text-left px-2 py-2">Ações</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-700">Qtd</th>
+              <th className="text-left px-4 py-3 font-semibold text-gray-700">Ações</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-gray-100">
             {visibleRows.length === 0 ? (
               <tr>
-                <td colSpan={columnOrder.length + 2} className="py-8 text-center text-muted-foreground">
+                <td colSpan={columnOrder.length + 2} className="py-12 text-center text-muted-foreground">
                   Esta base não contém linhas.
                 </td>
               </tr>
             ) : (
               visibleRows.map((row, ri) => (
-                <tr key={ri} className={ri % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                <tr key={ri} className="hover:bg-gray-50/80 transition-colors">
                   {columnOrder.map((headerName, ci) => {
                     const originalIndex = headerIndexMap[headerName];
                     return (
-                      <td key={ci} className="px-2 py-2 align-top break-words">
+                      <td key={ci} className="px-4 py-3 align-middle whitespace-normal break-words max-w-xs">
                         {renderCell(row[originalIndex])}
                       </td>
                     );
                   })}
 
-                  <td className="px-2 py-2">
+                  <td className="px-4 py-3 align-middle">
                     <Input
                       type="number"
                       min={1}
                       value={getQty(ri)}
                       onChange={(e) => handleQtyChange(ri, e.target.value)}
-                      className="w-20 h-8"
+                      className="w-20 h-9"
                     />
                   </td>
 
-                  <td className="px-2 py-2">
-                    <div className="flex gap-1">
-                      <Button size="sm" className="h-8 px-2" onClick={() => onAddRow(base.headers, row, getQty(ri))}>
-                        Add
+                  <td className="px-4 py-3 align-middle">
+                    <div className="flex gap-2">
+                      <Button size="sm" className="h-9 px-4 font-medium" onClick={() => onAddRow(base.headers, row, getQty(ri))}>
+                        Adicionar
                       </Button>
 
-                      <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => {
-                        // quick export of this row as JSON
+                      <Button size="sm" variant="outline" className="h-9 px-3" title="Exportar linha" onClick={() => {
                         try {
                           const payload = base.headers.reduce((acc: any, h, idx) => {
                             acc[h] = row[idx];
