@@ -89,6 +89,13 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       ? Number(data.overrideTotal)
       : (data.totalPrice || 0);
 
+    // Formatação BRL explícita para o replacement
+    const formattedTotal = new Intl.NumberFormat("pt-BR", { 
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+      useGrouping: true
+    }).format(computedTotal);
+
     const replacements: Record<string, string | number> = {
       companyName: data.companyName || "",
       contactName: data.contactName || "",
@@ -102,7 +109,7 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       endereço: data.address || "",
       users: data.users || 0,
       devices: data.devices || 0,
-      totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
+      totalPrice: formattedTotal,
       approvalLink: data.approvalLink || "",
     };
 
@@ -338,6 +345,13 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     ? Number(data.overrideTotal)
     : (data.totalPrice || 0);
 
+  // Formatação BRL explícita para o PDF
+  const formattedTotal = new Intl.NumberFormat("pt-BR", { 
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+    useGrouping: true
+  }).format(computedTotal);
+
   // Total Box
   doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
   doc.rect(width - 120, finalY + 10, 105, 30, 'F');
@@ -347,7 +361,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.text("VALOR TOTAL DO INVESTIMENTO", width - 110, finalY + 20);
   doc.setFontSize(26);
   doc.setFont("helvetica", "bold");
-  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 110, finalY + 33);
+  doc.text(`R$ ${formattedTotal}`, width - 110, finalY + 33);
 
   // 6. CONTATO (Slide 57)
   doc.addPage();
