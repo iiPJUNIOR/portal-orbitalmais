@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Check, ArrowRight, ArrowLeft, Package, User, Building, Layout, DollarSign, Loader2, Search, Plus, Trash2 } from "lucide-react";
+import { Check, ArrowRight, ArrowLeft, Package, User, Building, Layout, DollarSign, Loader2, Search, Plus, Trash2, X } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
 
@@ -75,9 +75,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     return currentBase.rows.map((row, idx) => {
       const p: any = {};
       headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
+      
+      // Detecção robusta de nome do produto
+      const name = p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product || p.item || p.sku || p["part number"] || p.pn || "Produto sem nome";
+      
       return {
         id: `${currentBase.id}-${idx}`,
-        name: p.modelo || p.description || p.descrição || p.nome || "Produto sem nome",
+        name: String(name).trim(),
         sku: p.sku || p["part number"] || p.pn || "",
         category: p.categoria || p.category || "",
         price12: parseSpreadsheetNumber(p.valor12 || p.price12 || p.value_12m || 0),
@@ -142,6 +146,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         };
       }
     });
+  };
+
+  const removeProduct = (baseId: string) => {
+    setFormData(prev => ({
+      ...prev,
+      selectedProducts: prev.selectedProducts.filter(p => p.baseId !== baseId)
+    }));
   };
 
   const updateProductQty = (baseId: string, qty: number) => {
@@ -235,24 +246,34 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             {formData.selectedProducts.length > 0 && (
               <div className="space-y-3 pt-4 border-t">
                 <Label className="text-primary font-bold">Itens no Orçamento ({formData.selectedProducts.length})</Label>
-                {formData.selectedProducts.map(p => (
-                  <Card key={p.baseId} className="p-3 bg-primary/5 border-primary/20">
-                    <div className="flex items-center justify-between gap-4">
-                      <div className="flex-1">
-                        <div className="text-xs font-bold truncate max-w-[200px]">{p.name}</div>
+                <div className="grid gap-2">
+                  {formData.selectedProducts.map(p => (
+                    <Card key={p.baseId} className="p-3 bg-primary/5 border-primary/20 relative group">
+                      <div className="flex items-center justify-between gap-4">
+                        <div className="flex-1">
+                          <div className="text-xs font-bold truncate max-w-[200px]">{p.name}</div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label className="text-[10px]">Qtd:</Label>
+                          <Input 
+                            type="number" 
+                            className="w-14 h-7 text-xs px-1" 
+                            value={p.quantity} 
+                            onChange={e => updateProductQty(p.baseId, parseInt(e.target.value) || 1)} 
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                            onClick={() => removeProduct(p.baseId)}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Label className="text-[10px]">Qtd:</Label>
-                        <Input 
-                          type="number" 
-                          className="w-16 h-8 text-xs" 
-                          value={p.quantity} 
-                          onChange={e => updateProductQty(p.baseId, parseInt(e.target.value) || 1)} 
-                        />
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+                    </Card>
+                  ))}
+                </div>
               </div>
             )}
           </div>
