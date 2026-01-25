@@ -44,9 +44,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     sellerPhone: initialSellerData.phone || "",
     users: "",
     devices: 0,
-    qtd: "",
-    qtd1: "",
-    qtd2: "",
+    qtd: "0",
+    qtd1: "0",
+    qtd2: "0",
     selectedProducts: [] as any[],
     totalPrice: 0
   });
@@ -63,6 +63,35 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     };
     loadData();
   }, []);
+
+  // Efeito para calcular quantidades automáticas sempre que os produtos mudarem
+  useEffect(() => {
+    let q = 0;   // Principal
+    let q1 = 0;  // Serviços
+    let q2 = 0;  // Mecânicos
+
+    formData.selectedProducts.forEach(it => {
+      const cat = (it.category || "").toLowerCase();
+      const model = (it.name || "").toLowerCase();
+      const qty = Number(it.quantity) || 0;
+
+      if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
+        q2 += qty;
+      } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
+        q1 += qty;
+      } else {
+        q += qty;
+      }
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      qtd: String(q),
+      qtd1: String(q1),
+      qtd2: String(q2),
+      devices: q + q1 + q2
+    }));
+  }, [formData.selectedProducts]);
 
   const currentBase = availableBases.find(b => b.id === selectedBaseId);
   const productsFromBase = React.useMemo(() => {
@@ -225,16 +254,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         return (
           <div className="space-y-6">
             <div className="p-6 bg-neutral-900 text-white rounded-2xl">
-              <Label>VALOR TOTAL</Label>
+              <Label>VALOR TOTAL DA PROPOSTA</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl text-gray-500">R$</span>
                 <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
               </div>
             </div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1"><Label className="text-[10px]">qtd</Label><Input value={formData.qtd} onChange={e => setFormData(prev => ({ ...prev, qtd: e.target.value }))} /></div>
-              <div className="space-y-1"><Label className="text-[10px]">qtd1</Label><Input value={formData.qtd1} onChange={e => setFormData(prev => ({ ...prev, qtd1: e.target.value }))} /></div>
-              <div className="space-y-1"><Label className="text-[10px]">qtd2</Label><Input value={formData.qtd2} onChange={e => setFormData(prev => ({ ...prev, qtd2: e.target.value }))} /></div>
+            <div className="p-4 bg-gray-50 rounded-xl border border-dashed text-xs text-muted-foreground space-y-2">
+              <p className="font-bold text-gray-700">Resumo de Quantidades (Calculado Automaticamente):</p>
+              <div className="grid grid-cols-3 gap-2">
+                <div>Principal (qtd): <span className="font-bold text-black">{formData.qtd}</span></div>
+                <div>Serviços (qtd1): <span className="font-bold text-black">{formData.qtd1}</span></div>
+                <div>Mecânicos (qtd2): <span className="font-bold text-black">{formData.qtd2}</span></div>
+              </div>
             </div>
           </div>
         );
