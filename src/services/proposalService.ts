@@ -9,6 +9,12 @@ interface QuoteItem {
   quantity: number;
   priceModel: '12m' | '24m';
   unitPrice?: number;
+  // Metadata for conditional slides
+  installationData?: {
+    entryTech?: 'facial' | 'biometria' | 'botoeira';
+    exitTech?: 'facial' | 'biometria' | 'botoeira';
+    doorType?: 'madeira' | 'ferro' | 'vidro';
+  };
 }
 
 interface ProposalData {
@@ -24,11 +30,16 @@ interface ProposalData {
   items: QuoteItem[];
   proposalNumber?: string;
   pipedriveUrl?: string;
-  versao?: number;
+  versao?: string | number;
   sellerName?: string;
   sellerRole?: string;
   sellerEmail?: string;
   sellerPhone?: string;
+  users?: number;
+  devices?: number;
+  qtd?: string;
+  qtd1?: string;
+  qtd2?: string;
   flags?: {
     botoeira?: boolean;
     idfaceEntry?: boolean;
@@ -42,6 +53,7 @@ interface ProposalData {
   overrideTotal?: number | null;
 }
 
+// Mapeamento exato de slides conforme solicitado
 const MODEL_TO_SLIDE: Record<string, number> = {
   "idface pro": 19,
   "idface max": 20,
@@ -54,53 +66,48 @@ const MODEL_TO_SLIDE: Record<string, number> = {
   "secbox": 27,
   "iduhf": 28,
   "iduhf lite": 29,
-  "idblock next catraca inteligente com reconhecimento facial": 30,
-  "idblock next catraca inteligente com biometria digital": 31,
-  "idblock facial inox catraca inteligente com reconhecimento facial": 32,
-  "idblock facial preta catraca inteligente com reconhecimento facial": 33,
-  "idblock facial mini preta catraca inteligente com reconhecimento facial": 34,
-  "idblock facial mini inox catraca inteligente com reconhecimento facial": 35,
-  "idblock inox catraca biométrica digital inteligente": 36,
-  "idblock preta catraca biométrica digital inteligente": 37,
-  "idblock braço articulado inox catraca biométrica digital inteligente": 38,
-  "idblock braço articulado preta catraca biométrica digital inteligente": 39,
-  "idblock balcão catraca biométrica digital inteligente": 40,
-  "idblock pne catraca biométrica digital inteligente": 41,
-  "torniquete fet 100 torniquete biométrico digital inteligente": 42,
-  "idpower fonte carregador temporizado": 43,
-  "idprox usb leitor de mesa rfid": 44,
-  "idbio leitor biométrico de mesa": 45,
+  "idblock next facial": 30,
+  "idblock next biometria digital": 31,
+  "idblock facial inox": 32,
+  "idblock facial preta": 33,
+  "idblock facial mini preta": 34,
+  "idblock facial mini inox": 35,
+  "idblock inox biométrica": 36,
+  "idblock preta biométrica": 37,
+  "idblock braço articulado inox": 38,
+  "idblock braço articulado preta": 39,
+  "idblock balcão": 40,
+  "idblock pne": 41,
+  "torniquete fet 100": 42,
+  "idpower": 43,
+  "idprox usb": 44,
+  "idbio": 45,
 };
 
 export const calculateProposalSummary = (items: Array<any>) => {
   const totalDevices = (items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-  const totalUsers = (items || []).reduce((s, it) => {
-    const qty = Number(it.quantity) || 0;
-    const perDevice = (it.product && (Number((it.product as any).users) || 0)) || 0;
-    return s + qty * perDevice;
-  }, 0);
-  return { totalDevices, totalUsers };
+  return { totalDevices };
 };
 
-export const generateProposalNumber = (): string => {
+export const generateProposalNumber = (dealId?: string, version?: string | number): string => {
+  if (dealId) return `${dealId} V${version || 1}`;
   const now = new Date();
   const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const rand = Math.floor(100000 + Math.random() * 900000);
-  return `${datePart}-${rand}`;
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${datePart}-${rand} V${version || 1}`;
 };
 
 export const formatDateForProposal = (dateStr?: string | null): string => {
   try {
-    let dt = dateStr ? (dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00")) : new Date();
-    return dt.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' });
+    if (!dateStr) return new Date().toLocaleDateString('pt-BR');
+    // Handle DD/MM/AAAA or AAAA-MM-DD
+    if (dateStr.includes("/")) {
+      return dateStr;
+    }
+    let dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
+    return dt.toLocaleDateString('pt-BR');
   } catch { return dateStr || ""; }
 };
-
-function extractIdFromPipedriveUrl(url?: string) {
-  if (!url) return "";
-  const m = url.match(/\/deal\/(\d+)/);
-  return m ? m[1] : "";
-}
 
 export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
   try {
@@ -108,25 +115,27 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       companyName: data.companyName || "",
       contactName: data.contactName || "",
       date: formatDateForProposal(data.proposalDate),
-      proposalNumber: data.proposalNumber || `${extractIdFromPipedriveUrl(data.pipedriveUrl)} V${data.versao || 1}`,
+      proposalNumber: data.proposalNumber || "",
       sellerName: data.sellerName || "",
       sellerRole: data.sellerRole || "",
       sellerEmail: data.sellerEmail || "",
       sellerPhone: data.sellerPhone || "",
       CNPJ: data.cnpj || "",
       endereço: data.address || "",
+      users: data.users || 0,
+      devices: data.devices || 0,
+      qtd: data.qtd || "",
+      qtd1: data.qtd1 || "",
+      qtd2: data.qtd2 || "",
     };
-
-    const summary = calculateProposalSummary(data.items);
-    replacements["users"] = summary.totalUsers || (data.flags?.systemIncluded ? 150 : 0);
-    replacements["devices"] = summary.totalDevices;
 
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
       : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
+    
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(computedTotal);
 
-    // Items list formatting
+    // Listas de itens (multilinhas)
     const mainItems: string[] = [];
     const serviceItems: string[] = [];
     const mechanicalItems: string[] = [];
@@ -134,9 +143,11 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     data.items.forEach(it => {
       const line = `${it.product.description} – ${it.quantity} un – ${it.product.model}`;
       const cat = it.product.category?.toLowerCase() || "";
-      if (cat.includes("catraca") || cat.includes("torniquete") || cat.includes("uhf")) {
+      const model = it.product.model?.toLowerCase() || "";
+      
+      if (model.includes("idblock") || model.includes("torniquete") || model.includes("iduhf") || model.includes("idprox") || model.includes("idbio")) {
         mechanicalItems.push(line);
-      } else if (cat.includes("serviço") || cat.includes("suporte")) {
+      } else if (cat.includes("serviço") || cat.includes("suporte") || model.includes("idpower")) {
         serviceItems.push(line);
       } else {
         mainItems.push(line);
@@ -147,45 +158,62 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = serviceItems.join("\n");
     replacements["items_list2"] = mechanicalItems.join("\n");
 
-    const firstThree = data.items.slice(0, 3);
-    replacements["qtd"] = firstThree[0]?.quantity ?? 0;
-    replacements["qtd1"] = firstThree[1]?.quantity ?? 0;
-    replacements["qtd2"] = firstThree[2]?.quantity ?? 0;
-
-    // Slide selection logic
+    // Lógica de seleção de slides
     const keepSlides = [1, 2, 3, 4];
-    for (let i = 5; i <= 18; i++) keepSlides.push(i);
+    for (let i = 5; i <= 18; i++) keepSlides.push(i); // Slides fixos
     keepSlides.push(46, 55);
 
     let hasCatraca = false;
+    let hasIdFaceProForSlide47 = false;
+    let hasIdFaceProForSlide48 = false;
+    let hasIdAccessNanoForSlide49 = false;
+    let hasIdFlexProForSlide51 = false;
+    let hasIdFlexProForSlide52 = false;
+
     data.items.forEach(it => {
-      const key = (it.product.model || "").toLowerCase().trim();
-      const slide = MODEL_TO_SLIDE[key];
-      if (slide) keepSlides.push(slide);
-      if (slide >= 30 && slide <= 42) hasCatraca = true;
+      const modelLower = (it.product.model || "").toLowerCase().trim();
+      
+      // Encontrar slide do produto
+      let foundSlide = MODEL_TO_SLIDE[modelLower];
+      if (!foundSlide) {
+        // Busca parcial se não houver exata
+        const key = Object.keys(MODEL_TO_SLIDE).find(k => modelLower.includes(k));
+        if (key) foundSlide = MODEL_TO_SLIDE[key];
+      }
+
+      if (foundSlide) {
+        keepSlides.push(foundSlide);
+        if (foundSlide >= 30 && foundSlide <= 42) hasCatraca = true;
+      }
+
+      // Regras de slides condicionais
+      const install = it.installationData;
+      if (modelLower.includes("idface pro")) {
+        if (install?.entryTech === 'facial' && install?.exitTech === 'botoeira') hasIdFaceProForSlide47 = true;
+        if (install?.entryTech === 'facial' && install?.exitTech === 'facial') hasIdFaceProForSlide48 = true;
+      }
+      if (modelLower.includes("idaccess nano")) {
+        if (install?.entryTech === 'biometria' && install?.exitTech === 'botoeira') hasIdAccessNanoForSlide49 = true;
+      }
+      if (modelLower.includes("idflex pro")) {
+        if (install?.entryTech === 'facial' && install?.exitTech === 'botoeira') hasIdFlexProForSlide51 = true;
+        if (install?.doorType === 'vidro') hasIdFlexProForSlide52 = true;
+      }
     });
 
-    // Conditional installation slides
-    const hasIdFacePro = data.items.some(it => it.product.model?.toLowerCase().includes("idface pro"));
-    const hasIdAccessNano = data.items.some(it => it.product.model?.toLowerCase().includes("idaccess nano"));
-    const hasIdFlexPro = data.items.some(it => it.product.model?.toLowerCase().includes("idflex pro"));
-
-    if (hasIdFacePro && data.flags?.idfaceEntry && data.flags?.botoeira) keepSlides.push(47);
-    if (hasIdFacePro && data.flags?.idfaceEntry && data.flags?.idfaceExit) keepSlides.push(48);
-    if (hasIdAccessNano && data.flags?.idAccessNanoEntry && data.flags?.botoeira) keepSlides.push(49);
-    if (hasIdFlexPro && data.flags?.idFlexProEntry && data.flags?.botoeira) keepSlides.push(51);
-    if (hasIdFlexPro && data.flags?.idFlexProGlass) keepSlides.push(52);
-    if (hasCatraca || data.flags?.hasCatraca) keepSlides.push(53);
+    if (hasIdFaceProForSlide47) keepSlides.push(47);
+    if (hasIdFaceProForSlide48) keepSlides.push(48);
+    if (hasIdAccessNanoForSlide49) keepSlides.push(49);
+    if (hasIdFlexProForSlide51) keepSlides.push(51);
+    if (hasIdFlexProForSlide52) keepSlides.push(52);
+    if (hasCatraca) keepSlides.push(53);
 
     return await generatePptxFromTemplate({
       replacements,
       keepSlidesOverride: Array.from(new Set(keepSlides)).sort((a, b) => a - b),
     });
   } catch (err) {
-    console.error("PPTX generation failed:", err);
-    const pptx = new PptxGenJS();
-    const s = pptx.addSlide();
-    s.addText("Erro ao processar template. Dados: " + data.companyName, { x: 1, y: 1 });
-    return await pptx.write("blob") as Blob;
+    console.error("Erro na geração do PPTX:", err);
+    throw err;
   }
 };
