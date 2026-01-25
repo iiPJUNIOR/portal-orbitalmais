@@ -55,14 +55,14 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
           <TableRow>
             <TableHead>Dispositivo</TableHead>
             <TableHead>Instalação</TableHead>
-            <TableHead>Material porta</TableHead>
+            <TableHead>Mat. Porta</TableHead>
             <TableHead>Controle</TableHead>
-            <TableHead>Com iDSecure</TableHead>
-            <TableHead>Sem iDSecure</TableHead>
-            <TableHead>Lite / outro sistema</TableHead>
-            <TableHead>Valor total (com iDSecure)</TableHead>
-            <TableHead>Valor total (sem iDSecure)</TableHead>
-            <TableHead className="text-right">Quantidade</TableHead>
+            <TableHead>Com iDS</TableHead>
+            <TableHead>Sem iDS</TableHead>
+            <TableHead>Sistema/Lite</TableHead>
+            <TableHead>Total (c/ iDS)</TableHead>
+            <TableHead>Total (s/ iDS)</TableHead>
+            <TableHead className="text-right">Qtd</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>
         </TableHeader>
@@ -141,7 +141,7 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
                       max="99"
                       value={qty}
                       onChange={(e) => handleQuantityChange(productId, parseInt(e.target.value) || 1)}
-                      className="w-20 text-center"
+                      className="w-16 text-center"
                     />
                   </div>
                 </TableCell>
@@ -151,7 +151,7 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
                     onClick={() => onAddToQuote(product, qty)}
                     size="sm"
                   >
-                    Adicionar
+                    Add
                   </Button>
                 </TableCell>
               </TableRow>

@@ -43,6 +43,19 @@ interface PriceBaseTableProps {
 
 const COLUMN_ORDER_STORAGE_KEY = "price_base_column_order_";
 
+function formatHeaderDisplay(header: string): string {
+  if (!header) return "(vazio)";
+  const h = header.toLowerCase();
+  if (h === "com idsecure" || h === "com ids") return "Com iDS";
+  if (h === "sem idsecure" || h === "sem ids") return "Sem iDS";
+  if (h.includes("valor total (com idsecure)")) return "Total (c/ iDS)";
+  if (h.includes("valor total (sem idsecure)")) return "Total (s/ iDS)";
+  if (h === "part number" || h === "part_number") return "P/N";
+  if (h === "quantidade") return "Qtd";
+  if (h === "descrição" || h === "description") return "Descrição";
+  return header;
+}
+
 export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: PriceBaseTableProps) {
   const [quantities, setQuantities] = useState<Record<number, number>>({});
   const [columnOrder, setColumnOrder] = useState<string[]>(base.headers);
@@ -151,11 +164,11 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
               <SortableContext items={columnOrder} strategy={horizontalListSortingStrategy}>
                 {columnOrder.map((headerName) => (
                   <SortableHeader key={headerName} id={headerName}>
-                    {headerName || "(vazio)"}
+                    {formatHeaderDisplay(headerName)}
                   </SortableHeader>
                 ))}
               </SortableContext>
-              <th className="text-left px-2 py-2">Quantidade</th>
+              <th className="text-left px-2 py-2">Qtd</th>
               <th className="text-left px-2 py-2">Ações</th>
             </tr>
           </thead>
@@ -184,17 +197,17 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
                       min={1}
                       value={getQty(ri)}
                       onChange={(e) => handleQtyChange(ri, e.target.value)}
-                      className="w-24"
+                      className="w-20 h-8"
                     />
                   </td>
 
                   <td className="px-2 py-2">
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => onAddRow(base.headers, row, getQty(ri))}>
-                        Adicionar
+                    <div className="flex gap-1">
+                      <Button size="sm" className="h-8 px-2" onClick={() => onAddRow(base.headers, row, getQty(ri))}>
+                        Add
                       </Button>
 
-                      <Button size="sm" variant="outline" onClick={() => {
+                      <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => {
                         // quick export of this row as JSON
                         try {
                           const payload = base.headers.reduce((acc: any, h, idx) => {
@@ -214,7 +227,7 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
                           console.error("export row failed", err);
                         }
                       }}>
-                        Exportar
+                        Exp
                       </Button>
                     </div>
                   </td>
