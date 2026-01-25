@@ -113,22 +113,16 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
     replacements["qtd2"] = data.items[2] ? data.items[2].quantity : "";
 
+    // Slides base que SEMPRE devem aparecer
     const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    keepSlides.push(46, 57);
-
-    const hasCatraca = data.items.some(it => {
-      const cat = (it.product.category || "").toLowerCase();
-      const model = (it.product.model || "").toLowerCase();
-      return cat.includes("catraca") || cat.includes("torniquete") || model.includes("idblock") || model.includes("torniquete");
-    });
-
-    if (hasCatraca) {
-      keepSlides.push(54, 55);
-    }
+    
+    // Adicionando 54 e 55 ao conjunto fixo para evitar que sumam
+    keepSlides.push(46, 54, 55, 57);
 
     if (data.includeApprovalPage) keepSlides.push(56);
 
+    // Adiciona slides específicos baseados nos produtos selecionados
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
