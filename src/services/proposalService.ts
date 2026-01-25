@@ -3,6 +3,7 @@ import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
 // pptxgenjs is used as a robust fallback generator when template-based editing fails
 import PptxGenJS from "pptxgenjs";
 import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface QuoteItem {
   id: string;
@@ -74,13 +75,14 @@ export const generateProposalNumber = (): string => {
 };
 
 /**
- * Format a date string for display in proposals (dd/MM/yyyy).
+ * Format a date string for display in proposals (long format in Portuguese).
  */
 export const formatDateForProposal = (dateStr?: string | null): string => {
   if (!dateStr) return "";
   try {
     const dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr);
-    return format(dt, "dd/MM/yyyy");
+    // Format: "24 de Janeiro de 2026"
+    return format(dt, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   } catch {
     return String(dateStr).slice(0, 10);
   }
@@ -99,11 +101,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["email"] = data.email || "";
     replacements["phone"] = data.phone || "";
     
-    try {
-      replacements["date"] = new Date(data.proposalDate).toLocaleDateString("pt-BR");
-    } catch {
-      replacements["date"] = data.proposalDate || "";
-    }
+    // Set formatted date
+    replacements["date"] = formatDateForProposal(data.proposalDate);
 
     replacements["proposalNumber"] = data.proposalNumber || (data.pipedriveUrl ? extractIdFromPipedriveUrl(data.pipedriveUrl) + " V.1" : "");
 
