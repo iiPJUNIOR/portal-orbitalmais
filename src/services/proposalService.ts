@@ -130,7 +130,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       ? Number(data.overrideTotal)
       : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
     
-    // Formatação de número sem o R$ para evitar duplicação (o template geralmente já tem o R$)
     const formattedNumber = new Intl.NumberFormat("pt-BR", { 
       minimumFractionDigits: 2, 
       maximumFractionDigits: 2 
@@ -143,7 +142,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     const mechanicalItems: string[] = [];
 
     data.items.forEach(it => {
-      // Ajuste na linha: apenas descrição e quantidade para evitar redundância
       const line = `${it.product.description} – ${it.quantity} un`;
       const cat = it.product.category?.toLowerCase() || "";
       const model = it.product.model?.toLowerCase() || "";
@@ -161,7 +159,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = serviceItems.join("\n");
     replacements["items_list2"] = mechanicalItems.join("\n");
 
-    const keepSlides = [1, 2, 3, 4];
+    // Lógica de exclusão do slide 2
+    const keepSlides = [1, 3, 4]; // Pulando o 2 explicitamente
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 55);
 
