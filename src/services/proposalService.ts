@@ -127,7 +127,8 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       if (idx === 2) replacements["items_list2"] = line;
     });
 
-    const keepSlides = [1, 2, 3, 4];
+    // Removendo o slide 2 explicitamente da lista [1, 3, 4]
+    const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55, 57);
 
