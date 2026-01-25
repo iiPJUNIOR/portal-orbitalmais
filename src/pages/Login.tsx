@@ -5,6 +5,7 @@ import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { ShieldCheck } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -54,42 +55,68 @@ export default function Login() {
   }, [navigate]);
 
   return (
-    <div className="min-h-screen flex flex-col md:flex-row bg-white">
-      {/* Coluna da Imagem - Esquerda */}
-      <div className="hidden md:flex md:w-1/2 lg:w-2/3 bg-gray-50 items-center justify-center p-12 overflow-hidden border-r">
-        <div className="relative w-full max-w-4xl">
-          <img 
-            src="https://www.controlid.com.br/assets/img/og-image.jpg" 
-            alt="Produtos Control iD" 
-            className="w-full h-auto object-contain rounded-xl shadow-2xl"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent pointer-events-none rounded-xl" />
+    <div className="min-h-screen flex bg-white">
+      {/* Lado Esquerdo: Imagem com Overlay */}
+      <div className="hidden lg:block lg:w-1/2 relative overflow-hidden">
+        <div 
+          className="absolute inset-0 bg-cover bg-center transition-transform duration-10000 hover:scale-105"
+          style={{ 
+            backgroundImage: "url('https://www.controlid.com.br/assets/img/og-image.jpg')",
+          }}
+        />
+        {/* Overlay gradiente para sofisticação */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black/60 via-black/20 to-transparent" />
+        
+        {/* Conteúdo sobre a imagem */}
+        <div className="absolute inset-0 flex flex-col justify-between p-12 text-white">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-8 w-8 text-primary-foreground" />
+            <span className="text-2xl font-bold tracking-tight">Control iD</span>
+          </div>
+          
+          <div className="max-w-md">
+            <h2 className="text-4xl font-bold mb-4">Inovação em Controle de Acesso</h2>
+            <p className="text-lg text-gray-200">
+              Gerencie suas propostas de forma ágil e profissional com a plataforma líder em tecnologia.
+            </p>
+          </div>
+          
+          <div className="text-sm text-gray-400">
+            &copy; {new Date().getFullYear()} Control iD. Tecnologia brasileira.
+          </div>
         </div>
       </div>
 
-      {/* Coluna do Formulário - Direita */}
-      <div className="flex-1 flex items-center justify-center p-6 md:p-12 lg:p-16">
-        <div className="w-full max-w-md space-y-8">
-          <div className="text-center md:text-left">
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900">
-              Control iD
-            </h1>
-            <p className="mt-2 text-sm text-gray-600">
-              Gerador de Propostas e Orçamentos
-            </p>
+      {/* Lado Direito: Formulário */}
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gray-50/30">
+        <div className="w-full max-w-[400px] space-y-8">
+          <div className="space-y-2 text-center lg:text-left">
+            <div className="lg:hidden flex justify-center mb-6">
+               <div className="flex items-center gap-2 font-bold text-2xl text-black">
+                <ShieldCheck className="h-8 w-8" />
+                <span>Control iD</span>
+              </div>
+            </div>
+            <h1 className="text-3xl font-bold tracking-tight text-gray-900">Bem-vindo</h1>
+            <p className="text-muted-foreground">Insira suas credenciais para acessar o painel.</p>
           </div>
 
-          <div className="bg-white rounded-xl">
+          <div className="bg-white p-2 rounded-2xl shadow-sm border border-gray-100">
             <Auth
               supabaseClient={supabase}
               providers={[]}
               appearance={{
                 theme: ThemeSupa,
+                style: {
+                  button: { borderRadius: '8px', fontWeight: '600' },
+                  input: { borderRadius: '8px' },
+                  anchor: { color: '#666', fontSize: '14px' },
+                },
                 variables: {
                   default: {
                     colors: {
                       brand: '#000000',
-                      brandAccent: '#333333',
+                      brandAccent: '#222222',
                     },
                   },
                 },
@@ -100,24 +127,19 @@ export default function Login() {
                   sign_in: {
                     email_label: 'E-mail',
                     password_label: 'Senha',
-                    button_label: 'Entrar',
-                    loading_button_label: 'Entrando...',
-                    social_provider_text: 'Entrar com {{provider}}',
-                    link_text: 'Já tem uma conta? Entre',
+                    button_label: 'Acessar Plataforma',
+                    loading_button_label: 'Verificando...',
+                    link_text: 'Já possui acesso? Entre aqui',
                   },
                   sign_up: {
                     email_label: 'E-mail',
                     password_label: 'Senha',
-                    button_label: 'Criar conta',
-                    loading_button_label: 'Criando conta...',
-                    social_provider_text: 'Criar conta com {{provider}}',
+                    button_label: 'Solicitar Acesso',
                     link_text: 'Não tem uma conta? Cadastre-se',
                   },
                   forgotten_password: {
                     email_label: 'E-mail',
-                    password_label: 'Senha',
-                    button_label: 'Recuperar senha',
-                    loading_button_label: 'Recuperando...',
+                    button_label: 'Enviar instruções',
                     link_text: 'Esqueceu sua senha?',
                   },
                 }
@@ -125,9 +147,9 @@ export default function Login() {
             />
           </div>
           
-          <div className="text-center text-xs text-gray-400 mt-8">
-            &copy; {new Date().getFullYear()} Control iD. Todos os direitos reservados.
-          </div>
+          <p className="text-center text-xs text-muted-foreground px-8">
+            Ao continuar, você concorda com nossos Termos de Serviço e Política de Privacidade.
+          </p>
         </div>
       </div>
     </div>
