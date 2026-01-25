@@ -116,8 +116,6 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
-    // Distribuição dos itens em tags separadas (uma em cada linha no template)
-    // Inicializamos as tags como vazio para limpar o template caso existam menos de 3 itens
     replacements["items_list"] = "";
     replacements["items_list1"] = "";
     replacements["items_list2"] = "";
@@ -129,17 +127,14 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       if (idx === 2) replacements["items_list2"] = line;
     });
 
-    // Slides base e slides finais obrigatórios (46, 54, 55 e o slide 57 que deve vir em todas)
     const keepSlides = [1, 2, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55, 57);
 
-    // Slide 56 (Aprovação) é opcional conforme escolha no Passo 5 do Wizard
     if (data.includeApprovalPage) {
       keepSlides.push(56);
     }
 
-    // Slides de produtos baseados no modelo
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
@@ -165,77 +160,101 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   const margin = 20;
   let y = margin;
 
-  doc.setFontSize(22);
+  // Header / Logo area simulation
+  doc.setFillColor(30, 30, 30);
+  doc.rect(0, 0, 210, 40, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.text("Control iD", margin, 25);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Proposta Comercial", margin, 32);
+
+  y = 55;
   doc.setTextColor(0, 0, 0);
-  doc.text("Proposta Comercial", margin, y);
+  doc.setFontSize(18);
+  doc.text(data.companyName || "Proposta Comercial", margin, y);
   y += 10;
-  doc.setFontSize(12);
+  
+  doc.setFontSize(10);
   doc.setTextColor(100, 100, 100);
   doc.text(`Número: ${data.proposalNumber || "N/A"}`, margin, y);
   doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 140, y);
   y += 15;
 
-  doc.setFontSize(14);
+  // Client info
   doc.setTextColor(0, 0, 0);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "bold");
   doc.text("Dados do Cliente", margin, y);
   y += 7;
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(`Empresa: ${data.companyName}`, margin, y);
   y += 5;
   doc.text(`CNPJ: ${data.cnpj}`, margin, y);
   y += 5;
-  doc.text(`Responsável: ${data.contactName}`, margin, y);
+  doc.text(`A/C: ${data.contactName}`, margin, y);
   y += 5;
   doc.text(`Endereço: ${data.address}`, margin, y);
   y += 15;
 
+  // Items table
   autoTable(doc, {
     startY: y,
-    head: [['Descrição', 'Quantidade']],
-    body: data.items.map(it => [it.product.description, it.quantity]),
-    theme: 'striped',
-    headStyles: { fillColor: [30, 30, 30] },
+    head: [['Descrição do Produto', 'Quantidade']],
+    body: data.items.map(it => [it.product.description, `${it.quantity} un`]),
+    theme: 'grid',
+    headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: 'bold' },
+    styles: { fontSize: 10, cellPadding: 5 },
     margin: { left: margin, right: margin }
   });
 
   y = (doc as any).lastAutoTable.finalY + 15;
 
+  // Summary and Price
   const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
     ? Number(data.overrideTotal)
     : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
 
-  doc.setFontSize(14);
-  doc.text("Resumo Financeiro", margin, y);
-  y += 8;
-  doc.setFontSize(12);
+  doc.setFillColor(245, 245, 245);
+  doc.rect(margin, y, 170, 25, 'F');
+  
   doc.setFont("helvetica", "bold");
-  doc.text(`VALOR TOTAL: R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, margin, y);
-  doc.setFont("helvetica", "normal");
-  y += 20;
+  doc.setFontSize(14);
+  doc.text("INVESTIMENTO TOTAL", margin + 5, y + 16);
+  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, 140, y + 16);
+  
+  y += 40;
 
+  // Seller info
   if (data.sellerName) {
-    doc.setFontSize(12);
+    doc.setFontSize(11);
     doc.text("Atenciosamente,", margin, y);
     y += 10;
     doc.setFont("helvetica", "bold");
     doc.text(data.sellerName, margin, y);
     y += 5;
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     doc.text(data.sellerRole || "", margin, y);
-    y += 5;
+    y += 4;
     doc.text(data.sellerEmail || "", margin, y);
-    y += 5;
+    y += 4;
     doc.text(data.sellerPhone || "", margin, y);
   }
 
-  if (data.observations) {
-    y += 15;
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text("Observações:", margin, y);
-    y += 5;
-    doc.text(data.observations, margin, y, { maxWidth: 170 });
+  // Optional Approval Page simulation
+  if (data.includeApprovalPage) {
+    doc.addPage();
+    doc.setFillColor(30, 30, 30);
+    doc.rect(0, 0, 210, 297, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(22);
+    doc.text("Clique aqui para aprovar sua proposta", 105, 140, { align: 'center' });
+    doc.setFontSize(12);
+    doc.text("Aguardamos seu retorno para darmos início ao projeto.", 105, 155, { align: 'center' });
   }
 
   return doc.output('blob');
