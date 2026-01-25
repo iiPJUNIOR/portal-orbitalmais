@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import * as googleClient from "@/integrations/google/client";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
-import { fetchBases, saveBase, type StoredBase } from "@/services/productBaseService";
+import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings } from "@/services/settingsService";
 
 const ENV_GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
@@ -398,6 +398,33 @@ export default function Settings() {
     }
   }
 
+  // New: delete a saved base
+  async function handleDeleteBase(id?: string) {
+    if (!id) {
+      toast.error("ID da base inválido");
+      return;
+    }
+    if (!confirm("Remover esta base permanentemente?")) return;
+
+    setLoading(true);
+    try {
+      await deleteBase(id);
+      toast.success("Base removida");
+      // refresh list
+      try {
+        const list = await fetchBases();
+        setBases(Array.isArray(list) ? list : []);
+      } catch (err) {
+        console.warn("Failed to refresh bases after delete", err);
+      }
+    } catch (err: any) {
+      console.error("delete base err", err);
+      toast.error("Falha ao remover base: " + (err?.message || ""));
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="container mx-auto py-8">
@@ -586,6 +613,8 @@ export default function Settings() {
                             URL.revokeObjectURL(url);
                             toast.success("Base exportada");
                           }}>Exportar</Button>
+
+                          <Button size="sm" variant="destructive" onClick={() => handleDeleteBase(String(b.id))}>Remover</Button>
                         </div>
                       </div>
                     ))}
