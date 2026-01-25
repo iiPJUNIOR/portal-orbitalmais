@@ -117,12 +117,29 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     
-    // Adicionando 54 e 55 ao conjunto fixo para evitar que sumam
-    keepSlides.push(46, 54, 55, 57);
+    // Conjunto de slides de fechamento e tabelas
+    keepSlides.push(46, 55, 57);
+
+    // Verificação de Catraca para incluir slide 54
+    const hasCatraca = data.items.some(it => {
+      const model = (it.product.model || "").toLowerCase();
+      const desc = (it.product.description || "").toLowerCase();
+      const cat = (it.product.category || "").toLowerCase();
+      return model.includes("idblock") || model.includes("torniquete") || 
+             desc.includes("idblock") || desc.includes("torniquete") ||
+             cat.includes("catraca") || cat.includes("torniquete");
+    });
+
+    if (hasCatraca) {
+      keepSlides.push(54);
+    }
+
+    // Slide 46 agora já está incluído acima, mas reforçamos os outros condicionais
+    if (!keepSlides.includes(46)) keepSlides.push(46);
 
     if (data.includeApprovalPage) keepSlides.push(56);
 
-    // Adiciona slides específicos baseados nos produtos selecionados
+    // Adiciona slides específicos baseados nos produtos selecionados (slides de detalhes de 19 a 45)
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
