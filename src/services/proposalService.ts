@@ -104,39 +104,29 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
     };
 
-    // Mapeamento individual de itens e suas respectivas quantidades para evitar somas indesejadas
     replacements["items_list"] = data.items[0] ? data.items[0].product.description : "";
     replacements["qtd"] = data.items[0] ? data.items[0].quantity : "";
-
     replacements["items_list1"] = data.items[1] ? data.items[1].product.description : "";
     replacements["qtd1"] = data.items[1] ? data.items[1].quantity : "";
-
     replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
     replacements["qtd2"] = data.items[2] ? data.items[2].quantity : "";
 
-    // Slides fundamentais
     const keepSlides = [1, 3, 4];
-    // Slides institucionais
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    
-    // Slide 46 (Resumo Financeiro) e 57 (Contato) são sempre mantidos
     keepSlides.push(46, 57);
 
-    // Verifica se há alguma catraca ou torniquete no orçamento
     const hasCatraca = data.items.some(it => {
       const cat = (it.product.category || "").toLowerCase();
       const model = (it.product.model || "").toLowerCase();
       return cat.includes("catraca") || cat.includes("torniquete") || model.includes("idblock") || model.includes("torniquete");
     });
 
-    // Slides 54 e 55 são de catraca/torniquete. Só entram se houver o produto.
     if (hasCatraca) {
       keepSlides.push(54, 55);
     }
 
     if (data.includeApprovalPage) keepSlides.push(56);
 
-    // Slides técnicos específicos de cada produto
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
@@ -161,57 +151,101 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
+  const primaryColor = [30, 30, 30]; // Dark Gray/Black from Control iD
 
-  const drawHeader = () => {
-    doc.setFillColor(30, 30, 30);
-    doc.rect(0, 0, width, 25, 'F');
+  const drawSlideHeader = (title: string) => {
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.rect(0, 0, width, 20, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(16);
+    doc.setFontSize(14);
     doc.setFont("helvetica", "bold");
-    doc.text("Control iD", 15, 17);
-    doc.setFontSize(8);
-    doc.setFont("helvetica", "normal");
-    doc.text("PROPOSTA COMERCIAL", width - 15, 17, { align: 'right' });
+    doc.text("Control iD", 10, 13);
+    doc.setFontSize(10);
+    doc.text(title.toUpperCase(), width - 10, 13, { align: 'right' });
   };
 
-  // Página 1: Capa
-  drawHeader();
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(32);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.companyName || "PROPOSTA", 15, 70);
-  doc.setFontSize(14);
-  doc.text(`Proposta: ${data.proposalNumber}`, 15, 85);
-  doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 15, 95);
+  // 1. CAPA
+  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.rect(0, 0, width, height, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(40);
+  doc.text(data.companyName || "PROPOSTA COMERCIAL", 20, height / 2 - 10);
+  doc.setFontSize(16);
+  doc.text(`A/C: ${data.contactName}`, 20, height / 2 + 10);
+  doc.setFontSize(12);
+  doc.text(`Proposta: ${data.proposalNumber} | Data: ${formatDateForProposal(data.proposalDate)}`, 20, height - 20);
 
-  // Página 3: Dados do Cliente
+  // 2. INSTITUCIONAL (Simplificado para PDF)
   doc.addPage();
-  drawHeader();
-  doc.setTextColor(30, 30, 30);
-  doc.setFontSize(22);
-  doc.text("Identificação do Projeto", 15, 50);
-  doc.setFontSize(14);
-  doc.text(`Número da Proposta: ${data.proposalNumber}`, 15, 70);
-  doc.text(`Responsável: ${data.contactName}`, 15, 80);
-  doc.text(`Empresa: ${data.companyName}`, 15, 90);
-  doc.text(`CNPJ: ${data.cnpj}`, 15, 100);
-  doc.text(`Endereço: ${data.address}`, 15, 110);
-  
-  // Página 4: Resumo de Itens
+  drawSlideHeader("Quem somos");
+  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+  doc.setFontSize(24);
+  doc.text("Líder brasileira em tecnologia", 15, 45);
+  doc.setFontSize(12);
+  doc.setFont("helvetica", "normal");
+  const introText = "A Control iD é uma empresa 100% brasileira especializada no desenvolvimento de hardware e software para controle de acesso, automação comercial e relógio de ponto. Com fabricação própria e tecnologia de ponta, oferecemos as melhores soluções do mercado.";
+  doc.text(doc.splitTextToSize(introText, width - 30), 15, 60);
+
+  // 3. IDENTIFICAÇÃO DO PROJETO
   doc.addPage();
-  drawHeader();
-  doc.setTextColor(30, 30, 30);
+  drawSlideHeader("Dados do Cliente");
+  doc.setFontSize(20);
+  doc.text("Identificação da Empresa", 15, 45);
+  autoTable(doc, {
+    startY: 55,
+    body: [
+      ["Razão Social:", data.companyName],
+      ["CNPJ:", data.cnpj],
+      ["Endereço:", data.address],
+      ["Responsável:", data.contactName],
+      ["E-mail:", data.email],
+      ["Telefone:", data.phone],
+    ],
+    theme: 'plain',
+    styles: { fontSize: 12, cellPadding: 4 },
+    columnStyles: { 0: { fontStyle: 'bold', width: 50 } }
+  });
+
+  // 4. DETALHES TÉCNICOS DOS PRODUTOS
+  data.items.forEach(item => {
+    doc.addPage();
+    drawSlideHeader("Especificações Técnicas");
+    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFontSize(22);
+    doc.text(item.product.description, 15, 45);
+    doc.setFontSize(10);
+    doc.text(`Part Number: ${item.product.part_number}`, 15, 52);
+    
+    // Placeholder para características (mimic slide técnico)
+    doc.setFontSize(12);
+    doc.text("Principais Características:", 15, 70);
+    const features = [
+      "- Alta velocidade de identificação",
+      "- Interface intuitiva e moderna",
+      "- Integração total com software iDSecure",
+      "- Design premiado e durabilidade superior"
+    ];
+    features.forEach((f, i) => doc.text(f, 20, 80 + (i * 8)));
+  });
+
+  // 5. RESUMO FINANCEIRO (Página 46 do PPTX)
+  doc.addPage();
+  drawSlideHeader("Resumo do Investimento");
   doc.setFontSize(22);
-  doc.text("Resumo do Projeto e Investimento", 15, 50);
+  doc.text("Proposta Comercial", 15, 40);
   
   autoTable(doc, {
-    startY: 60,
-    head: [['Descrição', 'Quantidade']],
-    body: data.items.map(it => [it.product.description, `${it.quantity} un`]),
+    startY: 50,
+    head: [['Item', 'Descrição do Produto', 'Qtd', 'Total']],
+    body: data.items.map((it, idx) => [
+      idx + 1,
+      it.product.description,
+      it.quantity,
+      "Incluso" // No modelo simplificado
+    ]),
     theme: 'grid',
-    headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 12 },
-    styles: { fontSize: 11, cellPadding: 6 },
-    margin: { left: 15, right: 15 }
+    headStyles: { fillColor: primaryColor, textColor: 255 },
+    styles: { fontSize: 10 }
   });
 
   const finalY = (doc as any).lastAutoTable.finalY;
@@ -220,32 +254,34 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     : (data.totalPrice || 0);
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(15, finalY + 10, width - 30, 20, 'F');
-  doc.setFont("helvetica", "bold");
-  doc.text("VALOR TOTAL DA PROPOSTA", 20, finalY + 23);
-  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 20, finalY + 23, { align: 'right' });
-
-  // Contato Vendedor
-  doc.addPage();
-  drawHeader();
-  doc.setFontSize(22);
-  doc.text("Contato Comercial", 15, 50);
+  doc.rect(15, finalY + 10, width - 30, 25, 'F');
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text(data.sellerName || "", 15, 70);
-  doc.setFont("helvetica", "normal");
-  doc.text(data.sellerRole || "", 15, 78);
-  doc.text(data.sellerEmail || "", 15, 86);
-  doc.text(data.sellerPhone || "", 15, 94);
+  doc.text("INVESTIMENTO TOTAL:", 20, finalY + 26);
+  doc.setFontSize(18);
+  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 20, finalY + 26, { align: 'right' });
 
-  // Aprovação
+  // 6. CONTATO (Página 57 do PPTX)
+  doc.addPage();
+  drawSlideHeader("Contato");
+  doc.setFontSize(22);
+  doc.text("Dúvidas sobre o projeto?", 15, 45);
+  doc.setFontSize(14);
+  doc.text(data.sellerName || "", 15, 65);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.text(data.sellerRole || "", 15, 72);
+  doc.text(data.sellerEmail || "", 15, 79);
+  doc.text(data.sellerPhone || "", 15, 86);
+
+  // 7. APROVAÇÃO
   if (data.includeApprovalPage) {
     doc.addPage();
-    doc.setFillColor(30, 30, 30);
+    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
     doc.rect(0, 0, width, height, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(28);
-    doc.text("Clique aqui para aprovar sua proposta", width / 2, height / 2, { align: 'center' });
+    doc.setFontSize(30);
+    doc.text("CLIQUE AQUI PARA APROVAR SUA PROPOSTA", width / 2, height / 2, { align: 'center' });
   }
 
   return doc.output('blob');
