@@ -13,13 +13,14 @@ export default function Login() {
   useEffect(() => {
     let mounted = true;
     
+    // Verifica sessão inicial
     const checkSession = async () => {
       try {
         // @ts-ignore
         const resp = await supabase.auth.getSession?.();
         const currentSession = resp?.data?.session ?? resp?.session ?? null;
         if (currentSession && mounted) {
-          navigate("/");
+          navigate("/", { replace: true });
         }
       } catch (err) {
         // ignore
@@ -28,29 +29,20 @@ export default function Login() {
 
     checkSession();
 
+    // Monitora mudanças de estado (Login/Logout)
     // @ts-ignore
-    const sub = supabase.auth.onAuthStateChange((event: string, payload: any) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      if (event === "SIGNED_IN") {
-        const s = payload?.session ?? null;
-        if (s) {
-          navigate("/");
-        }
+      
+      // Se logou com sucesso, redireciona imediatamente sem esperar refresh
+      if (event === "SIGNED_IN" && session) {
+        navigate("/", { replace: true });
       }
     });
 
     return () => {
       mounted = false;
-      try {
-        const maybeData = (sub as any)?.data ?? sub;
-        if (maybeData?.subscription?.unsubscribe) {
-          maybeData.subscription.unsubscribe();
-        } else if (typeof (sub as any)?.unsubscribe === "function") {
-          (sub as any).unsubscribe();
-        }
-      } catch (e) {
-        // ignore
-      }
+      subscription.unsubscribe();
     };
   }, [navigate]);
 
@@ -145,16 +137,26 @@ export default function Login() {
                     password_label: 'Sua senha',
                     button_label: 'Acessar Painel',
                     loading_button_label: 'Entrando...',
+                    link_text: 'Não tem uma conta? Cadastre-se', // Tradução do "Sign up"
                   },
                   sign_up: {
-                    email_label: 'E-mail',
-                    password_label: 'Senha',
+                    email_label: 'Endereço de e-mail',
+                    password_label: 'Crie uma senha',
                     button_label: 'Criar conta',
+                    loading_button_label: 'Criando...',
+                    link_text: 'Já possui uma conta? Entre aqui',
                   },
                   forgotten_password: {
-                    email_label: 'E-mail',
+                    email_label: 'Endereço de e-mail',
                     button_label: 'Recuperar senha',
+                    loading_button_label: 'Enviando e-mail...',
+                    link_text: 'Esqueceu sua senha?', // Tradução do "Forgot your password?"
                   },
+                  update_password: {
+                    password_label: 'Nova senha',
+                    button_label: 'Atualizar senha',
+                    loading_button_label: 'Atualizando...',
+                  }
                 }
               }}
             />
