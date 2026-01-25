@@ -116,19 +116,25 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
-    // Distribuição sequencial dos itens nas tags de lista
-    const itemLines = data.items.map(it => `${it.product.description} – ${it.quantity} un`);
-    
-    replacements["items_list"] = itemLines[0] || "";
-    replacements["items_list1"] = itemLines[1] || "";
-    replacements["items_list2"] = itemLines[2] || "";
+    // Distribuição dos itens em tags separadas (uma em cada linha no template)
+    // Inicializamos as tags como vazio para limpar o template caso existam menos de 3 itens
+    replacements["items_list"] = "";
+    replacements["items_list1"] = "";
+    replacements["items_list2"] = "";
 
-    // Slides base e slides finais obrigatórios (46, 54, 55, 57)
+    data.items.slice(0, 3).forEach((it, idx) => {
+      const line = `${it.product.description} – ${it.quantity} un`;
+      if (idx === 0) replacements["items_list"] = line;
+      if (idx === 1) replacements["items_list1"] = line;
+      if (idx === 2) replacements["items_list2"] = line;
+    });
+
+    // Slides base e slides finais obrigatórios (46, 54, 55 e o slide 57 que deve vir em todas)
     const keepSlides = [1, 2, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55, 57);
 
-    // Slide 56 (Aprovação) é opcional
+    // Slide 56 (Aprovação) é opcional conforme escolha no Passo 5 do Wizard
     if (data.includeApprovalPage) {
       keepSlides.push(56);
     }
