@@ -12,6 +12,7 @@ export type StoredBase = {
   sem_ids_column?: string | null;
   name_column?: string | null;
   description_column?: string | null;
+  info_column?: string | null;
   created_at?: string;
 };
 

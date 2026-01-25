@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { parseSpreadsheetNumber } from "@/lib/formatters";
 
@@ -70,6 +70,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     const headers = currentBase.headers;
     const nameCol = currentBase.name_column?.toLowerCase();
     const descCol = currentBase.description_column?.toLowerCase();
+    const infoCol = currentBase.info_column?.toLowerCase();
 
     return currentBase.rows.map((row, idx) => {
       const p: any = {};
@@ -77,11 +78,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       
       const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
       const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
+      const info = infoCol ? p[infoCol] : "";
       
       return {
         id: `${currentBase.id}-${idx}`,
         name: String(name || "Produto sem nome").trim(),
         description: String(description).trim(),
+        importantInfo: String(info).trim(),
         sku: p.sku || p["part number"] || p.pn || "",
         category: p.categoria || p.category || "",
       };
@@ -90,7 +93,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
 
   const filteredProducts = productsFromBase.filter(p => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-    p.sku.toLowerCase().includes(productSearch.toLowerCase())
+    p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
+    p.importantInfo.toLowerCase().includes(productSearch.toLowerCase())
   );
 
   const fetchCnpjData = async (rawCnpj: string) => {
@@ -173,7 +177,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Buscar por nome, SKU ou info..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
             </div>
             <div className="max-h-80 overflow-y-auto border rounded-xl divide-y">
               {filteredProducts.map(p => {
@@ -183,6 +187,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                     <div className="flex-1">
                       <div className="font-bold text-sm">{p.name}</div>
                       <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
+                      {p.importantInfo && (
+                        <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-primary bg-primary/5 w-fit px-1.5 py-0.5 rounded">
+                          <Info className="h-3 w-3" />
+                          {p.importantInfo}
+                        </div>
+                      )}
                     </div>
                     <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-8 w-8 p-0 rounded-full" onClick={() => handleProductToggle(p)}>
                       {isSelected ? <Trash2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}

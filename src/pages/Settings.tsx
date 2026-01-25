@@ -161,9 +161,9 @@ export default function Settings() {
                     <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteBase(base.id!).then(loadBases)}>Remover</Button>
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Coluna Nome do Produto</Label>
+                      <Label className="text-[10px] uppercase text-muted-foreground">Coluna Nome</Label>
                       <select 
                         className="w-full text-xs border rounded p-1" 
                         value={base.name_column || ""} 
@@ -181,6 +181,17 @@ export default function Settings() {
                         onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                       >
                         <option value="">-- Automático --</option>
+                        {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[10px] uppercase text-muted-foreground">Informação Adicional</Label>
+                      <select 
+                        className="w-full text-xs border rounded p-1" 
+                        value={base.info_column || ""} 
+                        onChange={e => updateBaseMapping(base, "info_column", e.target.value)}
+                      >
+                        <option value="">-- Nenhuma --</option>
                         {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
