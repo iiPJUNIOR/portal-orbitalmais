@@ -150,7 +150,7 @@ function productFromBaseRow(headers: string[], row: any[], idx: number): Product
 /* --- Filtering helper --- */
 function applyFiltersToProducts(products: Product[], filters: Partial<Record<string, any>> = {}) {
   const filtered = products.filter((product) => {
-    if (filters.category && product.category !== filters.category) return false;
+    if (filters.category && product.category !== product.category) return false;
     if (filters.tipo) {
       const t = String(filters.tipo).toLowerCase();
       if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) return false;
@@ -735,7 +735,7 @@ export default function Index() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <main className="lg:col-span-2 space-y-6">
                 <section className="bg-white p-4 rounded-md shadow-sm">
-                  <ProductFilter onFilterChange={(f) => debouncedLoad(f)} />
+                  <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
                 </section>
 
                 <section className="bg-white p-4 rounded-md shadow-sm">

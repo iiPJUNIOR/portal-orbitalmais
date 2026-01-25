@@ -14,9 +14,24 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Search } from "lucide-react";
 import { ProductFilters } from "@/types/product";
+import { parseSpreadsheetNumber } from "@/lib/formatters";
+
+// Define StoredBase type locally to avoid circular dependency issues if Index.tsx also defines it locally
+type StoredBase = {
+  id: string;
+  name: string;
+  type: "catalog" | "product";
+  headers: string[];
+  rows: any[][];
+  createdAt: string;
+  key_column?: string | null;
+  com_ids_column?: string | null;
+  sem_ids_column?: string | null;
+};
 
 interface ProductFilterProps {
   onFilterChange: (filters: ProductFilters) => void;
+  selectedBase?: StoredBase;
 }
 
 const DEBOUNCE_MS = 300;
@@ -25,12 +40,47 @@ function uniq<T>(arr: T[]) {
   return Array.from(new Set(arr.filter(Boolean)));
 }
 
-export function ProductFilter({ onFilterChange }: ProductFilterProps) {
+// Helper function to derive Product-like properties from a raw spreadsheet row
+function productFromBaseRow(headers: string[], row: any[], idx: number): any {
+  const map: Record<string, any> = {};
+  headers.forEach((h, i) => {
+    map[h] = row[i];
+  });
+
+  const safe = (k: string[]) => {
+    for (const key of k) {
+      if (map[key] !== undefined && map[key] !== null && String(map[key]).trim() !== "") {
+        return String(map[key]);
+      }
+    }
+    return "";
+  }
+    
+  const value12 = parseSpreadsheetNumber(safe(["value_12m", "12m", "valor12", "valor_12m", "price12", "price_12"]));
+  const value24 = parseSpreadsheetNumber(safe(["value_24m", "24m", "valor24", "valor_24m", "price24", "price_24"]));
+
+  return {
+    category: safe(["category", "Categoria", "Controladores Porta"]),
+    model: safe(["model", "Model", "modelo", "Modelo"]) || safe(["description", "Description", "descrição", "Descrição"]),
+    colors: safe(["colors", "Colors", "Cor"]).split(",").map((c: string) => c.trim()).filter(Boolean),
+    facial: safe(["facial", "Facial"]) || "None",
+    proximity: safe(["proximity", "Proximity"]) || "None",
+    biometrics: String(safe(["biometrics", "Biometria"])).toLowerCase() === "true",
+    urn: String(safe(["urn", "Urna"])).toLowerCase() === "true",
+    qr: String(safe(["qr", "QR", "qrcode"])).toLowerCase() === "true",
+    value_12m: value12,
+    value_24m: value24,
+  };
+}
+
+
+export function ProductFilter({ onFilterChange, selectedBase }: ProductFilterProps) {
   const [categories, setCategories] = useState<string[]>([]);
   const [models, setModels] = useState<string[]>([]);
   const [tipos, setTipos] = useState<string[]>([]);
   const [colors, setColors] = useState<string[]>([]);
-  const [hasImported, setHasImported] = useState<boolean>(false);
+  
+  const hasImported = !!selectedBase;
   
   const [filters, setFilters] = useState<ProductFilters>({
     category: undefined,
@@ -50,43 +100,40 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
   const debounceRef = useRef<number | null>(null);
   const mountedRef = useRef(false); // avoid triggering filter on initial mount
 
-  // Load option lists only from importedProducts in localStorage
+  // Load filter options from the selected base
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("importedProducts");
-      if (raw) {
-        const rows = JSON.parse(raw) as any[];
-        if (Array.isArray(rows) && rows.length > 0) {
-          setHasImported(true);
-          const products = rows;
-          const c = uniq(products.map((p) => (p.category ? String(p.category) : "")).filter(Boolean));
-          const m = uniq(products.map((p) => (p.model ? String(p.model) : "")).filter(Boolean));
-          // tipo: derive from model and part_number if available
-          const tset: string[] = [];
-          products.forEach((p) => {
-            if (p.model) tset.push(String(p.model));
-            if (p.part_number) tset.push(String(p.part_number));
-          });
-          const types = uniq(tset);
-          const cols = uniq(products.flatMap((p) => (Array.isArray(p.colors) ? p.colors : (p.colors ? String(p.colors).split(",") : []) ) ).map((c: any) => String(c).trim()).filter(Boolean));
-          setCategories(c);
-          setModels(m);
-          setTipos(types);
-          setColors(cols);
-          return;
-        }
-      }
-    } catch (err) {
-      console.warn("Failed to parse importedProducts for filter lists", err);
+    if (!selectedBase || selectedBase.rows.length === 0) {
+      setCategories([]);
+      setModels([]);
+      setTipos([]);
+      setColors([]);
+      return;
     }
 
-    // No imported products available
-    setHasImported(false);
-    setCategories([]);
-    setModels([]);
-    setTipos([]);
-    setColors([]);
-  }, []);
+    try {
+      const products = selectedBase.rows.map((row, idx) => productFromBaseRow(selectedBase.headers, row, idx));
+      
+      const c = uniq(products.map((p) => p.category).filter(Boolean));
+      const m = uniq(products.map((p) => p.model).filter(Boolean));
+      
+      // Tipo: use models for now
+      const types = uniq(products.map((p) => p.model).filter(Boolean));
+      
+      const cols = uniq(products.flatMap((p) => p.colors).filter(Boolean));
+      
+      setCategories(c);
+      setModels(m);
+      setTipos(types);
+      setColors(cols);
+    } catch (err) {
+      console.warn("Failed to derive filter lists from selected base", err);
+      setCategories([]);
+      setModels([]);
+      setTipos([]);
+      setColors([]);
+    }
+    
+  }, [selectedBase]);
 
   // Debounced filter application: wait DEBOUNCE_MS after the last change
   useEffect(() => {
@@ -162,7 +209,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
     <div className="space-y-6">
       {!hasImported && (
         <div className="p-3 bg-yellow-50 border rounded text-yellow-900">
-          Nenhuma planilha importada detectada. Importe a planilha em <strong>Configurações</strong> para habilitar busca e filtros.
+          Nenhuma base de produtos selecionada. Importe a planilha em <strong>Configurações</strong> e selecione uma base para habilitar busca e filtros.
           <div className="mt-2">
             <Button onClick={() => { window.location.href = "/settings"; }}>
               Ir para Configurações
@@ -179,7 +226,7 @@ export function ProductFilter({ onFilterChange }: ProductFilterProps) {
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
               id="search"
-              placeholder={hasImported ? "Descrição, part number..." : "Importe a planilha para buscar"}
+              placeholder={hasImported ? "Descrição, part number..." : "Selecione uma base para buscar"}
               className="pl-8"
               value={filters.search || ""}
               onChange={(e) => handleInputChange("search", e.target.value)}
