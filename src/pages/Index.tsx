@@ -765,8 +765,8 @@ export default function Index() {
 
       {step === "catalog" && (
         <>
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            <main className="lg:col-span-2 space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            <main className="lg:col-span-3 space-y-6">
               <section className="bg-white p-4 rounded-md shadow-sm">
                 <ProductFilter onFilterChange={(f) => debouncedLoad(f)} selectedBase={selectedBase} />
               </section>
@@ -808,7 +808,7 @@ export default function Index() {
                   </div>
                 </div>
 
-                <div>
+                <div className="w-full">
                   {baseLoading && !currentBaseForDisplay ? (
                     <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                   ) : (
@@ -1015,7 +1015,7 @@ export default function Index() {
 
       {quoteItems.length > 0 && (
         <div className="fixed left-0 right-0 bottom-4 z-50 px-4 pointer-events-none ml-[var(--sidebar-width)]">
-          <div className="w-full max-w-3xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
+          <div className="w-full max-w-5xl mx-auto bg-white/95 backdrop-blur-sm border rounded-md shadow-lg p-3 flex flex-col md:flex-row items-stretch md:items-center gap-3 pointer-events-auto">
             <div className="flex-1">
               <div className="text-sm text-muted-foreground">Itens: <span className="font-medium">{totalItemsCount}</span></div>
               <div className="text-lg font-bold">{new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(totalPrice)}</div>
