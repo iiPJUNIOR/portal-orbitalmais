@@ -5,7 +5,8 @@ import {
   LayoutTemplate, 
   Settings, 
   FileText,
-  LogOut
+  LogOut,
+  User
 } from "lucide-react";
 import {
   Sidebar,
@@ -21,7 +22,6 @@ import {
 } from "@/components/ui/sidebar";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
-import { Button } from "./ui/button";
 import { supabase } from "@/integrations/supabase/client";
 
 export function AppSidebar() {
@@ -78,25 +78,26 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t">
-        {user && (
-          <div className="space-y-3">
-            <div className="text-xs text-muted-foreground truncate px-2">
-              {user.email}
-            </div>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton 
-                  onClick={handleLogout}
-                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Sair</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </div>
-        )}
+      <SidebarFooter className="p-4 border-t bg-gray-50/50">
+        <SidebarMenu>
+          {user && (
+            <SidebarMenuItem className="mb-2 px-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground overflow-hidden">
+                <User className="h-3 w-3 flex-shrink-0" />
+                <span className="truncate">{user.email}</span>
+              </div>
+            </SidebarMenuItem>
+          )}
+          <SidebarMenuItem>
+            <SidebarMenuButton 
+              onClick={handleLogout}
+              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sair da conta</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
     </Sidebar>
   );
