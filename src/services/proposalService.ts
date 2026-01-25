@@ -106,10 +106,10 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
     };
 
-    // Linhas de itens (Página 4)
-    replacements["items_list"] = data.items[0] ? `${data.items[0].product.description} – ${data.items[0].quantity} un` : "";
-    replacements["items_list1"] = data.items[1] ? `${data.items[1].product.description} – ${data.items[1].quantity} un` : "";
-    replacements["items_list2"] = data.items[2] ? `${data.items[2].product.description} – ${data.items[2].quantity} un` : "";
+    // Linhas de itens (Página 4) - Apenas a descrição, sem quantidade
+    replacements["items_list"] = data.items[0] ? data.items[0].product.description : "";
+    replacements["items_list1"] = data.items[1] ? data.items[1].product.description : "";
+    replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
 
     // Slides mantidos: 1 (Capa), 3 (Dados Cliente), 4 (Resumo Itens)
     const keepSlides = [1, 3, 4];
