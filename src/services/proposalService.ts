@@ -111,13 +111,29 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = data.items[1] ? data.items[1].product.description : "";
     replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
 
-    // Slides mantidos: 1 (Capa), 3 (Dados Cliente), 4 (Resumo Itens)
+    // Slides fundamentais
     const keepSlides = [1, 3, 4];
+    // Slides institucionais
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    keepSlides.push(46, 54, 55, 57);
+    
+    // Slide 46 (Resumo Financeiro) e 57 (Contato) são sempre mantidos
+    keepSlides.push(46, 57);
+
+    // Verifica se há alguma catraca ou torniquete no orçamento
+    const hasCatraca = data.items.some(it => {
+      const cat = (it.product.category || "").toLowerCase();
+      const model = (it.product.model || "").toLowerCase();
+      return cat.includes("catraca") || cat.includes("torniquete") || model.includes("idblock") || model.includes("torniquete");
+    });
+
+    // Slides 54 e 55 são de catraca/torniquete. Só entram se houver o produto.
+    if (hasCatraca) {
+      keepSlides.push(54, 55);
+    }
 
     if (data.includeApprovalPage) keepSlides.push(56);
 
+    // Slides técnicos específicos de cada produto
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
