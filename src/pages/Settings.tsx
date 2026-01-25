@@ -194,7 +194,7 @@ export default function Settings() {
                     <div className="space-y-1.5">
                       <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
                       <select 
-                        className="w-full text-xs border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
+                        className="w-full text-xs border rounded-lg p-1.5 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
                         value={base.name_column || ""} 
                         onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                       >
@@ -205,7 +205,7 @@ export default function Settings() {
                     <div className="space-y-1.5">
                       <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
                       <select 
-                        className="w-full text-xs border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
+                        className="w-full text-xs border rounded-lg p-1.5 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
                         value={base.description_column || ""} 
                         onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                       >
@@ -227,29 +227,29 @@ export default function Settings() {
                         </Button>
                       </div>
                       
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-x-4 gap-y-3">
                         {(base.extra_columns || []).map((col, idx) => (
-                          <div key={idx} className="flex items-center gap-2 group">
+                          <div key={idx} className="flex items-center gap-1.5 group">
                             <select 
-                              className="flex-1 text-[11px] border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
+                              className="w-full text-[10px] border rounded-lg p-1.5 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
                               value={col} 
                               onChange={e => updateExtraColumn(base, idx, e.target.value)}
                             >
-                              <option value="">-- Selecione a Coluna --</option>
+                              <option value="">-- Selecione --</option>
                               {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                             </select>
                             <Button 
                               variant="ghost" 
                               size="sm" 
-                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors" 
+                              className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive flex-shrink-0" 
                               onClick={() => removeExtraColumn(base, idx)}
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
                         ))}
                         {(base.extra_columns || []).length === 0 && (
-                          <p className="text-[11px] text-muted-foreground italic py-2">Nenhuma informação adicional configurada.</p>
+                          <p className="text-[10px] text-muted-foreground italic col-span-full">Nenhuma informação adicional configurada.</p>
                         )}
                       </div>
                     </div>
