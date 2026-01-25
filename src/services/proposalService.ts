@@ -116,42 +116,24 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
-    const identificationItems: string[] = [];
-    const blockingItems: string[] = [];
-    const softwareServiceItems: string[] = [];
+    // Distribuição sequencial dos itens nas tags de lista
+    const itemLines = data.items.map(it => `${it.product.description} – ${it.quantity} un`);
+    
+    replacements["items_list"] = itemLines[0] || "";
+    replacements["items_list1"] = itemLines[1] || "";
+    replacements["items_list2"] = itemLines[2] || "";
 
-    data.items.forEach(it => {
-      const line = `${it.product.description} – ${it.quantity} un`;
-      const cat = it.product.category?.toLowerCase() || "";
-      const model = it.product.model?.toLowerCase() || "";
-      const desc = it.product.description?.toLowerCase() || "";
-
-      // Lógica de Categorização baseada nos placeholders do template
-      if (model.includes("idblock") || model.includes("torniquete") || cat.includes("catraca") || cat.includes("torniquete")) {
-        // Bloqueio -> items_list1
-        blockingItems.push(line);
-      } else if (cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || model.includes("idpower")) {
-        // Software/Serviço -> items_list2
-        softwareServiceItems.push(line);
-      } else {
-        // Identificação (iDFace, iDAccess, iDFlex, etc.) -> items_list
-        identificationItems.push(line);
-      }
-    });
-
-    replacements["items_list"] = identificationItems.join("\n");
-    replacements["items_list1"] = blockingItems.join("\n");
-    replacements["items_list2"] = softwareServiceItems.join("\n");
-
+    // Slides base e slides finais obrigatórios (46, 54, 55, 57)
     const keepSlides = [1, 2, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    keepSlides.push(46, 54, 55);
+    keepSlides.push(46, 54, 55, 57);
 
-    // Adiciona o slide 56 apenas se solicitado
+    // Slide 56 (Aprovação) é opcional
     if (data.includeApprovalPage) {
       keepSlides.push(56);
     }
 
+    // Slides de produtos baseados no modelo
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
       let foundSlide = MODEL_TO_SLIDE[modelLower];
