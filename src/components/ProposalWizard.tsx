@@ -21,10 +21,6 @@ interface WizardProps {
   onCancel: () => void;
 }
 
-const DOOR_CONTROLLERS = [
-  "iDFace Pro", "iDFace Max", "iDFlex IP65", "iDFlex Pro", "iDAccess Nano", "iDAccess", "iDAccess Pro"
-];
-
 export function ProposalWizard({ initialSellerData, onComplete, onCancel }: WizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [fetchingCnpj, setFetchingCnpj] = useState(false);
@@ -186,11 +182,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       case 3:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Nº de Usuários</Label><Input type="number" value={formData.users} onChange={e => setFormData(prev => ({ ...prev, users: e.target.value }))} /></div>
-            <div className="grid grid-cols-3 gap-2">
-              <div className="space-y-1"><Label className="text-xs">qtd</Label><Input value={formData.qtd} onChange={e => setFormData(prev => ({ ...prev, qtd: e.target.value }))} /></div>
-              <div className="space-y-1"><Label className="text-xs">qtd1</Label><Input value={formData.qtd1} onChange={e => setFormData(prev => ({ ...prev, qtd1: e.target.value }))} /></div>
-              <div className="space-y-1"><Label className="text-xs">qtd2</Label><Input value={formData.qtd2} onChange={e => setFormData(prev => ({ ...prev, qtd2: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label>Número de Usuários do Sistema</Label>
+              <Input 
+                type="number" 
+                placeholder="Ex: 500"
+                value={formData.users} 
+                onChange={e => setFormData(prev => ({ ...prev, users: e.target.value }))} 
+              />
+              <p className="text-xs text-muted-foreground">Esta quantidade será usada para definir o porte do software na proposta.</p>
             </div>
           </div>
         );
@@ -259,7 +259,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         );
       case 5:
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="p-6 bg-neutral-900 text-white rounded-2xl shadow-inner">
               <Label className="text-gray-400">VALOR TOTAL DA PROPOSTA</Label>
               <div className="flex items-center gap-2 mt-2">
@@ -273,8 +273,27 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 />
               </div>
             </div>
+
+            <div className="space-y-3">
+              <Label className="text-sm font-bold">Quantidades Auxiliares (Slide de Resumo)</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Variável: qtd</Label>
+                  <Input placeholder="Ex: 5" value={formData.qtd} onChange={e => setFormData(prev => ({ ...prev, qtd: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Variável: qtd1</Label>
+                  <Input placeholder="Ex: 2" value={formData.qtd1} onChange={e => setFormData(prev => ({ ...prev, qtd1: e.target.value }))} />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] uppercase text-muted-foreground">Variável: qtd2</Label>
+                  <Input placeholder="Ex: 10" value={formData.qtd2} onChange={e => setFormData(prev => ({ ...prev, qtd2: e.target.value }))} />
+                </div>
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-4 text-xs">
-              <Card className="p-3"><Label className="text-muted-foreground">Itens</Label><div className="text-lg font-bold">{formData.selectedProducts.length}</div></Card>
+              <Card className="p-3"><Label className="text-muted-foreground">Itens Selecionados</Label><div className="text-lg font-bold">{formData.selectedProducts.length}</div></Card>
               <Card className="p-3"><Label className="text-muted-foreground">Cliente</Label><div className="text-lg font-bold truncate">{formData.companyName || "-"}</div></Card>
             </div>
           </div>
