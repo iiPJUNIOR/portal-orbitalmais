@@ -38,7 +38,6 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       navigate(target);
     } catch (err) {
       // ignore navigation errors
-      // console.warn("safeNavigate failed", err);
     }
   };
 
@@ -62,30 +61,50 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       }
 
       // Listen for auth state changes
-      // onAuthStateChange returns { data } where data.subscription.unsubscribe() is available
+      // onAuthStateChange returns an object with 'data' containing the subscription
       // @ts-ignore
-      const { data } = supabase.auth.onAuthStateChange((event, payload) => {
-        // Ignore the INITIAL_SESSION event to avoid double-handling during startup
+      const authListener = supabase.auth.onAuthStateChange((event, payload) => {
+        // payload.session may be available in many events (including INITIAL_SESSION)
+        const s = payload?.session ?? null;
+
+        // Handle INITIAL_SESSION to ensure we restore the session if Supabase provides it.
+        // Some environments deliver the current session via this event rather than getSession.
         if (event === "INITIAL_SESSION") {
+          // only set session/user (do not force navigation here)
+          setSession(s);
+          setUser(s?.user ?? null);
           return;
         }
 
-        const s = payload?.session ?? null;
+        // For other events, update session and user
         setSession(s);
         setUser(s?.user ?? null);
 
         // Only auto-redirect on explicit sign-out events.
-        // Avoid forcing navigation to "/" on SIGNED_IN (lets user stay on pages like /settings).
         if (event === "SIGNED_OUT") {
           safeNavigate("/login");
         }
+
+        // Do not force navigation on SIGNED_IN to avoid interrupting user's current flow.
       });
 
+      // Cleanup function: unsubscribe listener properly
       return () => {
         mounted = false;
         try {
-          data?.subscription?.unsubscribe?.();
-        } catch {}
+          // The supabase client returns { data } with a subscription object that has unsubscribe()
+          // In some versions it's authListener.data.subscription.unsubscribe(); handle both shapes safely.
+          const maybeData = (authListener as any)?.data ?? authListener;
+          if (maybeData?.subscription?.unsubscribe) {
+            maybeData.subscription.unsubscribe();
+          } else if (typeof maybeData?.unsubscribe === "function") {
+            maybeData.unsubscribe();
+          } else if (typeof (authListener as any)?.unsubscribe === "function") {
+            (authListener as any).unsubscribe();
+          }
+        } catch (e) {
+          // ignore cleanup errors
+        }
       };
     })();
 
