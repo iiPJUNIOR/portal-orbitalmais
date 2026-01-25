@@ -225,9 +225,9 @@ function filterBaseRows(base: StoredBase, filters: Partial<Record<string, any>>)
 /* --- Main component --- */
 export default function Index() {
   const navigate = useNavigate();
-  // Use a separate state for base loading (fetching from server) vs filter loading (local debounce)
+  // Use a single state for network loading (fetching bases)
   const [baseLoading, setBaseLoading] = useState<boolean>(false);
-  const [filterLoading, setFilterLoading] = useState<boolean>(false);
+  // Removed filterLoading state
 
   // persisted quote items
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>(() => {
@@ -302,8 +302,6 @@ export default function Index() {
   // Effect to apply filtering whenever selectedBaseId or currentFilters change
   useEffect(() => {
     if (selectedBase) {
-      setFilterLoading(true); // Indicate that filtering is starting
-      
       // Debounce filtering logic
       if (debounceRef.current) {
         window.clearTimeout(debounceRef.current);
@@ -316,8 +314,6 @@ export default function Index() {
         } catch (err) {
           console.error("Error filtering base rows:", err);
           setFilteredRows(selectedBase.rows);
-        } finally {
-          setFilterLoading(false); // Filtering finished
         }
       }, 250); // Use a short debounce for filtering
 
@@ -328,7 +324,6 @@ export default function Index() {
       };
     } else {
       setFilteredRows([]);
-      setFilterLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBaseId, currentFilters, bases]);
@@ -764,12 +759,12 @@ export default function Index() {
                     </div>
 
                     <div className="text-sm text-muted-foreground whitespace-nowrap">
-                      {filterLoading ? "Filtrando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
+                      {baseLoading ? "Carregando..." : `Exibindo ${filteredProductsCount} de ${totalProductsCount} produtos`}
                     </div>
                   </div>
 
                   <div>
-                    {(baseLoading || filterLoading) && !currentBaseForDisplay ? (
+                    {baseLoading && !currentBaseForDisplay ? (
                       <div className="p-8 text-center text-muted-foreground">Carregando base...</div>
                     ) : (
                       <>
