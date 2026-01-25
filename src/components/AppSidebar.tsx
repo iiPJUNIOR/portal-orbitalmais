@@ -4,7 +4,6 @@ import React from "react";
 import { 
   LayoutTemplate, 
   Settings, 
-  FileText,
   LogOut,
   User
 } from "lucide-react";
@@ -49,11 +48,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 border-b">
-        <div className="flex items-center gap-2 font-bold text-xl text-primary">
-          <FileText className="h-6 w-6" />
-          <span>Control iD</span>
-        </div>
+      <SidebarHeader className="p-4 border-b flex items-center justify-center">
+        <img 
+          src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+          alt="Control iD" 
+          className="h-8 w-auto object-contain"
+        />
       </SidebarHeader>
       
       <SidebarContent>

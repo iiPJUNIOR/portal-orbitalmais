@@ -5,7 +5,7 @@ import { Auth } from "@supabase/auth-ui-react";
 import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -34,10 +34,7 @@ export default function Login() {
       if (!mounted) return;
       
       if (event === "SIGNED_IN" && session) {
-        // Ativa imediatamente o estado de transição
         setIsLoggingIn(true);
-        
-        // Pequeno delay para garantir que a animação seja percebida e o sistema processe o token
         setTimeout(() => {
           if (mounted) {
             navigate("/", { replace: true });
@@ -58,8 +55,12 @@ export default function Login() {
       {isLoggingIn && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-white animate-in fade-in duration-500">
           <div className="flex flex-col items-center space-y-4">
-            <div className="p-4 bg-neutral-900 rounded-2xl shadow-2xl animate-bounce">
-              <ShieldCheck className="h-12 w-12 text-white" />
+            <div className="p-6 bg-white rounded-2xl shadow-2xl animate-bounce">
+              <img 
+                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                alt="Control iD" 
+                className="h-10 w-auto"
+              />
             </div>
             <div className="text-center">
               <h2 className="text-2xl font-bold text-gray-900">Bem-vindo de volta!</h2>
@@ -83,9 +84,12 @@ export default function Login() {
           />
           
           <div className="relative z-10">
-            <div className="flex items-center gap-3">
-              <ShieldCheck className="h-10 w-10 text-white" />
-              <span className="text-2xl font-bold tracking-tight">Control iD</span>
+            <div className="bg-white p-4 rounded-xl inline-block">
+              <img 
+                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                alt="Control iD" 
+                className="h-8 w-auto"
+              />
             </div>
           </div>
 
@@ -108,10 +112,11 @@ export default function Login() {
         <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
           <div className="w-full max-w-[420px] py-8">
             <div className="lg:hidden flex justify-center mb-8">
-              <div className="flex items-center gap-2 font-bold text-3xl text-black">
-                <ShieldCheck className="h-10 w-10" />
-                <span>Control iD</span>
-              </div>
+              <img 
+                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                alt="Control iD" 
+                className="h-10 w-auto"
+              />
             </div>
 
             <div className="mb-10 text-center lg:text-left">
