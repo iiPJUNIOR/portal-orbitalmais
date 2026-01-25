@@ -45,6 +45,7 @@ const MODEL_TO_SLIDE: Record<string, number> = {
   "idflex pro": 23, "idaccess": 24, "idfit 4x2": 25, "idaccess pro": 26,
   "secbox": 27, "iduhf": 28, "iduhf lite": 29, "idblock next facial": 30,
   "idblock next biometria digital": 31, "idblock facial inox": 32,
+  "idblock facial inox ": 32, "idblock facial inox": 32,
   "idblock facial preta": 33, "idblock facial mini preta": 34,
   "idblock facial mini inox": 35, "idblock inox biométrica": 36,
   "idblock preta biométrica": 37, "idblock braço articulado inox": 38,
@@ -100,16 +101,18 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       endereço: data.address || "",
       users: data.users || 0,
       devices: data.devices || 0,
-      qtd: data.qtd || "0",
-      qtd1: data.qtd1 || "0",
-      qtd2: data.qtd2 || "0",
       totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
     };
 
-    // Linhas de itens (Página 4) - Apenas a descrição, sem quantidade
+    // Mapeamento individual de itens e suas respectivas quantidades para evitar somas indesejadas
     replacements["items_list"] = data.items[0] ? data.items[0].product.description : "";
+    replacements["qtd"] = data.items[0] ? data.items[0].quantity : "";
+
     replacements["items_list1"] = data.items[1] ? data.items[1].product.description : "";
+    replacements["qtd1"] = data.items[1] ? data.items[1].quantity : "";
+
     replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
+    replacements["qtd2"] = data.items[2] ? data.items[2].quantity : "";
 
     // Slides fundamentais
     const keepSlides = [1, 3, 4];
