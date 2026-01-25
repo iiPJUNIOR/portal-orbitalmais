@@ -13,6 +13,7 @@ export type StoredBase = {
   name_column?: string | null;
   description_column?: string | null;
   info_column?: string | null;
+  extra_columns?: string[]; // Lista de nomes de colunas adicionais
   created_at?: string;
 };
 

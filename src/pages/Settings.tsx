@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { Plus, Trash2, Settings as SettingsIcon } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings } from "@/services/settingsService";
@@ -91,7 +92,8 @@ export default function Settings() {
         name: newBaseName,
         type: baseType,
         headers,
-        rows
+        rows,
+        extra_columns: []
       });
       toast.success("Base salva!");
       setNewBaseName("");
@@ -101,7 +103,7 @@ export default function Settings() {
     }
   };
 
-  const updateBaseMapping = async (base: StoredBase, field: string, value: string) => {
+  const updateBaseMapping = async (base: StoredBase, field: string, value: any) => {
     try {
       await saveBase({ ...base, [field]: value });
       toast.success("Mapeamento atualizado");
@@ -109,6 +111,23 @@ export default function Settings() {
     } catch (err) {
       toast.error("Erro ao salvar mapeamento");
     }
+  };
+
+  const addExtraColumn = (base: StoredBase) => {
+    const current = base.extra_columns || [];
+    updateBaseMapping(base, "extra_columns", [...current, ""]);
+  };
+
+  const updateExtraColumn = (base: StoredBase, index: number, value: string) => {
+    const current = [...(base.extra_columns || [])];
+    current[index] = value;
+    updateBaseMapping(base, "extra_columns", current);
+  };
+
+  const removeExtraColumn = (base: StoredBase, index: number) => {
+    const current = [...(base.extra_columns || [])];
+    current.splice(index, 1);
+    updateBaseMapping(base, "extra_columns", current);
   };
 
   return (
@@ -155,17 +174,20 @@ export default function Settings() {
             <CardHeader><CardTitle>Bases Salvas e Mapeamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {bases.map(base => (
-                <div key={base.id} className="p-4 border rounded-xl space-y-4 bg-gray-50/50">
+                <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-gray-50/50">
                   <div className="flex items-center justify-between">
-                    <h3 className="font-bold">{base.name}</h3>
-                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => deleteBase(base.id!).then(loadBases)}>Remover</Button>
+                    <div className="flex items-center gap-2">
+                      <SettingsIcon className="h-4 w-4 text-primary" />
+                      <h3 className="font-bold text-lg">{base.name}</h3>
+                    </div>
+                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => deleteBase(base.id!).then(loadBases)}>Remover Base</Button>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Coluna Nome</Label>
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Coluna Nome do Produto</Label>
                       <select 
-                        className="w-full text-xs border rounded p-1" 
+                        className="w-full text-xs border rounded-lg p-2 bg-white" 
                         value={base.name_column || ""} 
                         onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                       >
@@ -174,9 +196,9 @@ export default function Settings() {
                       </select>
                     </div>
                     <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Coluna Descrição</Label>
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Coluna Descrição</Label>
                       <select 
-                        className="w-full text-xs border rounded p-1" 
+                        className="w-full text-xs border rounded-lg p-2 bg-white" 
                         value={base.description_column || ""} 
                         onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                       >
@@ -184,33 +206,49 @@ export default function Settings() {
                         {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase text-muted-foreground">Informação Adicional</Label>
-                      <select 
-                        className="w-full text-xs border rounded p-1" 
-                        value={base.info_column || ""} 
-                        onChange={e => updateBaseMapping(base, "info_column", e.target.value)}
-                      >
-                        <option value="">-- Nenhuma --</option>
-                        {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                      </select>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Informações Adicionais (Lista Dinâmica)</Label>
+                      <Button variant="outline" size="sm" className="h-7 text-[10px] rounded-full" onClick={() => addExtraColumn(base)}>
+                        <Plus className="h-3 w-3 mr-1" /> Adicionar Coluna
+                      </Button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {(base.extra_columns || []).map((col, idx) => (
+                        <div key={idx} className="flex gap-1">
+                          <select 
+                            className="flex-1 text-xs border rounded-lg p-2 bg-white" 
+                            value={col} 
+                            onChange={e => updateExtraColumn(base, idx, e.target.value)}
+                          >
+                            <option value="">-- Selecione a Coluna --</option>
+                            {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
+                          <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-destructive" onClick={() => removeExtraColumn(base, idx)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                      {(base.extra_columns || []).length === 0 && <p className="text-[10px] text-muted-foreground italic">Nenhuma informação adicional configurada.</p>}
                     </div>
                   </div>
                 </div>
               ))}
-              {bases.length === 0 && <p className="text-center text-muted-foreground">Nenhuma base cadastrada.</p>}
+              {bases.length === 0 && <p className="text-center text-muted-foreground py-10 border-2 border-dashed rounded-xl">Nenhuma base cadastrada ainda.</p>}
             </CardContent>
           </Card>
         </div>
 
-        <Card>
-          <CardHeader><CardTitle>Vendedor</CardTitle></CardHeader>
+        <Card className="h-fit sticky top-6">
+          <CardHeader><CardTitle>Perfil do Vendedor</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2"><Label>Nome</Label><Input value={sellerName} onChange={e => setSellerName(e.target.value)} /></div>
             <div className="space-y-2"><Label>Cargo</Label><Input value={sellerRole} onChange={e => setSellerRole(e.target.value)} /></div>
             <div className="space-y-2"><Label>E-mail</Label><Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} /></div>
             <div className="space-y-2"><Label>Telefone</Label><Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} /></div>
-            <Button onClick={() => saveUserSettings({ seller_name: sellerName, seller_role: sellerRole, seller_email: sellerEmail, seller_phone: sellerPhone }).then(() => toast.success("Salvo!"))} className="w-full">Salvar Perfil</Button>
+            <Button onClick={() => saveUserSettings({ seller_name: sellerName, seller_role: sellerRole, seller_email: sellerEmail, seller_phone: sellerPhone }).then(() => toast.success("Perfil atualizado!"))} className="w-full">Salvar Perfil</Button>
           </CardContent>
         </Card>
       </div>

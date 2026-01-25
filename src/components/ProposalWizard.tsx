@@ -70,7 +70,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     const headers = currentBase.headers;
     const nameCol = currentBase.name_column?.toLowerCase();
     const descCol = currentBase.description_column?.toLowerCase();
-    const infoCol = currentBase.info_column?.toLowerCase();
+    const extraCols = (currentBase.extra_columns || []).map(c => c.toLowerCase());
 
     return currentBase.rows.map((row, idx) => {
       const p: any = {};
@@ -78,13 +78,17 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       
       const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
       const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
-      const info = infoCol ? p[infoCol] : "";
+      
+      const extras = extraCols.map(col => ({
+        label: col,
+        value: String(p[col] || "").trim()
+      })).filter(ex => ex.value !== "");
       
       return {
         id: `${currentBase.id}-${idx}`,
         name: String(name || "Produto sem nome").trim(),
         description: String(description).trim(),
-        importantInfo: String(info).trim(),
+        extras: extras,
         sku: p.sku || p["part number"] || p.pn || "",
         category: p.categoria || p.category || "",
       };
@@ -94,7 +98,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const filteredProducts = productsFromBase.filter(p => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
     p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.importantInfo.toLowerCase().includes(productSearch.toLowerCase())
+    p.extras.some(ex => ex.value.toLowerCase().includes(productSearch.toLowerCase()))
   );
 
   const fetchCnpjData = async (rawCnpj: string) => {
@@ -177,7 +181,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar por nome, SKU ou info..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
+              <Input className="pl-9" placeholder="Buscar por nome, SKU ou qualquer info..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
             </div>
             <div className="max-h-80 overflow-y-auto border rounded-xl divide-y">
               {filteredProducts.map(p => {
@@ -187,12 +191,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                     <div className="flex-1">
                       <div className="font-bold text-sm">{p.name}</div>
                       <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
-                      {p.importantInfo && (
-                        <div className="flex items-center gap-1 mt-1 text-[10px] font-semibold text-primary bg-primary/5 w-fit px-1.5 py-0.5 rounded">
-                          <Info className="h-3 w-3" />
-                          {p.importantInfo}
-                        </div>
-                      )}
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {p.extras.map((ex, idx) => (
+                          <div key={idx} className="flex items-center gap-1 text-[9px] font-semibold text-primary bg-primary/5 px-1.5 py-0.5 rounded border border-primary/10">
+                            <Info className="h-2.5 w-2.5" />
+                            <span className="opacity-60 uppercase">{ex.label}:</span> {ex.value}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                     <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-8 w-8 p-0 rounded-full" onClick={() => handleProductToggle(p)}>
                       {isSelected ? <Trash2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -252,9 +258,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
 
   return (
-    <Card className="max-w-2xl mx-auto shadow-2xl rounded-3xl overflow-hidden">
+    <Card className="max-w-2xl mx-auto shadow-2xl rounded-3xl overflow-hidden border-none">
       <CardHeader className="bg-neutral-900 text-white p-8">
         <CardTitle className="text-2xl font-black">Passo {currentStep}</CardTitle>
+        <CardDescription className="text-gray-400">Gerenciando {formData.selectedProducts.length} itens no orçamento.</CardDescription>
       </CardHeader>
       <CardContent className="p-8">
         {renderStep()}
