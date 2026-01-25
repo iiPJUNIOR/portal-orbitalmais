@@ -13,6 +13,10 @@ const SessionContext = createContext<SessionContextValue | undefined>(undefined)
 
 const NO_BASES_WARN_KEY = "no_bases_warning_shown";
 
+// Add public routes that should be accessible without authentication.
+// You can add more paths here if other pages should be public.
+const PUBLIC_PATHS = ["/settings"];
+
 export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
   const [session, setSession] = useState<any | null>(null);
   const [user, setUser] = useState<any | null>(null);
@@ -128,9 +132,14 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     if (initializing) return;
 
     try {
-      if (!session && location.pathname !== "/login") {
+      const path = location.pathname || "/";
+
+      // If the current path is listed as public, don't force redirect to /login
+      const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith(p + "/") || path.startsWith(p + "?") || path.startsWith(p + "#"));
+
+      if (!session && !isPublic && path !== "/login") {
         safeNavigate("/login");
-      } else if (session && location.pathname === "/login") {
+      } else if (session && path === "/login") {
         // If logged in and currently on login page, go to root (only once)
         safeNavigate("/");
       }
