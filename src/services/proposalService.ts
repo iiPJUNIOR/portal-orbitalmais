@@ -2,8 +2,7 @@ import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
 // pptxgenjs is used as a robust fallback generator when template-based editing fails
 import PptxGenJS from "pptxgenjs";
-import { format, parseISO } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { parseISO } from "date-fns";
 
 interface QuoteItem {
   id: string;
@@ -75,16 +74,28 @@ export const generateProposalNumber = (): string => {
 };
 
 /**
- * Format a date string for display in proposals (long format in Portuguese).
+ * Format a date string for display in proposals (long format in Portuguese, São Paulo Timezone).
  */
 export const formatDateForProposal = (dateStr?: string | null): string => {
-  if (!dateStr) return "";
   try {
-    const dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr);
-    // Format: "24 de Janeiro de 2026"
-    return format(dt, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
-  } catch {
-    return String(dateStr).slice(0, 10);
+    let dt: Date;
+    if (dateStr) {
+      // Se vier apenas YYYY-MM-DD, adicionamos meio-dia para evitar mudança de dia por fuso
+      dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
+    } else {
+      dt = new Date();
+    }
+
+    // Usando Intl para garantir fuso horário de São Paulo (GMT-3) e formato extenso
+    return dt.toLocaleDateString('pt-BR', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+      timeZone: 'America/Sao_Paulo'
+    });
+  } catch (err) {
+    console.error("Erro ao formatar data:", err);
+    return dateStr || "";
   }
 };
 
@@ -101,7 +112,7 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["email"] = data.email || "";
     replacements["phone"] = data.phone || "";
     
-    // Set formatted date
+    // Set formatted date (GMT-3 São Paulo por extenso)
     replacements["date"] = formatDateForProposal(data.proposalDate);
 
     replacements["proposalNumber"] = data.proposalNumber || (data.pipedriveUrl ? extractIdFromPipedriveUrl(data.pipedriveUrl) + " V.1" : "");
