@@ -328,15 +328,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 <div className="p-4 border border-dashed rounded-2xl bg-neutral-50 space-y-3 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-2 text-primary">
                     <LinkIcon className="h-4 w-4" />
-                    <Label className="font-bold">Link de Aprovação</Label>
+                    <Label className="font-bold">Link do Gerador de Aprovação</Label>
                   </div>
                   <Input 
-                    placeholder="Cole aqui o link (ex: formulário ou link do Pipedrive)" 
+                    placeholder="Cole aqui o link gerado no Gerador de Aprovação" 
                     value={formData.approvalLink}
                     onChange={e => setFormData(prev => ({ ...prev, approvalLink: e.target.value }))}
                     className="bg-white"
                   />
-                  <p className="text-[10px] text-muted-foreground">O link será incorporado no botão de aprovação da proposta.</p>
+                  <p className="text-[10px] text-muted-foreground">O link inserido será incorporado no botão de aprovação da proposta.</p>
                 </div>
               )}
             </div>
