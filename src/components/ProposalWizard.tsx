@@ -1,13 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { Check, ArrowRight, ArrowLeft, Package, User, Building, Layout, DollarSign } from "lucide-react";
-import { parseSpreadsheetNumber } from "@/lib/formatters";
+import { Check, ArrowRight, ArrowLeft, Package, User, Building, Layout, DollarSign, Loader2 } from "lucide-react";
 
 interface WizardProps {
   initialSellerData: {
@@ -47,6 +46,9 @@ const DOOR_CONTROLLERS = [
 
 export function ProposalWizard({ initialSellerData, onComplete, onCancel }: WizardProps) {
   const [currentStep, setCurrentStep] = useState(1);
+  const [fetchingCnpj, setFetchingCnpj] = useState(false);
+  const lastFetchedCnpj = useRef<string>("");
+  
   const [formData, setFormData] = useState({
     pipedriveUrl: "",
     dealId: "",
@@ -68,6 +70,72 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     selectedProducts: [] as any[],
     totalPrice: 0
   });
+
+  // Função para formatar endereço da API
+  const buildAddressFromApi = (data: any) => {
+    const street = data.logradouro || "";
+    const number = data.numero || "";
+    const neighborhood = data.bairro || "";
+    const city = data.municipio || "";
+    const uf = data.uf || "";
+    const cep = data.cep || "";
+    
+    return [
+      street ? `${street}${number ? `, ${number}` : ""}` : "",
+      neighborhood,
+      city ? `${city} - ${uf}` : "",
+      cep
+    ].filter(Boolean).join(", ");
+  };
+
+  // Busca de CNPJ
+  const fetchCnpjData = async (rawCnpj: string) => {
+    if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
+    
+    setFetchingCnpj(true);
+    lastFetchedCnpj.current = rawCnpj;
+    const toastId = toast.loading("Buscando dados do CNPJ...");
+
+    try {
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      
+      setFormData(prev => ({
+        ...prev,
+        companyName: data.razao_social || data.nome_fantasia || prev.companyName,
+        address: buildAddressFromApi(data) || prev.address
+      }));
+      
+      toast.success("Dados preenchidos automaticamente!", { id: toastId });
+    } catch (err) {
+      toast.error("Não foi possível carregar os dados do CNPJ.", { id: toastId });
+    } finally {
+      setFetchingCnpj(false);
+    }
+  };
+
+  // Monitorar CNPJ para busca automática
+  useEffect(() => {
+    const digits = formData.cnpj.replace(/\D/g, "");
+    if (digits.length === 14) {
+      fetchCnpjData(digits);
+    }
+  }, [formData.cnpj]);
+
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let val = e.target.value.replace(/\D/g, "");
+    if (val.length > 14) val = val.substring(0, 14);
+    
+    // Máscara 00.000.000/0000-00
+    let masked = val;
+    if (val.length > 12) masked = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2}).*/, "$1.$2.$3/$4-$5");
+    else if (val.length > 8) masked = val.replace(/^(\d{2})(\d{3})(\d{3})(\d{4}).*/, "$1.$2.$3/$4");
+    else if (val.length > 5) masked = val.replace(/^(\d{2})(\d{3})(\d{3}).*/, "$1.$2.$3");
+    else if (val.length > 2) masked = val.replace(/^(\d{2})(\d{3}).*/, "$1.$2");
+    
+    setFormData(prev => ({ ...prev, cnpj: masked }));
+  };
 
   const nextStep = () => {
     if (validateStep()) setCurrentStep(prev => prev + 1);
@@ -160,28 +228,52 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 <Input value={formData.date} onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))} />
               </div>
             </div>
+            
             <div className="space-y-2">
-              <Label>Nome da Empresa do Cliente</Label>
-              <Input placeholder="Empresa LTDA" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} />
+              <Label className="flex items-center gap-2">
+                CNPJ da Empresa
+                {fetchingCnpj && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+              </Label>
+              <Input 
+                placeholder="00.000.000/0000-00" 
+                value={formData.cnpj} 
+                onChange={handleCnpjChange}
+              />
+              <p className="text-[10px] text-muted-foreground">Preenchimento automático ao digitar 14 dígitos.</p>
             </div>
+
+            <div className="space-y-2">
+              <Label>Razão Social / Nome da Empresa</Label>
+              <Input 
+                placeholder="Empresa LTDA" 
+                value={formData.companyName} 
+                onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} 
+              />
+            </div>
+
             <div className="space-y-2">
               <Label>Pessoa de Contato (A/C)</Label>
-              <Input placeholder="Nome do responsável" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} />
+              <Input 
+                placeholder="Nome do responsável" 
+                value={formData.contactName} 
+                onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} 
+              />
             </div>
-            <div className="space-y-2">
-              <Label>CNPJ da Empresa</Label>
-              <Input placeholder="00.000.000/0000-00" value={formData.cnpj} onChange={e => setFormData(prev => ({ ...prev, cnpj: e.target.value }))} />
-            </div>
+            
             <div className="space-y-2">
               <Label>Endereço Completo</Label>
-              <Input placeholder="Rua, Número, Bairro, Cidade - UF" value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} />
+              <Input 
+                placeholder="Rua, Número, Bairro, Cidade - UF" 
+                value={formData.address} 
+                onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} 
+              />
             </div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground mb-4">Confirme seus dados de vendedor (puxados das configurações):</p>
+            <p className="text-sm text-muted-foreground mb-4">Confirme seus dados de vendedor:</p>
             <div className="space-y-2">
               <Label>Nome do Vendedor</Label>
               <Input value={formData.sellerName} onChange={e => setFormData(prev => ({ ...prev, sellerName: e.target.value }))} />
@@ -309,9 +401,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} 
               />
             </div>
-            <div className="p-4 bg-yellow-50 text-yellow-800 text-xs rounded border border-yellow-200">
-              Certifique-se de que todos os dados obrigatórios foram preenchidos corretamente antes de gerar o PPTX final.
-            </div>
           </div>
         );
       default:
@@ -322,14 +411,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const handleFinish = () => {
     if (!validateStep()) return;
     
-    // Preparar payload final para o gerador
     const payload = {
       ...formData,
       proposalNumber: `${formData.dealId} V${formData.version}`,
       items: formData.selectedProducts.map(p => ({
         product: { description: p.name, model: p.name, category: p.name.includes("Block") ? "Catraca" : "Controlador" },
         quantity: p.quantity,
-        unitPrice: 0, // Not strictly needed if totalPrice is set
+        unitPrice: 0,
         installationData: {
           entryTech: p.entryTech,
           exitTech: p.exitTech,
@@ -375,7 +463,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             {currentStep === 1 ? "Cancelar" : "Voltar"}
           </Button>
           
-          <Button onClick={currentStep === 5 ? handleFinish : nextStep}>
+          <Button onClick={currentStep === 5 ? handleFinish : nextStep} disabled={fetchingCnpj}>
             {currentStep === 5 ? "Gerar PPTX Final" : "Próximo"}
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>
