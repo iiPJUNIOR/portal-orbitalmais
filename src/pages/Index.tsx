@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
-import { generateProposalPPTX, generateProposalPDF } from "@/services/proposalService";
+import { generateProposalPPTX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
@@ -41,8 +41,8 @@ export default function Index() {
     loadSettings();
   }, []);
 
-  const handleWizardComplete = async (payload: any, format: 'pptx' | 'pdf') => {
-    const loadToastId = toast.loading(`Gerando proposta em ${format.toUpperCase()}...`);
+  const handleWizardComplete = async (payload: any) => {
+    const loadToastId = toast.loading(`Gerando proposta em PPTX...`);
     try {
       const proposalData = {
         ...payload,
@@ -52,12 +52,9 @@ export default function Index() {
         sellerPhone: sellerInfo.phone,
       };
       
-      const blob = format === 'pptx' 
-        ? await generateProposalPPTX(proposalData)
-        : await generateProposalPDF(proposalData);
+      const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase (apenas uma vez para cada proposta)
-      // O backend gerencia o conflito se necessário ou cria nova entrada
+      // Salvar no Supabase
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -86,17 +83,16 @@ export default function Index() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `proposta-${payload.proposalNumber}.${format}`;
+      a.download = `proposta-${payload.proposalNumber}.pptx`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Proposta ${format.toUpperCase()} gerada com sucesso!`, { id: loadToastId });
-      // Não resetamos mais o passo aqui para que o Wizard mostre a tela final (passo 6)
+      toast.success(`Proposta PPTX gerada com sucesso!`, { id: loadToastId });
     } catch (err) {
       console.error(err);
-      toast.error(`Erro ao gerar ${format.toUpperCase()}.`, { id: loadToastId });
+      toast.error(`Erro ao gerar PPTX.`, { id: loadToastId });
     }
   };
 
@@ -110,7 +106,7 @@ export default function Index() {
                 Gerador de Propostas <span className="text-primary">Control iD</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Crie apresentações profissionais em PPTX ou PDF seguindo o padrão oficial da Control iD em poucos minutos.
+                Crie apresentações profissionais em PPTX seguindo o padrão oficial da Control iD em poucos minutos.
               </p>
             </div>
 

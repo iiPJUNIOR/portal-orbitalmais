@@ -19,7 +19,7 @@ interface WizardProps {
     email: string;
     phone: string;
   };
-  onComplete: (data: any, format: 'pptx' | 'pdf') => void;
+  onComplete: (data: any) => void;
   onCancel: () => void;
 }
 
@@ -99,7 +99,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     setFormData(prev => ({ ...prev, qtd: String(q), qtd1: String(q1), qtd2: String(q2), devices: q + q1 + q2 }));
   }, [formData.selectedProducts]);
 
-  // Sincroniza o valor total formatado para exibição
   useEffect(() => {
     setDisplayTotal(new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(formData.totalPrice));
   }, [formData.totalPrice]);
@@ -176,7 +175,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     toast.info("Iniciando novo orçamento.");
   };
 
-  const handleFinish = (format: 'pptx' | 'pdf') => {
+  const handleFinish = () => {
     const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
     
     onComplete({
@@ -195,7 +194,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       })),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
-    }, format);
+    });
     
     if (currentStep === 5) {
       setCurrentStep(6);
@@ -341,7 +340,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               )}
             </div>
 
-            <p className="text-sm text-muted-foreground text-center">Clique em um dos formatos abaixo para gerar e baixar sua proposta.</p>
+            <p className="text-sm text-muted-foreground text-center">Clique no botão abaixo para gerar e baixar sua proposta.</p>
           </div>
         );
       case 6:
@@ -352,15 +351,23 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-black text-neutral-900">Proposta Gerada!</h2>
-              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado. Você pode baixar em outro formato ou retornar para ajustes.</p>
+              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado.</p>
             </div>
             
-            <div className="grid grid-cols-2 gap-4 w-full">
-              <Button variant="outline" className="h-14 rounded-2xl" onClick={() => handleFinish('pdf')}>
-                <FileDown className="mr-2 h-5 w-5" /> Baixar PDF
-              </Button>
-              <Button variant="outline" className="h-14 rounded-2xl" onClick={() => handleFinish('pptx')}>
-                <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX
+            <div className="w-full p-4 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
+              <div className="flex items-center gap-2 text-primary font-bold text-sm">
+                <Info className="h-4 w-4" />
+                Dica: Como gerar o PDF
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
+                <span className="font-bold">Arquivo &gt; Exportar &gt; Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
+              </p>
+            </div>
+            
+            <div className="grid grid-cols-1 gap-4 w-full">
+              <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary hover:bg-primary/5" onClick={() => handleFinish()}>
+                <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX Novamente
               </Button>
             </div>
             
@@ -409,14 +416,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </Button>
             <div className="flex gap-2">
               {currentStep === 5 ? (
-                <>
-                  <Button variant="outline" className="rounded-full px-6" onClick={() => handleFinish('pdf')}>
-                    <FileDown className="mr-2 h-4 w-4" /> Gerar PDF
-                  </Button>
-                  <Button className="rounded-full px-6" onClick={() => handleFinish('pptx')}>
-                    <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
-                  </Button>
-                </>
+                <Button className="rounded-full px-8 bg-primary hover:bg-primary/90" onClick={() => handleFinish()}>
+                  <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
+                </Button>
               ) : (
                 <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>
                   Próximo <ArrowRight className="ml-2 h-4 w-4" />
