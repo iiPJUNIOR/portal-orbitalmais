@@ -50,7 +50,7 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="p-4 border-b flex items-center justify-center">
         <img 
-          src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+          src="/logo.png" 
           alt="Control iD" 
           className="h-8 w-auto object-contain"
         />

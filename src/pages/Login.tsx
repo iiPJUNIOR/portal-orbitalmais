@@ -57,7 +57,7 @@ export default function Login() {
           <div className="flex flex-col items-center space-y-4">
             <div className="p-6 bg-white rounded-2xl shadow-2xl animate-bounce">
               <img 
-                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                src="/logo.png" 
                 alt="Control iD" 
                 className="h-10 w-auto"
               />
@@ -86,7 +86,7 @@ export default function Login() {
           <div className="relative z-10">
             <div className="bg-white p-4 rounded-xl inline-block">
               <img 
-                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                src="/logo.png" 
                 alt="Control iD" 
                 className="h-8 w-auto"
               />
@@ -113,7 +113,7 @@ export default function Login() {
           <div className="w-full max-w-[420px] py-8">
             <div className="lg:hidden flex justify-center mb-8">
               <img 
-                src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/images/logo.png" 
+                src="/logo.png" 
                 alt="Control iD" 
                 className="h-10 w-auto"
               />
