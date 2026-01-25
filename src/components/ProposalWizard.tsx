@@ -303,14 +303,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
               </div>
             </div>
-            <div className="p-4 bg-gray-50 rounded-xl border border-dashed text-xs text-muted-foreground space-y-2">
-              <p className="font-bold text-gray-700">Resumo de Quantidades (Calculado Automaticamente):</p>
-              <div className="grid grid-cols-3 gap-2">
-                <div>Principal (qtd): <span className="font-bold text-black">{formData.qtd}</span></div>
-                <div>Serviços (qtd1): <span className="font-bold text-black">{formData.qtd1}</span></div>
-                <div>Mecânicos (qtd2): <span className="font-bold text-black">{formData.qtd2}</span></div>
-              </div>
-            </div>
           </div>
         );
       default: return null;
