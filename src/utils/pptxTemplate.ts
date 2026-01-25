@@ -44,14 +44,15 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
   
   // 1. Apply replacements from the main object
   for (const [key, val] of Object.entries(replacements || {})) {
-    const token = `{{${key}}}`;
-    // Replace exact match
-    out = out.split(token).join(String(val ?? ""));
-    
-    // Also try a case-insensitive replacement just in case
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Regex matches {{key}}, {{ key }}, {{  key  }}, etc. Case insensitive.
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     out = out.replace(regex, String(val ?? ""));
+    
+    // Fallback for common synonyms if the user uses a different token in the template
+    if (key === 'companyName') {
+      out = out.replace(/{{\s*(razaoSocial|razãoSocial|empresa)\s*}}/gi, String(val ?? ""));
+    }
   }
 
   // 2. Apply manual mappings from TokenScanner
@@ -59,6 +60,7 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
+    // sourceText is exactly what was found in the scanner (e.g. "{{companyName}}")
     out = out.split(sourceText).join(val);
   }
 
@@ -67,6 +69,7 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
 
 /**
  * Deeply processes <a:t> nodes to handle tokens split across multiple runs.
+ * PowerPoint often splits text like {{companyName}} into <a:t>{{</a:t><a:t>companyName</a:t><a:t>}}</a:t>
  */
 function processTxBodyBlock(blockContent: string, replacements: Record<string, string | number>) {
   const textNodeRegex = /(<a:t[^>]*>)([\s\S]*?)(<\/a:t>)/gi;
@@ -74,7 +77,12 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
   
   let match;
   while ((match = textNodeRegex.exec(blockContent)) !== null) {
-    runs.push({ full: match[0], open: match[1], text: match[2], close: match[3] });
+    runs.push({ 
+      full: match[0], 
+      open: match[1], 
+      text: match[2], 
+      close: match[3] 
+    });
   }
   
   if (runs.length === 0) return blockContent;
@@ -82,26 +90,28 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
   const fullText = runs.map(r => r.text).join("");
   let modifiedFullText = fullText;
 
-  // Replace all available tokens in the concatenated text
+  // Replace all available tokens in the concatenated text using regex
   for (const [key, val] of Object.entries(replacements)) {
-    const token = `{{${key}}}`;
-    if (modifiedFullText.includes(token)) {
-      modifiedFullText = modifiedFullText.split(token).join(String(val ?? ""));
-    }
-    // Case-insensitive check
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
     modifiedFullText = modifiedFullText.replace(regex, String(val ?? ""));
+    
+    // Add common synonyms here too for robustness
+    if (key === 'companyName') {
+      modifiedFullText = modifiedFullText.replace(/{{\s*(razaoSocial|razãoSocial|empresa)\s*}}/gi, String(val ?? ""));
+    }
   }
 
+  // If we changed anything, we clear the other runs and put everything in the first one
+  // to maintain style as much as possible without breaking the logic.
   if (modifiedFullText !== fullText) {
-    let first = true;
-    return blockContent.replace(textNodeRegex, () => {
-      if (first) {
-        first = false;
-        return runs[0].open + modifiedFullText + runs[0].close;
+    let replaced = false;
+    return blockContent.replace(textNodeRegex, (full, open, text, close) => {
+      if (!replaced) {
+        replaced = true;
+        return open + modifiedFullText + close;
       }
-      return runs[0].open + "" + runs[0].close;
+      return open + "" + close;
     });
   }
 
@@ -191,11 +201,13 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
     
+    // First pass: handle split tokens within text bodies
     const txBodyRegex = /(<a:txBody[^>]*>)([\s\S]*?)(<\/a:txBody>)/gi;
     let modifiedContent = content.replace(txBodyRegex, (fm, ot, body, ct) => {
       return ot + processTxBodyBlock(body, opts.replacements) + ct;
     });
     
+    // Second pass: handle any global replacements (non-split or outside txBody)
     modifiedContent = applyGlobalStringReplacements(modifiedContent, opts.replacements);
     zip.file(path, modifiedContent);
   }
