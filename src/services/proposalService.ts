@@ -10,11 +10,6 @@ interface QuoteItem {
   quantity: number;
   priceModel: '12m' | '24m';
   unitPrice?: number;
-  installationData?: {
-    entryTech?: 'facial' | 'biometria' | 'botoeira';
-    exitTech?: 'facial' | 'biometria' | 'botoeira';
-    doorType?: 'madeira' | 'ferro' | 'vidro';
-  };
 }
 
 interface ProposalData {
@@ -30,7 +25,7 @@ interface ProposalData {
   items: QuoteItem[];
   proposalNumber?: string;
   pipedriveUrl?: string;
-  versao?: string | number;
+  version?: string | number;
   sellerName?: string;
   sellerRole?: string;
   sellerEmail?: string;
@@ -40,16 +35,6 @@ interface ProposalData {
   qtd?: string;
   qtd1?: string;
   qtd2?: string;
-  flags?: {
-    botoeira?: boolean;
-    idfaceEntry?: boolean;
-    idfaceExit?: boolean;
-    idAccessNanoEntry?: boolean;
-    idFlexProEntry?: boolean;
-    idFlexProGlass?: boolean;
-    hasCatraca?: boolean;
-    systemIncluded?: boolean;
-  };
   overrideTotal?: number | null;
 }
 
@@ -71,8 +56,17 @@ export const calculateProposalSummary = (items: Array<any>) => {
   return { totalDevices };
 };
 
-export const generateProposalNumber = (dealId?: string, version?: string | number): string => {
+// Extrai o ID do link do Pipedrive
+export const extractPipedriveId = (url: string): string | null => {
+  if (!url) return null;
+  const match = url.match(/\/deal\/(\d+)/);
+  return match ? match[1] : null;
+};
+
+export const generateProposalNumber = (pipedriveUrl?: string, version?: string | number): string => {
+  const dealId = pipedriveUrl ? extractPipedriveId(pipedriveUrl) : null;
   if (dealId) return `${dealId} V${version || 1}`;
+  
   const now = new Date();
   const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
   const rand = Math.floor(1000 + Math.random() * 9000);
@@ -118,10 +112,11 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
 
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
-      : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
+      : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
     
     replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
 
+    // Listagem individual de itens por linha
     const mainItems: string[] = [];
     const serviceItems: string[] = [];
     const mechanicalItems: string[] = [];
@@ -143,9 +138,10 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
     replacements["items_list1"] = serviceItems.join("\n");
     replacements["items_list2"] = mechanicalItems.join("\n");
 
-    const keepSlides = [1, 3, 4];
+    // Mantém páginas iniciais, as de produtos selecionados e as últimas 2 páginas (54 e 55)
+    const keepSlides = [1, 2, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    keepSlides.push(46, 55);
+    keepSlides.push(46, 54, 55);
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
@@ -213,7 +209,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   // Summary & Totals
   const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
     ? Number(data.overrideTotal)
-    : data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0);
+    : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
 
   doc.setFontSize(14);
   doc.text("Resumo Financeiro", margin, y);

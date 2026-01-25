@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { toast } from "sonner";
 import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
+import { generateProposalNumber } from "@/services/proposalService";
 
 interface WizardProps {
   initialSellerData: {
@@ -153,9 +154,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   };
 
   const handleFinish = (format: 'pptx' | 'pdf') => {
+    const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
+    
     onComplete({
       ...formData,
-      proposalNumber: `P${Math.floor(Math.random() * 10000)} V${formData.version}`,
+      proposalNumber,
       items: formData.selectedProducts.map(p => ({
         product: { 
           id: p.id,
@@ -171,7 +174,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       totalPrice: formData.totalPrice
     }, format);
     
-    // Se estiver no passo 5, avança para o passo 6 (Conclusão)
     if (currentStep === 5) {
       setCurrentStep(6);
     }
@@ -182,30 +184,37 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       case 1:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>URL Pipedrive</Label><Input value={formData.pipedriveUrl} onChange={e => setFormData(prev => ({ ...prev, pipedriveUrl: e.target.value }))} /></div>
+            <div className="space-y-2">
+              <Label>URL Pipedrive</Label>
+              <Input 
+                placeholder="https://controlid.pipedrive.com/deal/214049" 
+                value={formData.pipedriveUrl} 
+                onChange={e => setFormData(prev => ({ ...prev, pipedriveUrl: e.target.value }))} 
+              />
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2"><Label>Versão</Label><Input value={formData.version} onChange={e => setFormData(prev => ({ ...prev, version: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Data</Label><Input type="date" value={formData.date} onChange={e => setFormData(prev => ({ ...prev, date: e.target.value }))} /></div>
             </div>
-            <div className="space-y-2"><Label>CNPJ</Label><Input value={formData.cnpj} onChange={e => setFormData(prev => ({ ...prev, cnpj: e.target.value.replace(/\D/g, "").substring(0, 14) }))} /></div>
-            <div className="space-y-2"><Label>Empresa</Label><Input value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Contato (A/C)</Label><Input value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>CNPJ</Label><Input placeholder="00.000.000/0000-00" value={formData.cnpj} onChange={e => setFormData(prev => ({ ...prev, cnpj: e.target.value.replace(/\D/g, "").substring(0, 14) }))} /></div>
+            <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} /></div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Vendedor</Label><Input value={formData.sellerName} onChange={e => setFormData(prev => ({ ...prev, sellerName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Cargo</Label><Input value={formData.sellerRole} onChange={e => setFormData(prev => ({ ...prev, sellerRole: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>E-mail</Label><Input value={formData.sellerEmail} onChange={e => setFormData(prev => ({ ...prev, sellerEmail: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Telefone</Label><Input value={formData.sellerPhone} onChange={e => setFormData(prev => ({ ...prev, sellerPhone: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Vendedor (sellerName)</Label><Input value={formData.sellerName} onChange={e => setFormData(prev => ({ ...prev, sellerName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Cargo (sellerRole)</Label><Input value={formData.sellerRole} onChange={e => setFormData(prev => ({ ...prev, sellerRole: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>E-mail (sellerEmail)</Label><Input value={formData.sellerEmail} onChange={e => setFormData(prev => ({ ...prev, sellerEmail: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Telefone (sellerPhone)</Label><Input value={formData.sellerPhone} onChange={e => setFormData(prev => ({ ...prev, sellerPhone: e.target.value }))} /></div>
           </div>
         );
       case 3:
         return (
           <div className="space-y-4">
-            <Label>Usuários do Sistema</Label>
+            <Label>Usuários do Sistema (users)</Label>
             <Input type="number" value={formData.users} onChange={e => setFormData(prev => ({ ...prev, users: e.target.value }))} />
           </div>
         );
@@ -255,10 +264,16 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         return (
           <div className="space-y-6">
             <div className="p-6 bg-neutral-900 text-white rounded-2xl">
-              <Label>VALOR TOTAL DA PROPOSTA</Label>
+              <Label>VALOR TOTAL DA PROPOSTA (totalPrice)</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl text-gray-500">R$</span>
-                <Input type="number" step="0.01" className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" value={formData.totalPrice || ""} onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} />
+                <Input 
+                  type="number" 
+                  step="0.01" 
+                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0" 
+                  value={formData.totalPrice || ""} 
+                  onChange={e => setFormData(prev => ({ ...prev, totalPrice: parseFloat(e.target.value) || 0 }))} 
+                />
               </div>
             </div>
             <p className="text-sm text-muted-foreground text-center">Clique em um dos formatos abaixo para gerar e baixar sua proposta.</p>
