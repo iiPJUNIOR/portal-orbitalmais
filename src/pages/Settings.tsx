@@ -174,20 +174,27 @@ export default function Settings() {
             <CardHeader><CardTitle>Bases Salvas e Mapeamento</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {bases.map(base => (
-                <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-gray-50/50">
-                  <div className="flex items-center justify-between">
+                <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-gray-50/50 shadow-sm">
+                  <div className="flex items-center justify-between border-b pb-4">
                     <div className="flex items-center gap-2">
-                      <SettingsIcon className="h-4 w-4 text-primary" />
+                      <SettingsIcon className="h-5 w-5 text-primary" />
                       <h3 className="font-bold text-lg">{base.name}</h3>
                     </div>
-                    <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => deleteBase(base.id!).then(loadBases)}>Remover Base</Button>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      className="text-destructive hover:bg-destructive/10 text-xs h-8" 
+                      onClick={() => deleteBase(base.id!).then(loadBases)}
+                    >
+                      Remover Base
+                    </Button>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Coluna Nome do Produto</Label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
                       <select 
-                        className="w-full text-xs border rounded-lg p-2 bg-white" 
+                        className="w-full text-xs border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
                         value={base.name_column || ""} 
                         onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                       >
@@ -195,10 +202,10 @@ export default function Settings() {
                         {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Coluna Descrição</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
                       <select 
-                        className="w-full text-xs border rounded-lg p-2 bg-white" 
+                        className="w-full text-xs border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
                         value={base.description_column || ""} 
                         onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                       >
@@ -206,32 +213,45 @@ export default function Settings() {
                         {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                       </select>
                     </div>
-                  </div>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground">Informações Adicionais (Lista Dinâmica)</Label>
-                      <Button variant="outline" size="sm" className="h-7 text-[10px] rounded-full" onClick={() => addExtraColumn(base)}>
-                        <Plus className="h-3 w-3 mr-1" /> Adicionar Coluna
-                      </Button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {(base.extra_columns || []).map((col, idx) => (
-                        <div key={idx} className="flex gap-1">
-                          <select 
-                            className="flex-1 text-xs border rounded-lg p-2 bg-white" 
-                            value={col} 
-                            onChange={e => updateExtraColumn(base, idx, e.target.value)}
-                          >
-                            <option value="">-- Selecione a Coluna --</option>
-                            {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
-                          </select>
-                          <Button variant="ghost" size="sm" className="h-9 w-9 p-0 text-destructive" onClick={() => removeExtraColumn(base, idx)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))}
-                      {(base.extra_columns || []).length === 0 && <p className="text-[10px] text-muted-foreground italic">Nenhuma informação adicional configurada.</p>}
+                    <div className="md:col-span-2 pt-2">
+                      <div className="flex items-center justify-between mb-3">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Informações Adicionais</Label>
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-7 text-[10px] rounded-full px-3" 
+                          onClick={() => addExtraColumn(base)}
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Add Coluna
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
+                        {(base.extra_columns || []).map((col, idx) => (
+                          <div key={idx} className="flex items-center gap-2 group">
+                            <select 
+                              className="flex-1 text-[11px] border rounded-lg p-2 bg-white focus:ring-1 focus:ring-primary outline-none transition-all" 
+                              value={col} 
+                              onChange={e => updateExtraColumn(base, idx, e.target.value)}
+                            >
+                              <option value="">-- Selecione a Coluna --</option>
+                              {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                            </select>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive transition-colors" 
+                              onClick={() => removeExtraColumn(base, idx)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))}
+                        {(base.extra_columns || []).length === 0 && (
+                          <p className="text-[11px] text-muted-foreground italic py-2">Nenhuma informação adicional configurada.</p>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -241,7 +261,7 @@ export default function Settings() {
           </Card>
         </div>
 
-        <Card className="h-fit sticky top-6">
+        <Card className="h-fit lg:sticky lg:top-6">
           <CardHeader><CardTitle>Perfil do Vendedor</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2"><Label>Nome</Label><Input value={sellerName} onChange={e => setSellerName(e.target.value)} /></div>
