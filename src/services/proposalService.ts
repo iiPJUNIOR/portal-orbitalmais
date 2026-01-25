@@ -35,6 +35,7 @@ interface ProposalData {
   qtd?: string;
   qtd1?: string;
   qtd2?: string;
+  totalPrice?: number;
   overrideTotal?: number | null;
   includeApprovalPage?: boolean;
 }
@@ -50,27 +51,6 @@ const MODEL_TO_SLIDE: Record<string, number> = {
   "idblock braço articulado preta": 39, "idblock balcão": 40,
   "idblock pne": 41, "torniquete fet 100": 42, "idpower": 43,
   "idprox usb": 44, "idbio": 45,
-};
-
-export const calculateProposalSummary = (items: Array<any>) => {
-  const totalDevices = (items || []).reduce((s, it) => s + (Number(it.quantity) || 0), 0);
-  return { totalDevices };
-};
-
-export const extractPipedriveId = (url: string): string | null => {
-  if (!url) return null;
-  const match = url.match(/\/deal\/(\d+)/);
-  return match ? match[1] : null;
-};
-
-export const generateProposalNumber = (pipedriveUrl?: string, version?: string | number): string => {
-  const dealId = pipedriveUrl ? extractPipedriveId(pipedriveUrl) : null;
-  if (dealId) return `${dealId} V${version || 1}`;
-  
-  const now = new Date();
-  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `${datePart}-${rand} V${version || 1}`;
 };
 
 export const formatDateForProposal = (dateStr?: string | null): string => {
@@ -90,8 +70,23 @@ export const formatDateForProposal = (dateStr?: string | null): string => {
   }
 };
 
+export const generateProposalNumber = (pipedriveUrl?: string, version?: string | number): string => {
+  const match = pipedriveUrl?.match(/\/deal\/(\d+)/);
+  const dealId = match ? match[1] : null;
+  if (dealId) return `${dealId} V${version || 1}`;
+  
+  const now = new Date();
+  const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
+  const rand = Math.floor(1000 + Math.random() * 9000);
+  return `${datePart}-${rand} V${version || 1}`;
+};
+
 export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
   try {
+    const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
+      ? Number(data.overrideTotal)
+      : (data.totalPrice || 0);
+
     const replacements: Record<string, string | number> = {
       companyName: data.companyName || "",
       contactName: data.contactName || "",
@@ -108,33 +103,20 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       qtd: data.qtd || "0",
       qtd1: data.qtd1 || "0",
       qtd2: data.qtd2 || "0",
+      totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
     };
 
-    const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
-      ? Number(data.overrideTotal)
-      : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
-    
-    replacements["totalPrice"] = new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal);
+    // Linhas da Página 3 - Garantindo que cada item vá para sua tag específica
+    replacements["items_list"] = data.items[0] ? `${data.items[0].product.description} – ${data.items[0].quantity} un` : "";
+    replacements["items_list1"] = data.items[1] ? `${data.items[1].product.description} – ${data.items[1].quantity} un` : "";
+    replacements["items_list2"] = data.items[2] ? `${data.items[2].product.description} – ${data.items[2].quantity} un` : "";
 
-    replacements["items_list"] = "";
-    replacements["items_list1"] = "";
-    replacements["items_list2"] = "";
-
-    data.items.slice(0, 3).forEach((it, idx) => {
-      const line = `${it.product.description} – ${it.quantity} un`;
-      if (idx === 0) replacements["items_list"] = line;
-      if (idx === 1) replacements["items_list1"] = line;
-      if (idx === 2) replacements["items_list2"] = line;
-    });
-
-    // Removendo o slide 2 explicitamente da lista [1, 3, 4]
+    // Página 3 está inclusa aqui no array [1, 3, 4]
     const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55, 57);
 
-    if (data.includeApprovalPage) {
-      keepSlides.push(56);
-    }
+    if (data.includeApprovalPage) keepSlides.push(56);
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
@@ -151,111 +133,87 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       keepSlidesOverride: Array.from(new Set(keepSlides)).sort((a, b) => a - b),
     });
   } catch (err) {
-    console.error("Erro na geração do PPTX:", err);
+    console.error("Erro PPTX:", err);
     throw err;
   }
 };
 
 export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => {
-  const doc = new jsPDF();
-  const margin = 20;
-  let y = margin;
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+  const width = doc.internal.pageSize.getWidth();
+  const height = doc.internal.pageSize.getHeight();
 
-  // Header / Logo area simulation
-  doc.setFillColor(30, 30, 30);
-  doc.rect(0, 0, 210, 40, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(24);
+  const drawHeader = () => {
+    doc.setFillColor(30, 30, 30);
+    doc.rect(0, 0, width, 25, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("Control iD", 15, 17);
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "normal");
+    doc.text("PROPOSTA COMERCIAL", width - 15, 17, { align: 'right' });
+  };
+
+  // Slide 1 (Capa)
+  drawHeader();
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(32);
   doc.setFont("helvetica", "bold");
-  doc.text("Control iD", margin, 25);
-  doc.setFontSize(10);
-  doc.setFont("helvetica", "normal");
-  doc.text("Proposta Comercial", margin, 32);
-
-  y = 55;
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(18);
-  doc.text(data.companyName || "Proposta Comercial", margin, y);
-  y += 10;
+  doc.text(data.companyName || "PROPOSTA", 15, 70);
+  doc.setFontSize(14);
+  doc.text(`Proposta: ${data.proposalNumber}`, 15, 85);
+  doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 15, 95);
   
-  doc.setFontSize(10);
-  doc.setTextColor(100, 100, 100);
-  doc.text(`Número: ${data.proposalNumber || "N/A"}`, margin, y);
-  doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 140, y);
-  y += 15;
-
-  // Client info
-  doc.setTextColor(0, 0, 0);
-  doc.setFontSize(12);
-  doc.setFont("helvetica", "bold");
-  doc.text("Dados do Cliente", margin, y);
-  y += 7;
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.text(`Empresa: ${data.companyName}`, margin, y);
-  y += 5;
-  doc.text(`CNPJ: ${data.cnpj}`, margin, y);
-  y += 5;
-  doc.text(`A/C: ${data.contactName}`, margin, y);
-  y += 5;
-  doc.text(`Endereço: ${data.address}`, margin, y);
-  y += 15;
-
-  // Items table
+  // Slide 3 (Resumo de Itens)
+  doc.addPage();
+  drawHeader();
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(22);
+  doc.text("Resumo do Projeto", 15, 50);
+  
   autoTable(doc, {
-    startY: y,
-    head: [['Descrição do Produto', 'Quantidade']],
+    startY: 60,
+    head: [['Descrição', 'Quantidade']],
     body: data.items.map(it => [it.product.description, `${it.quantity} un`]),
     theme: 'grid',
-    headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontStyle: 'bold' },
-    styles: { fontSize: 10, cellPadding: 5 },
-    margin: { left: margin, right: margin }
+    headStyles: { fillColor: [30, 30, 30], textColor: [255, 255, 255], fontSize: 12 },
+    styles: { fontSize: 11, cellPadding: 6 },
+    margin: { left: 15, right: 15 }
   });
 
-  y = (doc as any).lastAutoTable.finalY + 15;
-
-  // Summary and Price
+  const finalY = (doc as any).lastAutoTable.finalY;
   const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
     ? Number(data.overrideTotal)
-    : (data.totalPrice || data.items.reduce((s, it) => s + (it.unitPrice ?? 0) * it.quantity, 0));
+    : (data.totalPrice || 0);
 
   doc.setFillColor(245, 245, 245);
-  doc.rect(margin, y, 170, 25, 'F');
-  
+  doc.rect(15, finalY + 10, width - 30, 20, 'F');
   doc.setFont("helvetica", "bold");
+  doc.text("VALOR TOTAL DA PROPOSTA", 20, finalY + 23);
+  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 20, finalY + 23, { align: 'right' });
+
+  // Seller Info
+  doc.addPage();
+  drawHeader();
+  doc.setFontSize(22);
+  doc.text("Contato Comercial", 15, 50);
   doc.setFontSize(14);
-  doc.text("INVESTIMENTO TOTAL", margin + 5, y + 16);
-  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, 140, y + 16);
-  
-  y += 40;
+  doc.setFont("helvetica", "bold");
+  doc.text(data.sellerName || "", 15, 70);
+  doc.setFont("helvetica", "normal");
+  doc.text(data.sellerRole || "", 15, 78);
+  doc.text(data.sellerEmail || "", 15, 86);
+  doc.text(data.sellerPhone || "", 15, 94);
 
-  // Seller info
-  if (data.sellerName) {
-    doc.setFontSize(11);
-    doc.text("Atenciosamente,", margin, y);
-    y += 10;
-    doc.setFont("helvetica", "bold");
-    doc.text(data.sellerName, margin, y);
-    y += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(data.sellerRole || "", margin, y);
-    y += 4;
-    doc.text(data.sellerEmail || "", margin, y);
-    y += 4;
-    doc.text(data.sellerPhone || "", margin, y);
-  }
-
-  // Optional Approval Page simulation
+  // Approval Page
   if (data.includeApprovalPage) {
     doc.addPage();
     doc.setFillColor(30, 30, 30);
-    doc.rect(0, 0, 210, 297, 'F');
+    doc.rect(0, 0, width, height, 'F');
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(22);
-    doc.text("Clique aqui para aprovar sua proposta", 105, 140, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text("Aguardamos seu retorno para darmos início ao projeto.", 105, 155, { align: 'center' });
+    doc.setFontSize(28);
+    doc.text("Clique aqui para aprovar sua proposta", width / 2, height / 2, { align: 'center' });
   }
 
   return doc.output('blob');
