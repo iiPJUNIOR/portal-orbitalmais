@@ -36,41 +36,30 @@ function loadPlainMapping(): Record<string, string> {
   return {};
 }
 
-function normalizeKey(k?: string) {
-  if (!k) return "";
-  return String(k)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]/g, "")
-    .trim();
-}
-
 /**
- * Replaces tokens in the provided XML string.
- * This handles both standard {{token}} and custom mappings.
+ * Replaces tokens in the provided XML string with a more aggressive approach.
  */
 function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   
-  // 1. Prioritize exact matches for items_list tokens as they are critical for Page 3
-  const criticalTokens = ["items_list", "items_list1", "items_list2"];
-  criticalTokens.forEach(token => {
-    const val = String(replacements[token] || "");
-    out = out.split(`{{${token}}}`).join(val);
-  });
-
-  // 2. Apply all other replacements
+  // 1. Apply replacements from the main object
   for (const [key, val] of Object.entries(replacements || {})) {
-    if (criticalTokens.includes(key)) continue;
-    out = out.split(`{{${key}}}`).join(String(val ?? ""));
+    const token = `{{${key}}}`;
+    // Replace exact match
+    out = out.split(token).join(String(val ?? ""));
+    
+    // Also try a case-insensitive replacement just in case
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
+    out = out.replace(regex, String(val ?? ""));
   }
 
-  // 3. Apply manual mappings from TokenScanner
+  // 2. Apply manual mappings from TokenScanner
   const plainMap = loadPlainMapping();
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
-    out = out.split(sourceText).join(String(replacements[replacementKey] ?? ""));
+    const val = String(replacements[replacementKey] ?? "");
+    out = out.split(sourceText).join(val);
   }
 
   return out;
@@ -99,15 +88,13 @@ function processTxBodyBlock(blockContent: string, replacements: Record<string, s
     if (modifiedFullText.includes(token)) {
       modifiedFullText = modifiedFullText.split(token).join(String(val ?? ""));
     }
+    // Case-insensitive check
+    const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
+    modifiedFullText = modifiedFullText.replace(regex, String(val ?? ""));
   }
 
-  // If text changed, we need to distribute it back. 
-  // Simplest way for Page 3 is to put the new text in the first run and clear others 
-  // if the token was split. This prevents duplication.
   if (modifiedFullText !== fullText) {
-    let result = blockContent;
-    // We replace the first run with our processed full text and empty out the rest 
-    // to avoid the original text parts sticking around.
     let first = true;
     return blockContent.replace(textNodeRegex, () => {
       if (first) {
@@ -204,13 +191,11 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
     
-    // First, process txBody blocks which are more granular
     const txBodyRegex = /(<a:txBody[^>]*>)([\s\S]*?)(<\/a:txBody>)/gi;
     let modifiedContent = content.replace(txBodyRegex, (fm, ot, body, ct) => {
       return ot + processTxBodyBlock(body, opts.replacements) + ct;
     });
     
-    // Then apply global replacements for any remaining tokens
     modifiedContent = applyGlobalStringReplacements(modifiedContent, opts.replacements);
     zip.file(path, modifiedContent);
   }

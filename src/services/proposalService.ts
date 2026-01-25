@@ -106,12 +106,12 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       totalPrice: new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal),
     };
 
-    // Linhas da Página 3 - Garantindo que cada item vá para sua tag específica
+    // Linhas de itens (Página 4)
     replacements["items_list"] = data.items[0] ? `${data.items[0].product.description} – ${data.items[0].quantity} un` : "";
     replacements["items_list1"] = data.items[1] ? `${data.items[1].product.description} – ${data.items[1].quantity} un` : "";
     replacements["items_list2"] = data.items[2] ? `${data.items[2].product.description} – ${data.items[2].quantity} un` : "";
 
-    // Página 3 está inclusa aqui no array [1, 3, 4]
+    // Slides mantidos: 1 (Capa), 3 (Dados Cliente), 4 (Resumo Itens)
     const keepSlides = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepSlides.push(i);
     keepSlides.push(46, 54, 55, 57);
@@ -155,7 +155,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     doc.text("PROPOSTA COMERCIAL", width - 15, 17, { align: 'right' });
   };
 
-  // Slide 1 (Capa)
+  // Página 1: Capa
   drawHeader();
   doc.setTextColor(30, 30, 30);
   doc.setFontSize(32);
@@ -164,13 +164,26 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.setFontSize(14);
   doc.text(`Proposta: ${data.proposalNumber}`, 15, 85);
   doc.text(`Data: ${formatDateForProposal(data.proposalDate)}`, 15, 95);
-  
-  // Slide 3 (Resumo de Itens)
+
+  // Página 3: Dados do Cliente
   doc.addPage();
   drawHeader();
   doc.setTextColor(30, 30, 30);
   doc.setFontSize(22);
-  doc.text("Resumo do Projeto", 15, 50);
+  doc.text("Identificação do Projeto", 15, 50);
+  doc.setFontSize(14);
+  doc.text(`Número da Proposta: ${data.proposalNumber}`, 15, 70);
+  doc.text(`Responsável: ${data.contactName}`, 15, 80);
+  doc.text(`Empresa: ${data.companyName}`, 15, 90);
+  doc.text(`CNPJ: ${data.cnpj}`, 15, 100);
+  doc.text(`Endereço: ${data.address}`, 15, 110);
+  
+  // Página 4: Resumo de Itens
+  doc.addPage();
+  drawHeader();
+  doc.setTextColor(30, 30, 30);
+  doc.setFontSize(22);
+  doc.text("Resumo do Projeto e Investimento", 15, 50);
   
   autoTable(doc, {
     startY: 60,
@@ -193,7 +206,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.text("VALOR TOTAL DA PROPOSTA", 20, finalY + 23);
   doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 20, finalY + 23, { align: 'right' });
 
-  // Seller Info
+  // Contato Vendedor
   doc.addPage();
   drawHeader();
   doc.setFontSize(22);
@@ -206,7 +219,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.text(data.sellerEmail || "", 15, 86);
   doc.text(data.sellerPhone || "", 15, 94);
 
-  // Approval Page
+  // Aprovação
   if (data.includeApprovalPage) {
     doc.addPage();
     doc.setFillColor(30, 30, 30);
