@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
@@ -340,7 +340,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-black text-neutral-900">Proposta Gerada!</h2>
-              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado. Você pode baixar em outro formato ou iniciar um novo processo.</p>
+              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado. Você pode baixar em outro formato ou retornar para ajustes.</p>
             </div>
             
             <div className="grid grid-cols-2 gap-4 w-full">
@@ -352,9 +352,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </Button>
             </div>
             
-            <Button className="w-full h-14 rounded-2xl bg-neutral-900 hover:bg-neutral-800" onClick={handleReset}>
-              <RefreshCw className="mr-2 h-5 w-5" /> Iniciar Novo Orçamento
-            </Button>
+            <div className="grid grid-cols-2 gap-4 w-full">
+              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(5)}>
+                <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
+              </Button>
+              <Button className="h-14 rounded-2xl bg-neutral-900 hover:bg-neutral-800" onClick={handleReset}>
+                <RefreshCw className="mr-2 h-5 w-5" /> Novo Orçamento
+              </Button>
+            </div>
           </div>
         );
       default: return null;
