@@ -149,105 +149,177 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
   }
 };
 
+/**
+ * High-fidelity PDF Generation Service
+ * Mimics the presentation layout slide-by-slide
+ */
 export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => {
-  const doc = new jsPDF({ orientation: 'landscape', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'landscape', format: 'a4', unit: 'mm' });
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
-  const primaryColor = [30, 30, 30]; // Dark Gray/Black from Control iD
-
-  const drawSlideHeader = (title: string) => {
-    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.rect(0, 0, width, 20, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(14);
-    doc.setFont("helvetica", "bold");
-    doc.text("Control iD", 10, 13);
-    doc.setFontSize(10);
-    doc.text(title.toUpperCase(), width - 10, 13, { align: 'right' });
+  
+  // Color Palette Control iD
+  const colors = {
+    primary: [20, 20, 20], // Neutral 900
+    accent: [220, 20, 60],  // Crimson Red
+    light: [245, 245, 245],
+    text: [40, 40, 40],
+    white: [255, 255, 255]
   };
 
-  // 1. CAPA
-  doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.rect(0, 0, width, height, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(40);
-  doc.text(data.companyName || "PROPOSTA COMERCIAL", 20, height / 2 - 10);
-  doc.setFontSize(16);
-  doc.text(`A/C: ${data.contactName}`, 20, height / 2 + 10);
-  doc.setFontSize(12);
-  doc.text(`Proposta: ${data.proposalNumber} | Data: ${formatDateForProposal(data.proposalDate)}`, 20, height - 20);
+  const drawSlideBase = (title?: string) => {
+    // Top Bar
+    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+    doc.rect(0, 0, width, 18, 'F');
+    
+    // Logo Text Replacement (Control iD Style)
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(16);
+    doc.text("Control iD", 15, 12);
+    
+    if (title) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      doc.text(title.toUpperCase(), width - 15, 11.5, { align: 'right' });
+    }
+    
+    // Footer decoration
+    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+    doc.rect(0, height - 2, width, 2, 'F');
+  };
 
-  // 2. INSTITUCIONAL (Simplificado para PDF)
-  doc.addPage();
-  drawSlideHeader("Quem somos");
-  doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-  doc.setFontSize(24);
-  doc.text("Líder brasileira em tecnologia", 15, 45);
-  doc.setFontSize(12);
+  // 1. CAPA (Slide 1)
+  doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+  doc.rect(0, 0, width, height, 'F');
+  
+  // Gradient/Accent bar
+  doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.rect(0, height * 0.7, width * 0.4, 15, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(48);
+  doc.text("PROPOSTA", 20, height * 0.35);
+  doc.text("COMERCIAL", 20, height * 0.52);
+
+  doc.setFontSize(18);
   doc.setFont("helvetica", "normal");
-  const introText = "A Control iD é uma empresa 100% brasileira especializada no desenvolvimento de hardware e software para controle de acesso, automação comercial e relógio de ponto. Com fabricação própria e tecnologia de ponta, oferecemos as melhores soluções do mercado.";
-  doc.text(doc.splitTextToSize(introText, width - 30), 15, 60);
+  doc.text(data.companyName.toUpperCase(), 20, height * 0.75 + 10);
+  doc.setFontSize(14);
+  doc.text(`A/C: ${data.contactName}`, 20, height * 0.75 + 20);
+  
+  doc.setFontSize(10);
+  doc.text(`NÚMERO: ${data.proposalNumber}`, width - 20, height - 15, { align: 'right' });
+  doc.text(`DATA: ${formatDateForProposal(data.proposalDate)}`, width - 20, height - 10, { align: 'right' });
+
+  // 2. INSTITUCIONAL (Slide 3/4)
+  doc.addPage();
+  drawSlideBase("Quem Somos");
+  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+  doc.setFontSize(32);
+  doc.setFont("helvetica", "bold");
+  doc.text("Inovação e Tecnologia", 15, 45);
+  doc.text("100% Brasileira", 15, 58);
+  
+  doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+  doc.rect(15, 65, 40, 2, 'F');
+
+  doc.setFontSize(14);
+  doc.setFont("helvetica", "normal");
+  const introText = "A Control iD é uma empresa nacional, líder no desenvolvimento de hardware e software para controle de acesso e automação. Com design moderno e fabricação própria, entregamos soluções que combinam segurança extrema com usabilidade intuitiva.";
+  doc.text(doc.splitTextToSize(introText, width - 60), 15, 80);
 
   // 3. IDENTIFICAÇÃO DO PROJETO
   doc.addPage();
-  drawSlideHeader("Dados do Cliente");
-  doc.setFontSize(20);
-  doc.text("Identificação da Empresa", 15, 45);
-  autoTable(doc, {
-    startY: 55,
-    body: [
-      ["Razão Social:", data.companyName],
-      ["CNPJ:", data.cnpj],
-      ["Endereço:", data.address],
-      ["Responsável:", data.contactName],
-      ["E-mail:", data.email],
-      ["Telefone:", data.phone],
-    ],
-    theme: 'plain',
-    styles: { fontSize: 12, cellPadding: 4 },
-    columnStyles: { 0: { fontStyle: 'bold', width: 50 } }
-  });
+  drawSlideBase("Dados do Cliente");
+  doc.setFontSize(24);
+  doc.setFont("helvetica", "bold");
+  doc.text("Dados da Empresa", 15, 40);
 
-  // 4. DETALHES TÉCNICOS DOS PRODUTOS
-  data.items.forEach(item => {
-    doc.addPage();
-    drawSlideHeader("Especificações Técnicas");
-    doc.setTextColor(primaryColor[0], primaryColor[1], primaryColor[2]);
-    doc.setFontSize(22);
-    doc.text(item.product.description, 15, 45);
-    doc.setFontSize(10);
-    doc.text(`Part Number: ${item.product.part_number}`, 15, 52);
-    
-    // Placeholder para características (mimic slide técnico)
-    doc.setFontSize(12);
-    doc.text("Principais Características:", 15, 70);
-    const features = [
-      "- Alta velocidade de identificação",
-      "- Interface intuitiva e moderna",
-      "- Integração total com software iDSecure",
-      "- Design premiado e durabilidade superior"
-    ];
-    features.forEach((f, i) => doc.text(f, 20, 80 + (i * 8)));
-  });
-
-  // 5. RESUMO FINANCEIRO (Página 46 do PPTX)
-  doc.addPage();
-  drawSlideHeader("Resumo do Investimento");
-  doc.setFontSize(22);
-  doc.text("Proposta Comercial", 15, 40);
-  
   autoTable(doc, {
     startY: 50,
-    head: [['Item', 'Descrição do Produto', 'Qtd', 'Total']],
+    margin: { left: 15 },
+    body: [
+      ["RAZÃO SOCIAL", data.companyName],
+      ["CNPJ", data.cnpj],
+      ["ENDEREÇO", data.address || "Não informado"],
+      ["RESPONSÁVEL", data.contactName],
+      ["E-MAIL", data.email],
+      ["TELEFONE", data.phone || "Não informado"],
+    ],
+    theme: 'plain',
+    styles: { fontSize: 13, cellPadding: 5, textColor: [50, 50, 50] },
+    columnStyles: { 0: { fontStyle: 'bold', width: 60, textColor: colors.accent } }
+  });
+
+  // 4. ESPECIFICAÇÕES TÉCNICAS (Slide-per-product)
+  data.items.forEach(item => {
+    doc.addPage();
+    drawSlideBase("Detalhamento Técnico");
+    
+    // Header do Produto
+    doc.setFillColor(colors.light[0], colors.light[1], colors.light[2]);
+    doc.rect(15, 25, width - 30, 25, 'F');
+    
+    doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+    doc.setFontSize(22);
+    doc.setFont("helvetica", "bold");
+    doc.text(item.product.description, 20, 42);
+    
+    // Content
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "normal");
+    doc.text("SOLUÇÃO PROPOSTA:", 15, 65);
+    
+    const bulletPoints = [
+      "• Processamento de alta performance para reconhecimento instantâneo.",
+      "• Integração nativa com ecossistema iDSecure.",
+      "• Interface visual moderna e amigável ao usuário.",
+      "• Durabilidade industrial com acabamento premium.",
+      `• Quantidade considerada no projeto: ${item.quantity} unidade(s).`
+    ];
+    
+    bulletPoints.forEach((bp, i) => {
+      doc.text(bp, 20, 75 + (i * 10));
+    });
+
+    // Sidebar/Accent
+    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+    doc.rect(width - 50, 60, 35, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(24);
+    doc.text(String(item.quantity), width - 32.5, 83, { align: 'center' });
+    doc.setFontSize(8);
+    doc.text("QTD", width - 32.5, 88, { align: 'center' });
+  });
+
+  // 5. RESUMO FINANCEIRO (Slide 46)
+  doc.addPage();
+  drawSlideBase("Investimento");
+  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+  doc.setFontSize(28);
+  doc.setFont("helvetica", "bold");
+  doc.text("Proposta Comercial", 15, 40);
+
+  autoTable(doc, {
+    startY: 50,
+    margin: { left: 15, right: 15 },
+    head: [['ITEM', 'DESCRIÇÃO DOS EQUIPAMENTOS E SERVIÇOS', 'QTD', 'SITUAÇÃO']],
     body: data.items.map((it, idx) => [
-      idx + 1,
-      it.product.description,
+      String(idx + 1).padStart(2, '0'),
+      it.product.description.toUpperCase(),
       it.quantity,
-      "Incluso" // No modelo simplificado
+      "INCLUSO NO PACOTE"
     ]),
     theme: 'grid',
-    headStyles: { fillColor: primaryColor, textColor: 255 },
-    styles: { fontSize: 10 }
+    headStyles: { fillColor: colors.primary, textColor: 255, fontSize: 10, halign: 'center' },
+    styles: { fontSize: 10, cellPadding: 6 },
+    columnStyles: { 
+      0: { halign: 'center', width: 20 },
+      2: { halign: 'center', width: 20 },
+      3: { halign: 'center', fontStyle: 'bold', textColor: colors.accent }
+    }
   });
 
   const finalY = (doc as any).lastAutoTable.finalY;
@@ -255,44 +327,62 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     ? Number(data.overrideTotal)
     : (data.totalPrice || 0);
 
-  doc.setFillColor(245, 245, 245);
-  doc.rect(15, finalY + 10, width - 30, 25, 'F');
+  // Total Box
+  doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+  doc.rect(width - 120, finalY + 10, 105, 30, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.text("VALOR TOTAL DO INVESTIMENTO", width - 110, finalY + 20);
+  doc.setFontSize(26);
+  doc.setFont("helvetica", "bold");
+  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 110, finalY + 33);
+
+  // 6. CONTATO (Slide 57)
+  doc.addPage();
+  drawSlideBase("Encerramento");
+  
+  doc.setFillColor(colors.light[0], colors.light[1], colors.light[2]);
+  doc.rect(0, 0, width * 0.4, height, 'F');
+  
+  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
+  doc.setFontSize(32);
+  doc.text("Vamos tirar seu", 15, 45);
+  doc.text("projeto do papel?", 15, 58);
+  
   doc.setFontSize(14);
   doc.setFont("helvetica", "bold");
-  doc.text("INVESTIMENTO TOTAL:", 20, finalY + 26);
-  doc.setFontSize(18);
-  doc.text(`R$ ${new Intl.NumberFormat("pt-BR", { minimumFractionDigits: 2 }).format(computedTotal)}`, width - 20, finalY + 26, { align: 'right' });
-
-  // 6. CONTATO (Página 57 do PPTX)
-  doc.addPage();
-  drawSlideHeader("Contato");
-  doc.setFontSize(22);
-  doc.text("Dúvidas sobre o projeto?", 15, 45);
-  doc.setFontSize(14);
-  doc.text(data.sellerName || "", 15, 65);
+  doc.text(data.sellerName?.toUpperCase() || "CONTATO COMERCIAL", 15, 90);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(11);
-  doc.text(data.sellerRole || "", 15, 72);
-  doc.text(data.sellerEmail || "", 15, 79);
-  doc.text(data.sellerPhone || "", 15, 86);
+  doc.text(data.sellerRole || "", 15, 97);
+  doc.text(data.sellerEmail || "", 15, 104);
+  doc.text(data.sellerPhone || "", 15, 111);
 
-  // 7. APROVAÇÃO
+  // 7. APROVAÇÃO (Slide 56)
   if (data.includeApprovalPage) {
     doc.addPage();
-    doc.setFillColor(primaryColor[0], primaryColor[1], primaryColor[2]);
+    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
     doc.rect(0, 0, width, height, 'F');
+    
+    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
+    const btnW = 120;
+    const btnH = 20;
+    const btnX = (width - btnW) / 2;
+    const btnY = (height - btnH) / 2;
+    doc.rect(btnX, btnY, btnW, btnH, 'F');
+    
     doc.setTextColor(255, 255, 255);
-    doc.setFontSize(30);
-    const approvalText = "CLIQUE AQUI PARA APROVAR SUA PROPOSTA";
+    doc.setFontSize(16);
+    doc.setFont("helvetica", "bold");
+    doc.text("CLIQUE AQUI PARA APROVAR", width / 2, height / 2 + 2, { align: 'center' });
     
     if (data.approvalLink) {
-      doc.text(approvalText, width / 2, height / 2, { align: 'center' });
-      // Adiciona o link sobre o texto
-      doc.link(width / 2 - 100, height / 2 - 10, 200, 20, { url: data.approvalLink });
-      doc.setFontSize(12);
-      doc.text(data.approvalLink, width / 2, height / 2 + 15, { align: 'center' });
-    } else {
-      doc.text(approvalText, width / 2, height / 2, { align: 'center' });
+      doc.link(btnX, btnY, btnW, btnH, { url: data.approvalLink });
+      doc.setFontSize(8);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(150, 150, 150);
+      doc.text(data.approvalLink, width / 2, height / 2 + 18, { align: 'center' });
     }
   }
 
