@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
-import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess } from "@/services/settingsService";
+import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -36,6 +37,8 @@ export default function Settings() {
   
   const [hasFullAccess, setHasFullAccess] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [newEmailToGrant, setNewEmailToGrant] = useState("");
+  const [grantingAccess, setGrantingAccess] = useState(false);
 
   const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
 
@@ -144,6 +147,17 @@ export default function Settings() {
     }
   };
 
+  const handleToggleExtraColumn = async (base: StoredBase, header: string) => {
+    const current = base.extra_columns || [];
+    let next: string[];
+    if (current.includes(header)) {
+      next = current.filter(c => c !== header);
+    } else {
+      next = [...current, header];
+    }
+    await updateBaseMapping(base, "extra_columns", next);
+  };
+
   const toggleUserAccess = async (userId: string, currentAccess: boolean) => {
     try {
       await updateUserAccess(userId, !currentAccess);
@@ -151,6 +165,23 @@ export default function Settings() {
       loadAllUsers();
     } catch (err) {
       toast.error("Erro ao atualizar acesso");
+    }
+  };
+
+  const handleGrantAccessByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmailToGrant) return;
+    
+    setGrantingAccess(true);
+    try {
+      await grantAccessByEmail(newEmailToGrant);
+      toast.success(`Acesso total concedido para ${newEmailToGrant}`);
+      setNewEmailToGrant("");
+      loadAllUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao conceder acesso");
+    } finally {
+      setGrantingAccess(false);
     }
   };
 
@@ -212,7 +243,7 @@ export default function Settings() {
           {hasFullAccess ? (
             <>
               <Card className="border-primary/20 shadow-lg">
-                <CardHeader className="bg-primary/5">
+                <CardHeader className="bg-primary/10 dark:bg-primary/5">
                   <CardTitle className="flex items-center gap-2">
                     <ScanText className="h-5 w-5" />
                     Mapeamento de Tokens do Template
@@ -244,7 +275,7 @@ export default function Settings() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Aba</Label>
-                        <select className="w-full border rounded p-2" value={selectedSheet || ""} onChange={e => setSelectedSheet(e.target.value)}>
+                        <select className="w-full border rounded p-2 bg-background" value={selectedSheet || ""} onChange={e => setSelectedSheet(e.target.value)}>
                           {sheetTitles.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
@@ -260,10 +291,13 @@ export default function Settings() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Bases Salvas e Mapeamento</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
+                <CardHeader>
+                  <CardTitle>Bases Salvas e Mapeamento</CardTitle>
+                  <CardDescription>Defina quais colunas da planilha representam cada informação no assistente.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
                   {bases.map(base => (
-                    <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-gray-50/50 shadow-sm">
+                    <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-muted/30 dark:bg-muted/10 shadow-sm">
                       <div className="flex items-center justify-between border-b pb-4">
                         <div className="flex items-center gap-2">
                           <SettingsIcon className="h-5 w-5 text-primary" />
@@ -273,7 +307,7 @@ export default function Settings() {
                           variant="ghost" 
                           size="sm" 
                           className="text-destructive hover:bg-destructive/10 text-xs h-8" 
-                          onClick={() => deleteBase(base.id!).then(loadBases)}
+                          onClick={() => { if(confirm("Remover esta base?")) deleteBase(base.id!).then(loadBases); }}
                         >
                           Remover Base
                         </Button>
@@ -283,7 +317,7 @@ export default function Settings() {
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
                           <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-white" 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
                             value={base.name_column || ""} 
                             onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                           >
@@ -294,7 +328,7 @@ export default function Settings() {
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
                           <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-white" 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
                             value={base.description_column || ""} 
                             onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                           >
@@ -303,16 +337,42 @@ export default function Settings() {
                           </select>
                         </div>
                       </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-2">
+                          Colunas Extras para Exibição (Passo 4)
+                          <Info className="h-3 w-3" title="Estas colunas aparecerão como detalhes adicionais na busca de produtos." />
+                        </Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-background/50">
+                          {base.headers.map(header => (
+                            <div key={header} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={`extra-${base.id}-${header}`}
+                                checked={(base.extra_columns || []).includes(header)}
+                                onCheckedChange={() => handleToggleExtraColumn(base, header)}
+                              />
+                              <Label 
+                                htmlFor={`extra-${base.id}-${header}`}
+                                className="text-[10px] truncate cursor-pointer font-medium"
+                                title={header}
+                              >
+                                {header}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ))}
+                  {bases.length === 0 && <p className="text-sm text-center text-muted-foreground py-10 border border-dashed rounded-2xl">Nenhuma base importada ainda.</p>}
                 </CardContent>
               </Card>
             </>
           ) : (
-            <Card className="bg-neutral-50 border-dashed">
+            <Card className="bg-muted/20 border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <Lock className="h-12 w-12 text-neutral-300 mb-4" />
-                <h3 className="text-lg font-bold text-neutral-900">Configurações Avançadas Restritas</h3>
+                <h3 className="text-lg font-bold">Configurações Avançadas Restritas</h3>
                 <p className="text-sm text-neutral-500 max-w-sm mt-2">
                   As opções de importação de bases e mapeamento de tokens estão disponíveis apenas para administradores autorizados.
                 </p>
@@ -322,7 +382,7 @@ export default function Settings() {
 
           {/* Gestão de Acessos (Apenas para Paulo) */}
           {isSuperAdmin && (
-            <Card className="border-green-100 bg-green-50/30">
+            <Card className="border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-green-600" />
@@ -330,10 +390,28 @@ export default function Settings() {
                 </CardTitle>
                 <CardDescription>Libere o acesso às configurações avançadas para outros usuários.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+              <CardContent className="space-y-6">
+                <form onSubmit={handleGrantAccessByEmail} className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Acesso Total por E-mail</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="email" 
+                      placeholder="vendedor@controlid.com.br" 
+                      value={newEmailToGrant}
+                      onChange={e => setNewEmailToGrant(e.target.value)}
+                      required
+                    />
+                    <Button type="submit" disabled={grantingAccess}>
+                      {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                      Conceder
+                    </Button>
+                  </div>
+                </form>
+
+                <div className="space-y-2 border-t pt-4">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários</Label>
                   {allUsers.map(u => (
-                    <div key={u.user_id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-green-100 shadow-sm">
+                    <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
                       <div>
                         <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
                         <p className="text-xs text-muted-foreground">{u.seller_email}</p>
@@ -348,16 +426,15 @@ export default function Settings() {
                       </div>
                     </div>
                   ))}
-                  {allUsers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhum usuário cadastrado.</p>}
                 </div>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Perfil do Vendedor (Sempre visível) */}
-        <Card className="h-fit lg:sticky lg:top-6 shadow-md">
-          <CardHeader className="border-b bg-neutral-50/50">
+        {/* Perfil do Vendedor */}
+        <Card className="h-fit lg:sticky lg:top-6 shadow-md overflow-hidden">
+          <CardHeader className="border-b bg-muted/30 dark:bg-muted/20">
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
               Perfil do Vendedor
