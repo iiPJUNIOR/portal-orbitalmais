@@ -72,12 +72,7 @@ input:-webkit-autofill,
 input:-webkit-autofill:hover, 
 input:-webkit-autofill:focus, 
 input:-webkit-autofill:active {
-    /* Remove background color */
     -webkit-box-shadow: 0 0 0 30px white inset !important;
-    /* Remove border/outline that might be applied by the browser */
-    box-shadow: none !important;
-    border: none !important;
-    outline: none !important;
     -webkit-text-fill-color: inherit !important;
 }
 
@@ -85,12 +80,7 @@ input:-webkit-autofill:active {
 .dark input:-webkit-autofill:hover, 
 .dark input:-webkit-autofill:focus, 
 .dark input:-webkit-autofill:active {
-    /* Use background color of the card/theme to hide the autofill background */
     -webkit-box-shadow: 0 0 0 30px hsl(var(--card)) inset !important;
-    /* Remove border/outline that might be applied by the browser */
-    box-shadow: none !important;
-    border: none !important;
-    outline: none !important;
     -webkit-text-fill-color: white !important;
 }
 

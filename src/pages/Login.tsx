@@ -226,7 +226,7 @@ export default function Login() {
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
                       <Label htmlFor="email" className="text-sm font-semibold">E-mail</Label>
-                      <div className="mt-2 relative border-b border-border focus-within:border-primary transition-colors">
+                      <div className="mt-2 relative border-b border-neutral-200 focus-within:border-primary transition-colors">
                         <Input
                           id="email"
                           type="email"
@@ -242,7 +242,7 @@ export default function Login() {
                     {mode !== "reset-password" && (
                       <div>
                         <Label htmlFor="password" className="text-sm font-semibold">Senha</Label>
-                        <div className="mt-2 relative border-b border-border pr-12 focus-within:border-primary transition-colors">
+                        <div className="mt-2 relative border-b border-neutral-200 pr-12 focus-within:border-primary transition-colors">
                           <Input
                             id="password"
                             type={showPassword ? "text" : "password"}
