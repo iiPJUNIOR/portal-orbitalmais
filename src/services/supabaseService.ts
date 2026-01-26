@@ -51,7 +51,7 @@ export const saveQuote = async (
       product_description: it.productDescription,
       quantity: it.quantity,
       unit_price: it.unitPrice || 0,
-      price_model: it.price_model || it.priceModel || quote.priceModel,
+      price_model: it.priceModel || quote.priceModel,
       subtotal: (it.unitPrice || 0) * it.quantity,
     }));
 
@@ -99,31 +99,6 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
     })) as QuoteType[];
   } catch (err) {
     console.error("Erro ao buscar orçamentos por CNPJ:", err);
-    throw err;
-  }
-};
-
-export const getQuoteItems = async (quoteId: string): Promise<QuoteItemType[]> => {
-  try {
-    const { data, error } = await supabase
-      .from("quote_items")
-      .select("*")
-      .eq("quote_id", quoteId);
-
-    if (error) throw error;
-
-    return (data || []).map(it => ({
-      id: it.id,
-      quoteId: it.quote_id,
-      sku: it.sku,
-      productDescription: it.product_description,
-      quantity: it.quantity,
-      unitPrice: it.unit_price,
-      priceModel: it.price_model,
-      subtotal: it.subtotal
-    })) as QuoteItemType[];
-  } catch (err) {
-    console.error("Erro ao buscar itens do orçamento:", err);
     throw err;
   }
 };

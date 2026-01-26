@@ -5,22 +5,16 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
-import { QuoteDetails } from "@/components/QuoteDetails";
 import { generateProposalPPTX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { saveQuote, getQuoteItems } from "@/services/supabaseService";
+import { saveQuote } from "@/services/supabaseService";
 import { getUserSettings } from "@/services/settingsService";
-import { FileText, PlusCircle, History, Settings as SettingsIcon, ArrowLeft } from "lucide-react";
-import { Quote, QuoteItem } from "@/types/quote";
+import { FileText, PlusCircle, History, Settings as SettingsIcon } from "lucide-react";
 
 export default function Index() {
   const navigate = useNavigate();
-  const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details">("welcome");
-  const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
-  const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-
+  const [step, setStep] = useState<"welcome" | "wizard" | "history">("welcome");
   const [sellerInfo, setSellerInfo] = useState({
     name: "",
     role: "",
@@ -75,10 +69,10 @@ export default function Index() {
           totalPrice: payload.totalPrice,
           status: "rascunho",
           observations: payload.observations || "",
-          settings: payload, // Estado completo para regeneração futura
+          settings: payload,
         },
         payload.items.map((it: any) => ({
-          sku: it.product.part_number || it.product.description,
+          sku: it.product.description,
           productDescription: it.product.description,
           quantity: it.quantity,
           unitPrice: it.unitPrice || 0,
@@ -86,11 +80,11 @@ export default function Index() {
         }))
       );
 
-      // Download do arquivo
+      // Formatação do nome do arquivo: Nome da empresa - Proposta Plano Premium Access v.XX_Mês-Ano
       const dateObj = new Date(payload.date + "T12:00:00");
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const year = dateObj.getFullYear();
-      const fileName = `${payload.companyName} - Proposta Plano Premium Access v.${payload.version || '1'}_${month}-${year}.pptx`;
+      const fileName = `${payload.companyName} - Proposta Plano Premium Access v.${payload.version}_${month}-${year}.pptx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -105,52 +99,6 @@ export default function Index() {
     } catch (err) {
       console.error(err);
       toast.error(`Erro ao gerar PPTX.`, { id: loadToastId });
-    }
-  };
-
-  const handleSelectQuote = async (quote: Quote) => {
-    setLoadingDetails(true);
-    try {
-      const items = await getQuoteItems(quote.id);
-      setSelectedQuote(quote);
-      setQuoteItems(items);
-      setStep("details");
-    } catch (err) {
-      toast.error("Erro ao carregar detalhes do orçamento.");
-    } finally {
-      setLoadingDetails(false);
-    }
-  };
-
-  const handleRegenerateQuote = async () => {
-    if (!selectedQuote || !selectedQuote.settings) {
-      toast.error("Configurações originais não encontradas para este orçamento.");
-      return;
-    }
-
-    const loadToastId = toast.loading("Regenerando arquivo PPTX...");
-    try {
-      // Usamos as configurações salvas no momento da criação original
-      const blob = await generateProposalPPTX(selectedQuote.settings);
-      
-      const dateObj = new Date(selectedQuote.proposalDate);
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      const fileName = `${selectedQuote.companyName} - Proposta Regenerada_${month}-${year}.pptx`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success("PPTX regenerado com sucesso!", { id: loadToastId });
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao regenerar PPTX.", { id: loadToastId });
     }
   };
 
@@ -227,18 +175,7 @@ export default function Index() {
               <h2 className="text-3xl font-bold">Histórico de Propostas</h2>
               <Button variant="outline" onClick={() => setStep("welcome")}>Voltar</Button>
             </div>
-            <QuoteHistory onQuoteSelect={handleSelectQuote} />
-          </div>
-        )}
-
-        {step === "details" && selectedQuote && (
-          <div className="animate-in fade-in duration-500">
-            <QuoteDetails 
-              quote={selectedQuote} 
-              items={quoteItems} 
-              onBack={() => setStep("history")} 
-              onRegenerate={handleRegenerateQuote}
-            />
+            <QuoteHistory onQuoteSelect={(q) => toast.info(`Orçamento selecionado: ${q.proposalNumber}`)} />
           </div>
         )}
       </main>
