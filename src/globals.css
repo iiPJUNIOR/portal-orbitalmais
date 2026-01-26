@@ -5,63 +5,64 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 240 10% 3.9%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
+    --popover-foreground: 240 10% 3.9%;
 
     --primary: 262 83% 58%;
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222 47% 11.2%;
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 3.8% 46.1%;
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222 47% 11.2%;
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 90%;
     --ring: 262 83% 58%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 222 47% 4%;
-    --foreground: 210 40% 98%;
+    /* Paleta Deep Zinc para um modo noturno premium */
+    --background: 240 10% 3.9%; /* Black */
+    --foreground: 0 0% 98%;
 
-    --card: 222 47% 6%;
-    --card-foreground: 210 40% 98%;
+    --card: 240 10% 6%; /* Quase black */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 222 47% 5%;
-    --popover-foreground: 210 40% 98%;
+    --popover: 240 10% 8%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 262 83% 58%;
+    --primary: 263 70% 50%; /* Roxo um pouco mais suave para o escuro */
     --primary-foreground: 210 40% 98%;
 
-    --secondary: 217.2 32.6% 12%;
-    --secondary-foreground: 210 40% 98%;
+    --secondary: 240 3.7% 15.9%;
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 217.2 32.6% 12%;
-    --muted-foreground: 215 20.2% 65.1%;
+    --muted: 240 3.7% 15.9%;
+    --muted-foreground: 240 5% 64.9%;
 
-    --accent: 217.2 32.6% 12%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
+    --border: 240 3.7% 15.9%; /* Bordas muito sutis */
+    --input: 240 3.7% 15.9%;
     --ring: 262 83% 58%;
   }
 }
@@ -71,45 +72,31 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased selection:bg-primary/30;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Layout architectural adjustments for 'lines meeting' */
 @layer components {
-  .seamless-border-r {
-    @apply border-r border-border;
-  }
-  .seamless-border-b {
-    @apply border-b border-border;
-  }
-  
-  /* Make sidebar and header borders feel continuous */
-  .app-layout-grid {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    height: 100vh;
-  }
-
-  /* Refined Proposal Card */
-  .proposal-highlight {
-    @apply bg-card border border-border shadow-sm transition-all duration-300;
-  }
-  
+  /* Efeito de vidro sutil para cards no modo escuro */
   .dark .proposal-highlight {
-    @apply bg-card/50 border-border/50 shadow-2xl shadow-black/40;
+    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
+    @apply shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-white/5;
+  }
+
+  /* Ajuste para que as bordas do sidebar e do header pareçam uma única linha contínua */
+  .header-blur {
+    @apply backdrop-blur-md bg-background/80 border-b sticky top-0 z-50;
   }
 }
 
-/* Specific overrides for consistent borders */
-.dark input, 
-.dark select, 
-.dark textarea {
-  @apply bg-secondary/50 border-border/50 focus:border-primary/50;
+/* Scrollbar personalizada para o modo noturno */
+.dark ::-webkit-scrollbar {
+  width: 10px;
 }
-
-/* Neutralize the Dyad badge area */
-.p-4.text-center {
-  @apply opacity-20 hover:opacity-100 transition-opacity;
+.dark ::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-secondary rounded-full border-2 border-background;
 }
