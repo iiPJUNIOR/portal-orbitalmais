@@ -11,7 +11,6 @@ import Login from "./pages/Login";
 import { SessionProvider } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
-import { ThemeProvider } from "@/contexts/ThemeProvider";
 
 const queryClient = new QueryClient();
 
@@ -47,13 +46,11 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <ThemeProvider>
-          <SessionProvider>
-            <SidebarProvider>
-              <AppContent />
-            </SidebarProvider>
-          </SessionProvider>
-        </ThemeProvider>
+        <SessionProvider>
+          <SidebarProvider>
+            <AppContent />
+          </SidebarProvider>
+        </SessionProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

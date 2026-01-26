@@ -13,8 +13,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
 
-    /* COR PRIMÁRIA ALTERADA PARA ROXO (mantida caso queira manter tema roxo) */
-    --primary: 270 60% 50%;
+    /* COR PRIMÁRIA ALTERADA PARA ROXO */
+    --primary: 270 60% 50%; /* Roxo intenso */
     --primary-foreground: 0 0% 98%;
 
     --secondary: 0 0% 96.1%;
@@ -83,23 +83,5 @@
 
   body {
     @apply bg-background text-foreground;
-  }
-
-  /* Estilo para o quadrado do logo quando ativado (garante contraste e visibilidade do logo) */
-  .logo-square-dark {
-    background-color: hsl(var(--sidebar-primary));
-    padding: 0.75rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-bottom-left-radius: 0.5rem;
-    border-bottom-right-radius: 0.5rem;
-    transition: background-color 200ms ease, filter 200ms ease;
-  }
-
-  .logo-square-dark img {
-    /* inverter a imagem para ficar visível sobre fundo escuro */
-    filter: brightness(0) invert(1);
-    transition: filter 200ms ease;
   }
 }
