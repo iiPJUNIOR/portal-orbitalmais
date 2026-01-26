@@ -22,11 +22,15 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
+import { useTheme } from "@/contexts/ThemeProvider";
+import { Switch } from "@/components/ui/switch";
+import { Trash2 } from "lucide-react";
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
+  const { dark, logoDark, toggleDark, toggleLogoDark } = useTheme();
 
   const menuItems = [
     {
@@ -46,9 +50,13 @@ export function AppSidebar() {
     navigate("/login");
   };
 
+  const headerClass = `p-4 border-b flex items-center justify-center transition-colors ${
+    logoDark ? "logo-square-dark" : ""
+  }`;
+
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 border-b flex items-center justify-center">
+      <SidebarHeader className={headerClass}>
         <img 
           src="/logo.png" 
           alt="Control iD" 
@@ -78,15 +86,25 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t bg-gray-50/50">
+      <SidebarFooter className="p-4 border-t bg-gray-50/50 space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="text-sm">Modo Noturno</div>
+          <Switch checked={dark} onCheckedChange={toggleDark} />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <div className="text-sm">Logo Escuro</div>
+          <Switch checked={logoDark} onCheckedChange={toggleLogoDark} />
+        </div>
+
         <SidebarMenu>
           {user && (
-            <SidebarMenuItem className="mb-2 px-2">
+            <div className="mb-2 px-2">
               <div className="flex items-center gap-2 text-xs text-muted-foreground overflow-hidden">
                 <User className="h-3 w-3 flex-shrink-0" />
                 <span className="truncate">{user.email}</span>
               </div>
-            </SidebarMenuItem>
+            </div>
           )}
           <SidebarMenuItem>
             <SidebarMenuButton 
