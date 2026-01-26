@@ -6,9 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft, FileText } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
-import { generateProposalNumber, generateProposalPDF } from "@/services/proposalService";
+import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrencyBRL } from "@/lib/formatters";
 
@@ -19,7 +19,7 @@ interface WizardProps {
     email: string;
     phone: string;
   };
-  onComplete: (data: any, type: 'pptx' | 'pdf') => void;
+  onComplete: (data: any, type: 'pptx') => void;
   onCancel: () => void;
 }
 
@@ -28,7 +28,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const [loadingBases, setLoadingBases] = useState(true);
   const [availableBases, setAvailableBases] = useState<StoredBase[]>([]);
   const [productSearch, setProductSearch] = useState("");
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const lastFetchedCnpj = useRef<string>("");
   
   const initialFormState = {
@@ -169,53 +168,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     lastFetchedCnpj.current = "";
   };
 
-  const handleDownloadPdf = async () => {
-    setIsGeneratingPdf(true);
-    const toastId = toast.loading("Gerando PDF profissional...");
-    try {
-      const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
-      const data = {
-        ...formData,
-        proposalNumber,
-        items: formData.selectedProducts.map(p => ({
-          product: { 
-            id: p.id,
-            description: p.name, 
-            model: p.name, 
-            category: p.category,
-            part_number: p.sku
-          },
-          quantity: p.quantity,
-          unitPrice: 0,
-        })),
-        proposalDate: formData.date,
-        totalPrice: formData.totalPrice
-      };
-
-      const blob = await generateProposalPDF(data as any);
-      const dateObj = new Date(formData.date + "T12:00:00");
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      const fileName = `${formData.companyName} - Proposta Control iD v.${formData.version}_${month}-${year}.pdf`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast.success("PDF gerado!", { id: toastId });
-    } catch (err) {
-      toast.error("Erro ao gerar PDF", { id: toastId });
-    } finally {
-      setIsGeneratingPdf(false);
-    }
-  };
-
-  const handleFinish = (type: 'pptx' | 'pdf') => {
+  const handleFinish = () => {
     const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
     
     const payload = {
@@ -236,11 +189,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       totalPrice: formData.totalPrice
     };
 
-    onComplete(payload, type);
-    
-    if (currentStep === 5) {
-      setCurrentStep(6);
-    }
+    onComplete(payload, 'pptx');
+    setCurrentStep(6);
   };
 
   const renderStep = () => {
@@ -387,22 +337,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="space-y-2">
               <h2 className="text-3xl font-black">Proposta Pronta!</h2>
-              <p className="text-muted-foreground">Escolha o formato que deseja baixar.</p>
+              <p className="text-muted-foreground">Clique no botão abaixo para baixar o arquivo PPTX.</p>
             </div>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-              <Button className="h-16 rounded-2xl font-bold text-lg" onClick={() => handleFinish('pptx')}>
-                <Presentation className="mr-2 h-6 w-6" /> Baixar PPTX
-              </Button>
-              <Button variant="outline" className="h-16 rounded-2xl font-bold text-lg border-2" onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
-                {isGeneratingPdf ? <Loader2 className="animate-spin mr-2 h-6 w-6" /> : <FileText className="mr-2 h-6 w-6" />}
-                Baixar PDF
+            <div className="w-full max-w-sm">
+              <Button className="h-16 w-full rounded-2xl font-bold text-lg" onClick={handleReset}>
+                <RefreshCw className="mr-2 h-6 w-6" /> Novo Orçamento
               </Button>
             </div>
-
-            <Button variant="ghost" onClick={handleReset} className="mt-4">
-              <RefreshCw className="mr-2 h-4 w-4" /> Novo Orçamento
-            </Button>
           </div>
         );
       default: return null;
@@ -420,7 +362,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               {currentStep === 6 ? "Concluído" : `Passo ${currentStep}`}
             </CardTitle>
             <CardDescription className="text-white/70">
-              {currentStep === 6 ? "Baixe seus arquivos" : `Orçamento com ${formData.selectedProducts.length} itens.`}
+              {currentStep === 6 ? "Arquivo gerado com sucesso" : `Orçamento com ${formData.selectedProducts.length} itens.`}
             </CardDescription>
           </div>
           {currentStep < 6 && (
@@ -440,8 +382,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </Button>
             <div className="flex gap-2">
               {currentStep === 5 ? (
-                <Button className="rounded-full px-8" onClick={() => setCurrentStep(6)}>
-                  Revisar e Gerar <ArrowRight className="ml-2 h-4 w-4" />
+                <Button className="rounded-full px-8" onClick={handleFinish}>
+                  Gerar PPTX <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : (
                 <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>

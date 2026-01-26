@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
-import { generateProposalPPTX, generateProposalPDF } from "@/services/proposalService";
+import { generateProposalPPTX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote } from "@/services/supabaseService";
@@ -41,9 +41,8 @@ export default function Index() {
     loadSettings();
   }, []);
 
-  const handleWizardComplete = async (payload: any, type: 'pptx' | 'pdf') => {
-    const ext = type.toUpperCase();
-    const loadToastId = toast.loading(`Gerando proposta em ${ext}...`);
+  const handleWizardComplete = async (payload: any) => {
+    const loadToastId = toast.loading("Gerando proposta PPTX...");
     try {
       const proposalData = {
         ...payload,
@@ -53,11 +52,9 @@ export default function Index() {
         sellerPhone: sellerInfo.phone,
       };
       
-      const blob = type === 'pptx' 
-        ? await generateProposalPPTX(proposalData)
-        : await generateProposalPDF(proposalData);
+      const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase (apenas uma vez, independente do tipo de download)
+      // Salvar no Supabase
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -86,7 +83,7 @@ export default function Index() {
       const dateObj = new Date(payload.date + "T12:00:00");
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const year = dateObj.getFullYear();
-      const fileName = `${payload.companyName} - Proposta Control iD v.${payload.version}_${month}-${year}.${type}`;
+      const fileName = `${payload.companyName} - Proposta Control iD v.${payload.version}_${month}-${year}.pptx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -97,10 +94,10 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Proposta ${ext} gerada e salva com sucesso!`, { id: loadToastId });
+      toast.success("Proposta PPTX gerada e salva com sucesso!", { id: loadToastId });
     } catch (err) {
       console.error(err);
-      toast.error(`Erro ao gerar ${ext}.`, { id: loadToastId });
+      toast.error("Erro ao gerar PPTX.", { id: loadToastId });
     }
   };
 
@@ -114,7 +111,7 @@ export default function Index() {
                 Gerador de Propostas <span className="text-neutral-900 dark:text-white">Control iD</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Crie apresentações profissionais em PPTX ou PDF seguindo o padrão oficial da Control iD.
+                Crie apresentações profissionais em PPTX seguindo o padrão oficial da Control iD.
               </p>
             </div>
 
