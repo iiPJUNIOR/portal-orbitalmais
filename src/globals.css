@@ -4,7 +4,8 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    /* Fundo alterado para um cinza claro para dar contraste com o branco do card */
+    --background: 240 5% 96%; 
     --foreground: 240 10% 3.9%;
 
     --card: 0 0% 100%;
@@ -82,20 +83,20 @@ html.font-extra-large { font-size: 20px; }
 }
 
 @layer components {
-  /* Sombra muito mais intensa e profunda para o card 'popar' do fundo */
+  /* Estilo do card para detoar do fundo cinza */
   .proposal-highlight {
     position: relative;
     z-index: 10;
-    background: hsl(var(--card));
+    background-color: #ffffff; /* Branco puro forçado */
     border-radius: 1.5rem;
     
-    /* Mix de sombras para criar profundidade real nas bordas */
+    /* Sombra projetada para baixo e para os lados */
     box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.08),        /* Borda fina de definição */
-      0 10px 30px -5px rgba(0, 0, 0, 0.2),  /* Sombra de proximidade */
-      0 30px 60px -10px rgba(0, 0, 0, 0.25); /* Sombra de profundidade/distância */
+      0 1px 3px rgba(0, 0, 0, 0.1),
+      0 10px 40px -10px rgba(0, 0, 0, 0.25),
+      0 20px 25px -5px rgba(0, 0, 0, 0.1);
 
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid rgba(0, 0, 0, 0.05);
     overflow: hidden;
   }
 

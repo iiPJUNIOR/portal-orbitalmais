@@ -18,8 +18,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  // Force light mode while on the login page by temporarily removing the 'dark' class.
-  // Restore the previous state when the component unmounts.
   useLayoutEffect(() => {
     const html = document.documentElement;
     const hadDark = html.classList.contains("dark");
@@ -38,7 +36,6 @@ export default function Login() {
 
     const checkSession = async () => {
       try {
-        // @ts-ignore
         const resp = await supabase.auth.getSession?.();
         const currentSession = resp?.data?.session ?? resp?.session ?? null;
         if (currentSession && mounted) {
@@ -51,7 +48,6 @@ export default function Login() {
 
     checkSession();
 
-    // @ts-ignore
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
       if (event === "SIGNED_IN" && session) {
@@ -77,7 +73,6 @@ export default function Login() {
       });
 
       if (error) {
-        console.error("signIn error", error);
         toast.error("Falha ao entrar: " + (error.message || "erro desconhecido"));
         return;
       }
@@ -85,11 +80,8 @@ export default function Login() {
       if (data?.user) {
         toast.success("Login bem-sucedido");
         navigate("/", { replace: true });
-      } else {
-        toast.success("Verifique seu e-mail para confirmar (se aplicável).");
       }
     } catch (err: any) {
-      console.error("signIn exception", err);
       toast.error("Erro ao autenticar: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -100,13 +92,12 @@ export default function Login() {
     if (e) e.preventDefault();
     setLoading(true);
     try {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
       });
 
       if (error) {
-        console.error("signUp error", error);
         toast.error("Falha ao criar conta: " + (error.message || "erro desconhecido"));
         return;
       }
@@ -114,7 +105,6 @@ export default function Login() {
       toast.success("Conta criada! Verifique seu e-mail para confirmar.");
       setMode("sign-in");
     } catch (err: any) {
-      console.error("signUp exception", err);
       toast.error("Erro ao criar conta: " + (err?.message || err));
     } finally {
       setLoading(false);
@@ -127,9 +117,8 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen w-full relative bg-white overflow-hidden">
+    <div className="min-h-screen w-full relative bg-background overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
-        {/* Left side: promotional image (desktop only) */}
         <div className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white">
           <div 
             className="absolute inset-0 z-0 bg-cover bg-center opacity-40"
@@ -137,36 +126,22 @@ export default function Login() {
               backgroundImage: "url('https://www.controlid.com.br/assets/img/og-image.jpg')",
             }}
           />
-          
           <div className="relative z-10">
             <div className="inline-block p-4 rounded-xl">
-              <img 
-                src="/logo.png" 
-                alt="Control iD" 
-                className="h-8 w-auto"
-              />
+              <img src="/logo.png" alt="Control iD" className="h-8 w-auto" />
             </div>
           </div>
-
           <div className="relative z-10">
-            <h2 className="text-5xl font-extrabold mb-6 leading-tight">
-              Gere propostas <br />
-              com inteligência.
-            </h2>
-            <p className="text-xl text-gray-300 max-w-lg leading-relaxed">
-              A plataforma definitiva para automação de orçamentos e controle de acesso profissional.
-            </p>
+            <h2 className="text-5xl font-extrabold mb-6 leading-tight">Gere propostas com inteligência.</h2>
+            <p className="text-xl text-gray-300 max-w-lg leading-relaxed">A plataforma definitiva para automação de orçamentos e controle de acesso profissional.</p>
           </div>
-
-          <div className="relative z-10 text-sm text-gray-500">
-            &copy; {new Date().getFullYear()} Control iD. Inovação Brasileira.
-          </div>
+          <div className="relative z-10 text-sm text-gray-500">&copy; {new Date().getFullYear()} Control iD. Inovação Brasileira.</div>
         </div>
 
-        {/* Right side: centered Card matching ProposalWizard steps */}
-        <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
+        {/* Lado do login com fundo cinza para destacar o card branco */}
+        <div className="flex items-center justify-center p-8 bg-background overflow-y-auto">
           <div className="w-full max-w-[480px]">
-            <Card className="proposal-highlight rounded-3xl overflow-hidden border-none">
+            <Card className="proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl">
               <CardHeader className="bg-primary text-white p-8">
                 <div className="flex items-start justify-between">
                   <div>
@@ -183,11 +158,11 @@ export default function Login() {
                 </div>
               </CardHeader>
 
-              <CardContent className="p-6">
+              <CardContent className="p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <Label htmlFor="email" className="text-sm">E-mail</Label>
-                    <div className="mt-2 relative border-b border-neutral-200 dark:border-neutral-700 focus-within:border-transparent focus-within:dark:border-transparent transition-colors">
+                    <div className="mt-2 relative border-b border-neutral-200 focus-within:border-primary transition-colors">
                       <Input
                         id="email"
                         type="email"
@@ -195,14 +170,14 @@ export default function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 placeholder:text-muted-foreground"
                       />
                     </div>
                   </div>
 
                   <div>
                     <Label htmlFor="password" className="text-sm">Senha</Label>
-                    <div className="mt-2 relative border-b border-neutral-200 dark:border-neutral-700 pr-12 focus-within:border-transparent focus-within:dark:border-transparent transition-colors">
+                    <div className="mt-2 relative border-b border-neutral-200 pr-12 focus-within:border-primary transition-colors">
                       <Input
                         id="password"
                         type={showPassword ? "text" : "password"}
@@ -210,75 +185,47 @@ export default function Login() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 placeholder:text-muted-foreground"
                       />
-
                       <button
                         type="button"
-                        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                        title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                         onClick={() => setShowPassword((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none shadow-sm
-                          bg-white border border-neutral-200 text-neutral-700"
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white border border-neutral-200 text-neutral-700"
                       >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4" />
-                        ) : (
-                          <Eye className="h-4 w-4" />
-                        )}
+                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <input id="remember" type="checkbox" className="h-4 w-4" />
+                      <input id="remember" type="checkbox" className="h-4 w-4 rounded border-gray-300" />
                       <label htmlFor="remember" className="text-sm text-muted-foreground">Lembrar</label>
                     </div>
-
-                    <div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!email) return toast.error("Preencha o e-mail para recuperar a senha");
-                          setLoading(true);
-                          supabase.auth.resetPasswordForEmail(email).then(({ data, error }) => {
-                            if (error) toast.error("Erro ao enviar link de recuperação: " + (error.message || ""));
-                            else toast.success("Link de recuperação enviado para o seu e-mail");
-                          }).finally(() => setLoading(false));
-                        }}
-                        className="text-sm text-muted-foreground underline"
-                      >
-                        Esqueceu a senha?
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toast.info("Funcionalidade em desenvolvimento")}
+                      className="text-sm text-muted-foreground underline"
+                    >
+                      Esqueceu a senha?
+                    </button>
                   </div>
 
                   <div className="flex flex-col gap-2">
-                    <Button type="submit" className="h-11" disabled={loading}>
-                      {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2 inline" /> : null}
-                      {mode === "sign-in" ? "Acessar Painel" : "Criar Conta"}
+                    <Button type="submit" className="h-12 text-base font-bold" disabled={loading}>
+                      {loading ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
+                      {mode === "sign-in" ? "Entrar no Sistema" : "Cadastrar Agora"}
                     </Button>
 
-                    <div className="text-center text-sm text-muted-foreground">
+                    <div className="text-center text-sm text-muted-foreground mt-4">
                       {mode === "sign-in" ? (
-                        <>
-                          Não tem conta?{" "}
-                          <button type="button" className="underline" onClick={() => setMode("sign-up")}>Criar conta</button>
-                        </>
+                        <>Não tem conta? <button type="button" className="underline font-semibold text-primary" onClick={() => setMode("sign-up")}>Criar conta</button></>
                       ) : (
-                        <>
-                          Já tem conta?{" "}
-                          <button type="button" className="underline" onClick={() => setMode("sign-in")}>Entrar</button>
-                        </>
+                        <>Já tem conta? <button type="button" className="underline font-semibold text-primary" onClick={() => setMode("sign-in")}>Entrar</button></>
                       )}
                     </div>
                   </div>
                 </form>
-
-                <div className="mt-6 pt-6 border-t text-center text-sm text-gray-400">
-                  Precisa de ajuda? <span className="text-black font-semibold cursor-pointer hover:underline">Fale com o suporte</span>
-                </div>
               </CardContent>
             </Card>
           </div>
