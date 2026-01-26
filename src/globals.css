@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    /* Fundo alterado para um cinza claro para dar contraste com o branco do card */
+    /* Fundo cinza para contraste */
     --background: 240 5% 96%; 
     --foreground: 240 10% 3.9%;
 
@@ -83,20 +83,22 @@ html.font-extra-large { font-size: 20px; }
 }
 
 @layer components {
-  /* Estilo do card para detoar do fundo cinza */
+  /* Sombra Ultra Forte para destacar o card do fundo cinza */
   .proposal-highlight {
     position: relative;
     z-index: 10;
-    background-color: #ffffff; /* Branco puro forçado */
+    background-color: #ffffff;
     border-radius: 1.5rem;
     
-    /* Sombra projetada para baixo e para os lados */
+    /* Múltiplas camadas de sombra para efeito 3D profundo */
     box-shadow: 
-      0 1px 3px rgba(0, 0, 0, 0.1),
-      0 10px 40px -10px rgba(0, 0, 0, 0.25),
-      0 20px 25px -5px rgba(0, 0, 0, 0.1);
+      0 0 0 1px rgba(0, 0, 0, 0.05),            /* Borda ultra fina */
+      0 2px 4px rgba(0, 0, 0, 0.05),            /* Sombra de contato */
+      0 12px 24px rgba(0, 0, 0, 0.15),          /* Sombra média */
+      0 25px 50px -12px rgba(0, 0, 0, 0.35),    /* Sombra de elevação principal */
+      0 40px 80px -20px rgba(0, 0, 0, 0.2);     /* Sombra de espalhamento suave */
 
-    border: 1px solid rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.08);
     overflow: hidden;
   }
 
@@ -104,8 +106,8 @@ html.font-extra-large { font-size: 20px; }
     background: hsl(var(--card));
     box-shadow: 
       0 0 0 1px rgba(255, 255, 255, 0.1),
-      0 25px 50px -12px rgba(0, 0, 0, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.05);
+      0 25px 60px -15px rgba(0, 0, 0, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.1);
   }
 
   .header-blur {
