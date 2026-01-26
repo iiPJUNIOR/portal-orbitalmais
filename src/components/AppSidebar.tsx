@@ -48,11 +48,14 @@ export function AppSidebar() {
 
   return (
     <Sidebar className="border-r">
-      <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
+      {/* Force the logo header to remain visually identical regardless of dark/light theme */}
+      <SidebarHeader className="h-14 flex items-center justify-center border-b px-4 bg-white dark:bg-white/100 z-30">
         <img 
           src="/logo.png" 
           alt="Control iD" 
           className="h-7 w-auto object-contain"
+          // Ensure the image itself isn't affected by any inherited filter/opacity
+          style={{ filter: "none", opacity: 1 }}
         />
       </SidebarHeader>
       
