@@ -7,13 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2 } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -144,6 +145,17 @@ export default function Settings() {
     } catch (err) {
       toast.error("Erro ao salvar mapeamento");
     }
+  };
+
+  const handleToggleExtraColumn = async (base: StoredBase, header: string) => {
+    const current = base.extra_columns || [];
+    let next: string[];
+    if (current.includes(header)) {
+      next = current.filter(c => c !== header);
+    } else {
+      next = [...current, header];
+    }
+    await updateBaseMapping(base, "extra_columns", next);
   };
 
   const toggleUserAccess = async (userId: string, currentAccess: boolean) => {
@@ -279,8 +291,11 @@ export default function Settings() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Bases Salvas e Mapeamento</CardTitle></CardHeader>
-                <CardContent className="space-y-6">
+                <CardHeader>
+                  <CardTitle>Bases Salvas e Mapeamento</CardTitle>
+                  <CardDescription>Defina quais colunas da planilha representam cada informação no assistente.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-8">
                   {bases.map(base => (
                     <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-muted/30 dark:bg-muted/10 shadow-sm">
                       <div className="flex items-center justify-between border-b pb-4">
@@ -292,7 +307,7 @@ export default function Settings() {
                           variant="ghost" 
                           size="sm" 
                           className="text-destructive hover:bg-destructive/10 text-xs h-8" 
-                          onClick={() => deleteBase(base.id!).then(loadBases)}
+                          onClick={() => { if(confirm("Remover esta base?")) deleteBase(base.id!).then(loadBases); }}
                         >
                           Remover Base
                         </Button>
@@ -322,8 +337,34 @@ export default function Settings() {
                           </select>
                         </div>
                       </div>
+
+                      <div className="space-y-3">
+                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-2">
+                          Colunas Extras para Exibição (Passo 4)
+                          <Info className="h-3 w-3" title="Estas colunas aparecerão como detalhes adicionais na busca de produtos." />
+                        </Label>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-background/50">
+                          {base.headers.map(header => (
+                            <div key={header} className="flex items-center space-x-2">
+                              <Checkbox 
+                                id={`extra-${base.id}-${header}`}
+                                checked={(base.extra_columns || []).includes(header)}
+                                onCheckedChange={() => handleToggleExtraColumn(base, header)}
+                              />
+                              <Label 
+                                htmlFor={`extra-${base.id}-${header}`}
+                                className="text-[10px] truncate cursor-pointer font-medium"
+                                title={header}
+                              >
+                                {header}
+                              </Label>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   ))}
+                  {bases.length === 0 && <p className="text-sm text-center text-muted-foreground py-10 border border-dashed rounded-2xl">Nenhuma base importada ainda.</p>}
                 </CardContent>
               </Card>
             </>
@@ -365,7 +406,6 @@ export default function Settings() {
                       Conceder
                     </Button>
                   </div>
-                  <p className="text-[10px] text-muted-foreground">O usuário já deve ter logado no sistema pelo menos uma vez.</p>
                 </form>
 
                 <div className="space-y-2 border-t pt-4">
@@ -386,14 +426,13 @@ export default function Settings() {
                       </div>
                     </div>
                   ))}
-                  {allUsers.length === 0 && <p className="text-sm text-muted-foreground text-center py-4">Nenhum usuário cadastrado.</p>}
                 </div>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Perfil do Vendedor (Sempre visível) */}
+        {/* Perfil do Vendedor */}
         <Card className="h-fit lg:sticky lg:top-6 shadow-md overflow-hidden">
           <CardHeader className="border-b bg-muted/30 dark:bg-muted/20">
             <CardTitle className="flex items-center gap-2">

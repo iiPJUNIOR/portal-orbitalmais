@@ -104,12 +104,20 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
       const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
+      
       return base.rows.map((row, idx) => {
         const p: any = {};
         headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
-        const name = nameCol ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
-        const description = descCol ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
-        const extras = extraCols.map(col => ({ label: col, value: String(p[col] || "").trim() })).filter(ex => ex.value !== "");
+        
+        // Mapeamento dinâmico baseado nas configurações da base
+        const name = nameCol && p[nameCol] ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
+        const description = descCol && p[descCol] ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
+        
+        const extras = (base.extra_columns || []).map(col => {
+          const val = p[col.toLowerCase()];
+          return val !== undefined && val !== null ? { label: col, value: String(val).trim() } : null;
+        }).filter(Boolean);
+
         return {
           id: `${base.id}-${idx}`,
           name: String(name || "Produto sem nome").trim(),
@@ -126,7 +134,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const filteredProducts = allProducts.filter(p => 
     p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
     p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.extras.some(ex => ex.value.toLowerCase().includes(productSearch.toLowerCase()))
+    p.extras.some((ex: any) => ex.value.toLowerCase().includes(productSearch.toLowerCase()))
   );
 
   const fetchCnpjData = async (rawCnpj: string) => {
@@ -259,7 +267,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                         <span className="font-bold text-sm">{p.name}</span>
                         <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-medium">{p.baseName}</span>
                       </div>
-                      <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
+                      <div className="text-[10px] text-muted-foreground mb-1">{p.sku} | {p.description}</div>
+                      
+                      {/* Colunas Extras Mapeadas */}
+                      {p.extras && p.extras.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {p.extras.map((ex: any) => (
+                            <span key={ex.label} className="text-[9px] border px-1.5 py-0.5 rounded bg-muted/30">
+                              <span className="font-bold opacity-70">{ex.label}:</span> {ex.value}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-8 w-8 p-0 rounded-full" onClick={() => handleProductToggle(p)}>
                       {isSelected ? <Trash2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
@@ -357,7 +376,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
-                <span className="font-bold">Arquivo &gt; Exportar &gt; Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
+                <span className="font-bold">Arquivo > Exportar > Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
               </p>
             </div>
             
