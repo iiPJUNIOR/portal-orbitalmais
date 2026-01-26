@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft, FileText } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
-import { generateProposalNumber } from "@/services/proposalService";
+import { generateProposalNumber, generateProposalPDF } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
-import { formatCurrencyBRL, parseSpreadsheetNumber } from "@/lib/formatters";
+import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface WizardProps {
   initialSellerData: {
@@ -19,7 +19,7 @@ interface WizardProps {
     email: string;
     phone: string;
   };
-  onComplete: (data: any) => void;
+  onComplete: (data: any, type: 'pptx' | 'pdf') => void;
   onCancel: () => void;
 }
 
@@ -28,6 +28,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const [loadingBases, setLoadingBases] = useState(true);
   const [availableBases, setAvailableBases] = useState<StoredBase[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const lastFetchedCnpj = useRef<string>("");
   
   const initialFormState = {
@@ -56,7 +57,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
 
   const [formData, setFormData] = useState(initialFormState);
 
-  // Helper to format CNPJ
   const formatCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "");
     let formatted = digits;
@@ -167,13 +167,58 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     setFormData(initialFormState);
     setCurrentStep(1);
     lastFetchedCnpj.current = "";
-    toast.info("Iniciando novo orçamento.");
   };
 
-  const handleFinish = () => {
+  const handleDownloadPdf = async () => {
+    setIsGeneratingPdf(true);
+    const toastId = toast.loading("Gerando PDF profissional...");
+    try {
+      const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
+      const data = {
+        ...formData,
+        proposalNumber,
+        items: formData.selectedProducts.map(p => ({
+          product: { 
+            id: p.id,
+            description: p.name, 
+            model: p.name, 
+            category: p.category,
+            part_number: p.sku
+          },
+          quantity: p.quantity,
+          unitPrice: 0,
+        })),
+        proposalDate: formData.date,
+        totalPrice: formData.totalPrice
+      };
+
+      const blob = await generateProposalPDF(data as any);
+      const dateObj = new Date(formData.date + "T12:00:00");
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      const fileName = `${formData.companyName} - Proposta Control iD v.${formData.version}_${month}-${year}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast.success("PDF gerado!", { id: toastId });
+    } catch (err) {
+      toast.error("Erro ao gerar PDF", { id: toastId });
+    } finally {
+      setIsGeneratingPdf(false);
+    }
+  };
+
+  const handleFinish = (type: 'pptx' | 'pdf') => {
     const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
     
-    onComplete({
+    const payload = {
       ...formData,
       proposalNumber,
       items: formData.selectedProducts.map(p => ({
@@ -189,7 +234,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       })),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
-    });
+    };
+
+    onComplete(payload, type);
     
     if (currentStep === 5) {
       setCurrentStep(6);
@@ -221,24 +268,24 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                 onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
               />
             </div>
-            <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Razão Social</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={e => setFormData(prev => ({ ...prev, address: e.target.value }))} /></div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Vendedor (sellerName)</Label><Input value={formData.sellerName} onChange={e => setFormData(prev => ({ ...prev, sellerName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Cargo (sellerRole)</Label><Input value={formData.sellerRole} onChange={e => setFormData(prev => ({ ...prev, sellerRole: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>E-mail (sellerEmail)</Label><Input value={formData.sellerEmail} onChange={e => setFormData(prev => ({ ...prev, sellerEmail: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Telefone (sellerPhone)</Label><Input value={formData.sellerPhone} onChange={e => setFormData(prev => ({ ...prev, sellerPhone: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Vendedor</Label><Input value={formData.sellerName} onChange={e => setFormData(prev => ({ ...prev, sellerName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Cargo</Label><Input value={formData.sellerRole} onChange={e => setFormData(prev => ({ ...prev, sellerRole: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>E-mail</Label><Input value={formData.sellerEmail} onChange={e => setFormData(prev => ({ ...prev, sellerEmail: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Telefone</Label><Input value={formData.sellerPhone} onChange={e => setFormData(prev => ({ ...prev, sellerPhone: e.target.value }))} /></div>
           </div>
         );
       case 3:
         return (
           <div className="space-y-4">
-            <Label>Usuários do Sistema (users)</Label>
+            <Label>Usuários do Sistema</Label>
             <Input type="number" value={formData.users} onChange={e => setFormData(prev => ({ ...prev, users: e.target.value }))} />
           </div>
         );
@@ -288,7 +335,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         return (
           <div className="space-y-6">
             <div className="p-6 bg-primary text-white rounded-2xl">
-              <Label>VALOR TOTAL DA PROPOSTA (totalPrice)</Label>
+              <Label>VALOR TOTAL DA PROPOSTA</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl opacity-70">R$</span>
                 <Input 
@@ -311,7 +358,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <div className="flex items-center justify-between p-4 border rounded-2xl bg-card shadow-sm">
                 <div className="space-y-0.5">
                   <Label className="text-base font-bold">Página de Aprovação</Label>
-                  <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
+                  <p className="text-xs text-muted-foreground">Incluir a página de aprovação ao final.</p>
                 </div>
                 <Switch 
                   checked={formData.includeApprovalPage} 
@@ -320,61 +367,42 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </div>
 
               {formData.includeApprovalPage && (
-                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 text-primary">
-                    <LinkIcon className="h-4 w-4" />
-                    <Label className="font-bold">Link do Gerador de Aprovação</Label>
-                  </div>
+                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3">
+                  <Label className="font-bold flex items-center gap-2"><LinkIcon className="h-4 w-4" /> Link de Aprovação</Label>
                   <Input 
-                    placeholder="Cole aqui o link gerado no Gerador de Aprovação" 
+                    placeholder="Link gerado no Gerador de Aprovação" 
                     value={formData.approvalLink}
                     onChange={e => setFormData(prev => ({ ...prev, approvalLink: e.target.value }))}
-                    className="bg-card"
                   />
-                  <p className="text-[10px] text-muted-foreground">O link inserido será incorporado no botão de aprovação da proposta.</p>
                 </div>
               )}
             </div>
-
-            <p className="text-sm text-muted-foreground text-center">Clique no botão abaixo para gerar e baixar sua proposta.</p>
           </div>
         );
       case 6:
         return (
-          <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95 duration-500">
+          <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95">
             <div className="p-4 bg-green-100 rounded-full">
               <CheckCircle2 className="h-16 w-16 text-green-600" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-black text-neutral-900 dark:text-white">Proposta Gerada!</h2>
-              <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado.</p>
+              <h2 className="text-3xl font-black">Proposta Pronta!</h2>
+              <p className="text-muted-foreground">Escolha o formato que deseja baixar.</p>
             </div>
             
-            <div className="w-full p-4 bg-muted/30 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
-              <div className="flex items-center gap-2 text-primary font-bold text-sm">
-                <Info className="h-4 w-4" />
-                Dica: Como gerar o PDF
-              </div>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
-                <span className="font-bold">Arquivo &gt; Exportar &gt; Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
-              </p>
-            </div>
-            
-            <div className="grid grid-cols-1 gap-4 w-full">
-              <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary hover:bg-primary/5" onClick={() => handleFinish()}>
-                <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX Novamente
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+              <Button className="h-16 rounded-2xl font-bold text-lg" onClick={() => handleFinish('pptx')}>
+                <Presentation className="mr-2 h-6 w-6" /> Baixar PPTX
+              </Button>
+              <Button variant="outline" className="h-16 rounded-2xl font-bold text-lg border-2" onClick={handleDownloadPdf} disabled={isGeneratingPdf}>
+                {isGeneratingPdf ? <Loader2 className="animate-spin mr-2 h-6 w-6" /> : <FileText className="mr-2 h-6 w-6" />}
+                Baixar PDF
               </Button>
             </div>
-            
-            <div className="grid grid-cols-2 gap-4 w-full">
-              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(5)}>
-                <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
-              </Button>
-              <Button className="h-14 rounded-2xl" onClick={handleReset}>
-                <RefreshCw className="mr-2 h-5 w-5" /> Novo Orçamento
-              </Button>
-            </div>
+
+            <Button variant="ghost" onClick={handleReset} className="mt-4">
+              <RefreshCw className="mr-2 h-4 w-4" /> Novo Orçamento
+            </Button>
           </div>
         );
       default: return null;
@@ -384,7 +412,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl overflow-hidden border-none">
+    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl">
       <CardHeader className="bg-primary text-white p-8">
         <div className="flex justify-between items-center">
           <div>
@@ -392,11 +420,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               {currentStep === 6 ? "Concluído" : `Passo ${currentStep}`}
             </CardTitle>
             <CardDescription className="text-white/70">
-              {currentStep === 6 ? "Ações disponíveis" : `Gerenciando ${formData.selectedProducts.length} itens no orçamento.`}
+              {currentStep === 6 ? "Baixe seus arquivos" : `Orçamento com ${formData.selectedProducts.length} itens.`}
             </CardDescription>
           </div>
           {currentStep < 6 && (
-            <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
+            <div className="text-xs bg-white/20 px-3 py-1 rounded-full">
               {currentStep}/5
             </div>
           )}
@@ -412,8 +440,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </Button>
             <div className="flex gap-2">
               {currentStep === 5 ? (
-                <Button className="rounded-full px-8" onClick={() => handleFinish()}>
-                  <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
+                <Button className="rounded-full px-8" onClick={() => setCurrentStep(6)}>
+                  Revisar e Gerar <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : (
                 <Button className="rounded-full px-8" onClick={() => setCurrentStep(prev => prev + 1)}>
