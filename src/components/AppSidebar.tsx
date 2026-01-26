@@ -83,10 +83,10 @@ export function AppSidebar() {
               <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                 <User className="h-3 w-3 text-primary" />
               </div>
-              <span className="text-sm font-medium text-muted-foreground truncate">{user.email}</span>
+              <span className="text-xs font-medium text-muted-foreground truncate">{user.email}</span>
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">Não autenticado</div>
+            <div className="text-xs text-muted-foreground">Não autenticado</div>
           )}
         </div>
 
