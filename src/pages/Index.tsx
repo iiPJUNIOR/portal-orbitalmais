@@ -103,7 +103,7 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 container mx-auto py-10 px-4">
         {step === "welcome" && (
           <div className="max-w-4xl mx-auto space-y-8">
@@ -119,7 +119,7 @@ export default function Index() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-10">
               <button 
                 onClick={() => setStep("wizard")}
-                className="group p-8 bg-white border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all hover:shadow-xl space-y-4"
+                className="group p-8 bg-white border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-primary/10 rounded-2xl w-fit group-hover:bg-primary group-hover:text-white transition-colors">
                   <PlusCircle className="h-8 w-8" />
@@ -132,7 +132,7 @@ export default function Index() {
 
               <button 
                 onClick={() => setStep("history")}
-                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4"
+                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-neutral-100 rounded-2xl w-fit group-hover:bg-neutral-900 group-hover:text-white transition-colors">
                   <History className="h-8 w-8" />
@@ -145,7 +145,7 @@ export default function Index() {
 
               <button 
                 onClick={() => navigate("/settings")}
-                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4"
+                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-neutral-100 rounded-2xl w-fit group-hover:bg-neutral-900 group-hover:text-white transition-colors">
                   <SettingsIcon className="h-8 w-8" />
