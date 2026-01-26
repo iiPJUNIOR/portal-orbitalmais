@@ -384,7 +384,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <Card className="max-w-2xl mx-auto shadow-2xl rounded-3xl overflow-hidden border-none">
+    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl overflow-hidden border-none">
       <CardHeader className="bg-primary text-white p-8">
         <div className="flex justify-between items-center">
           <div>

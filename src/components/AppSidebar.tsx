@@ -49,13 +49,22 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-4 border-b flex items-center justify-center">
-        <div className="logo-light">
-          <img 
-            src="/logo.png" 
-            alt="Control iD" 
-            className="h-8 w-auto object-contain"
-          />
+      <SidebarHeader className="p-3 border-b flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className="logo-light">
+            <img 
+              src="/logo.png" 
+              alt="Control iD" 
+              className="h-8 w-auto object-contain"
+            />
+          </div>
+          <div className="hidden md:block">
+            <span className="text-sm font-semibold">Control iD</span>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
         </div>
       </SidebarHeader>
       
@@ -91,11 +100,6 @@ export function AppSidebar() {
           ) : (
             <div className="text-xs text-muted-foreground">Não autenticado</div>
           )}
-
-          {/* Theme toggle placed here for quick access */}
-          <div className="ml-2">
-            <ThemeToggle />
-          </div>
         </div>
 
         <SidebarMenu>

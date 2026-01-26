@@ -71,7 +71,9 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 210 9% 14%;
+    /* Make borders a subtle dark-gray that doesn't draw attention */
+    --border: 210 6% 32%;
+
     --input: 210 9% 12%;
     --ring: 270 60% 50%;
 
@@ -136,7 +138,7 @@
       color: rgba(255, 255, 255, 0.70) !important;
     }
 
-    /* Border colors */
+    /* Border colors: use the subtle dark-gray variable so lines are less prominent */
     .border,
     .border-gray-100,
     .border-neutral-100,
@@ -328,6 +330,21 @@
     animation: logoLightOn 1.0s ease-in-out both;
   }
 
+  /* Subtle highlight for the main proposal card so it separates from the page background */
+  .proposal-highlight {
+    background-color: color-mix(in srgb, hsl(var(--card)) 94%, white 6%);
+    box-shadow: 0 18px 40px rgba(2,6,23,0.08);
+    border-radius: 1.25rem;
+    border: 1px solid color-mix(in srgb, hsl(var(--border)) 60%, transparent 40%);
+  }
+
+  /* Dark-mode specific tweak for the proposal highlight: slightly lighter than base card so it stands out subtly */
+  .dark .proposal-highlight {
+    background-color: color-mix(in srgb, hsl(var(--card)) 92%, black 6%);
+    box-shadow: 0 18px 40px rgba(2,6,23,0.18);
+    border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, black 20%);
+  }
+
   /* Reduce intensity on small screens slightly */
   @media (max-width: 640px) {
     .logo-light {
@@ -336,6 +353,9 @@
     }
     .dark .logo-light {
       box-shadow: 0 6px 14px rgba(255,200,50,0.06) !important;
+    }
+    .proposal-highlight {
+      box-shadow: 0 8px 22px rgba(2,6,23,0.06);
     }
   }
 }
