@@ -1,7 +1,6 @@
 import { Product } from "@/types/product";
 import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 import { parseISO } from "date-fns";
 
 interface QuoteItem {
@@ -157,153 +156,85 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
 };
 
 /**
- * High-fidelity PDF Generation Service
+ * PDF Generation using pdf-lib to overlay data on a template.
+ * For this to work exactly like the PPTX, you MUST have a proposal-template.pdf 
+ * in the public folder that is an export of your PPTX template.
  */
 export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => {
-  const doc = new jsPDF({ orientation: 'landscape', format: 'a4', unit: 'mm' });
-  const width = doc.internal.pageSize.getWidth();
-  const height = doc.internal.pageSize.getHeight();
-  
-  const colors = {
-    primary: [26, 26, 26], 
-    accent: [220, 20, 60], 
-    light: [248, 249, 250],
-    text: [33, 37, 41],
-    white: [255, 255, 255]
-  };
+  try {
+    // 1. Fetch the PDF Template
+    const templatePath = "/proposal-template.pdf";
+    const existingPdfBytes = await fetch(templatePath).then(res => {
+      if (!res.ok) throw new Error("Template PDF não encontrado. Por favor, exporte seu PPTX como PDF e salve como 'proposal-template.pdf' na pasta public.");
+      return res.arrayBuffer();
+    });
 
-  const drawSlideBase = (title?: string) => {
-    // Top Bar
-    doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-    doc.rect(0, 0, width, 20, 'F');
+    // 2. Load the PDF
+    const pdfDoc = await PDFDocument.load(existingPdfBytes);
+    const pages = pdfDoc.getPages();
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+    // 3. Define the pages to keep (same logic as PPTX)
+    const keepPages = [1, 3, 4];
+    for (let i = 5; i <= 18; i++) keepPages.push(i);
+    keepPages.push(46, 55, 57);
+
+    const hasCatraca = data.items.some(it => {
+      const model = (it.product.model || "").toLowerCase();
+      return model.includes("idblock") || model.includes("torniquete");
+    });
+    if (hasCatraca) keepPages.push(54);
+    if (data.includeApprovalPage) keepPages.push(56);
+
+    data.items.forEach(it => {
+      const modelLower = (it.product.model || "").toLowerCase().trim();
+      let foundSlide = MODEL_TO_SLIDE[modelLower];
+      if (foundSlide) keepPages.push(foundSlide);
+    });
+
+    const pagesToKeepSorted = Array.from(new Set(keepPages)).sort((a, b) => a - b);
     
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text("Control iD", 15, 13);
+    // 4. Fill data on the first page (Cover)
+    const firstPage = pages[0];
+    const { width, height } = firstPage.getSize();
     
-    if (title) {
-      doc.setFontSize(9);
-      doc.setFont("helvetica", "normal");
-      doc.text(title.toUpperCase(), width - 15, 12.5, { align: 'right' });
+    firstPage.drawText(data.companyName.toUpperCase(), { x: 50, y: height - 150, size: 24, font: fontBold, color: rgb(1, 1, 1) });
+    firstPage.drawText(`A/C: ${data.contactName}`, { x: 50, y: height - 180, size: 14, font, color: rgb(1, 1, 1) });
+    firstPage.drawText(`NÚMERO: ${data.proposalNumber}`, { x: width - 150, y: 50, size: 10, font, color: rgb(1, 1, 1) });
+
+    // 5. Fill items list (usually on a specific summary page, e.g., page 3 or 4)
+    // For now, drawing on page 3 as a fallback (adjust coordinates based on your template)
+    if (pages.length >= 3) {
+      const summaryPage = pages[2]; 
+      let yPos = height - 100;
+      data.items.forEach((it, idx) => {
+        summaryPage.drawText(`${it.product.description} x ${it.quantity}`, { x: 50, y: yPos, size: 11, font });
+        yPos -= 20;
+      });
+      
+      const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
+        ? Number(data.overrideTotal)
+        : (data.totalPrice || 0);
+      const totalStr = new Intl.NumberFormat("pt-BR", { style: 'currency', currency: 'BRL' }).format(computedTotal);
+      summaryPage.drawText(totalStr, { x: 50, y: yPos - 40, size: 20, font: fontBold, color: rgb(0.86, 0.08, 0.24) });
     }
+
+    // 6. Prune the document to keep only selected pages
+    // Note: PDF pages are 0-indexed, keepPages are 1-indexed
+    const indicesToKeep = pagesToKeepSorted.map(n => n - 1).filter(idx => idx < pages.length);
     
-    doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-    doc.rect(0, height - 1.5, width, 1.5, 'F');
-  };
+    // Create a new document to copy pages into (this is cleaner for pruning)
+    const finalPdf = await PDFDocument.create();
+    const copiedPages = await finalPdf.copyPages(pdfDoc, indicesToKeep);
+    copiedPages.forEach(page => finalPdf.addPage(page));
 
-  // 1. CAPA
-  doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-  doc.rect(0, 0, width, height, 'F');
-  
-  doc.setFillColor(colors.accent[0], colors.accent[1], colors.accent[2]);
-  doc.rect(0, height * 0.65, width * 0.45, 12, 'F');
+    // 7. Save and Return
+    const pdfBytes = await finalPdf.save();
+    return new Blob([pdfBytes], { type: "application/pdf" });
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(52);
-  doc.text("PROPOSTA", 25, height * 0.38);
-  doc.text("COMERCIAL", 25, height * 0.55);
-
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "normal");
-  doc.text(data.companyName.toUpperCase(), 25, height * 0.78);
-  doc.setFontSize(14);
-  doc.text(`A/C: ${data.contactName}`, 25, height * 0.78 + 10);
-  
-  doc.setFontSize(9);
-  doc.text(`NÚMERO: ${data.proposalNumber}`, width - 25, height - 15, { align: 'right' });
-  doc.text(`DATA: ${formatDateForProposal(data.proposalDate)}`, width - 25, height - 10, { align: 'right' });
-
-  // 2. DADOS DO CLIENTE
-  doc.addPage();
-  drawSlideBase("Informações do Projeto");
-  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-  doc.setFontSize(26);
-  doc.setFont("helvetica", "bold");
-  doc.text("Identificação do Cliente", 15, 45);
-
-  autoTable(doc, {
-    startY: 55,
-    margin: { left: 15 },
-    body: [
-      ["CLIENTE", data.companyName],
-      ["CNPJ", data.cnpj],
-      ["ENDEREÇO", data.address || "Não informado"],
-      ["CONTATO", data.contactName],
-      ["E-MAIL", data.email],
-      ["TELEFONE", data.phone || "Não informado"],
-    ],
-    theme: 'plain',
-    styles: { fontSize: 12, cellPadding: 6, textColor: colors.text },
-    columnStyles: { 0: { fontStyle: 'bold', width: 50, textColor: colors.accent } }
-  });
-
-  // 3. INVESTIMENTO
-  doc.addPage();
-  drawSlideBase("Resumo do Investimento");
-  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-  doc.setFontSize(26);
-  doc.setFont("helvetica", "bold");
-  doc.text("Soluções Propostas", 15, 45);
-
-  autoTable(doc, {
-    startY: 55,
-    margin: { left: 15, right: 15 },
-    head: [['#', 'DESCRIÇÃO DOS PRODUTOS', 'QTD', 'VALOR UNIT.', 'TOTAL']],
-    body: data.items.map((it, idx) => [
-      String(idx + 1).padStart(2, '0'),
-      it.product.description.toUpperCase(),
-      it.quantity,
-      new Intl.NumberFormat("pt-BR", { style: 'currency', currency: 'BRL' }).format(it.unitPrice || 0),
-      new Intl.NumberFormat("pt-BR", { style: 'currency', currency: 'BRL' }).format((it.unitPrice || 0) * it.quantity)
-    ]),
-    theme: 'grid',
-    headStyles: { fillColor: colors.primary, textColor: 255, fontSize: 10, halign: 'center' },
-    styles: { fontSize: 9, cellPadding: 5 },
-    columnStyles: { 
-      0: { halign: 'center', width: 15 },
-      2: { halign: 'center', width: 15 },
-      3: { halign: 'right', width: 35 },
-      4: { halign: 'right', width: 35, fontStyle: 'bold' }
-    }
-  });
-
-  const finalY = (doc as any).lastAutoTable.finalY;
-  const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
-    ? Number(data.overrideTotal)
-    : (data.totalPrice || 0);
-
-  const formattedTotal = new Intl.NumberFormat("pt-BR", { 
-    style: 'currency', currency: 'BRL'
-  }).format(computedTotal);
-
-  doc.setFillColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-  doc.rect(width - 110, finalY + 10, 95, 25, 'F');
-  
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(9);
-  doc.text("TOTAL DO INVESTIMENTO", width - 100, finalY + 18);
-  doc.setFontSize(22);
-  doc.setFont("helvetica", "bold");
-  doc.text(formattedTotal, width - 100, finalY + 30);
-
-  // 4. CONTATO
-  doc.addPage();
-  drawSlideBase("Encerramento");
-  doc.setTextColor(colors.primary[0], colors.primary[1], colors.primary[2]);
-  doc.setFontSize(32);
-  doc.text("Dúvidas?", 15, 50);
-  doc.text("Estamos à disposição.", 15, 65);
-  
-  doc.setFontSize(14);
-  doc.setFont("helvetica", "bold");
-  doc.text(data.sellerName?.toUpperCase() || "CONTATO COMERCIAL", 15, 95);
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(11);
-  doc.text(data.sellerRole || "", 15, 102);
-  doc.text(data.sellerEmail || "", 15, 109);
-  doc.text(data.sellerPhone || "", 15, 116);
-
-  return doc.output('blob');
+  } catch (err: any) {
+    console.error("Erro PDF:", err);
+    throw err;
+  }
 };
