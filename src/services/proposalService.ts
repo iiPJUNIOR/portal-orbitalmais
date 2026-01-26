@@ -40,13 +40,12 @@ interface ProposalData {
   approvalLink?: string;
 }
 
-// Mapeamento de Produto -> Página do PDF (igual ao PPTX)
 const MODEL_TO_SLIDE: Record<string, number> = {
   "idface pro": 19, "idface max": 20, "idaccess nano": 21, "idflex ip65": 22,
   "idflex pro": 23, "idaccess": 24, "idfit 4x2": 25, "idaccess pro": 26,
   "secbox": 27, "iduhf": 28, "iduhf lite": 29, "idblock next facial": 30,
   "idblock next biometria digital": 31, "idblock facial inox": 32,
-  "idblock facial inox ": 32, "idblock facial preta": 33, "idblock facial mini preta": 34,
+  "idblock facial preta": 33, "idblock facial mini preta": 34,
   "idblock facial mini inox": 35, "idblock inox biométrica": 36,
   "idblock preta biométrica": 37, "idblock braço articulado inox": 38,
   "idblock braço articulado preta": 39, "idblock balcão": 40,
@@ -83,7 +82,6 @@ export const generateProposalNumber = (pipedriveUrl?: string, version?: string |
 };
 
 export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
-  // Mantendo a lógica do PPTX original...
   try {
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
@@ -156,106 +154,29 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
   }
 };
 
-/**
- * PDF Generation with Coordinate Mapping
- */
 export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => {
   try {
     const templatePath = "/proposal-template.pdf";
     const existingPdfBytes = await fetch(templatePath).then(res => {
-      if (!res.ok) throw new Error("Template PDF não encontrado em /public/proposal-template.pdf");
+      if (!res.ok) throw new Error("Template PDF não encontrado.");
       return res.arrayBuffer();
     });
 
     const pdfDoc = await PDFDocument.load(existingPdfBytes);
     const pages = pdfDoc.getPages();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // --- CONFIGURAÇÃO DE COORDENADAS (AJUSTE AQUI) ---
-    const config = {
-      cover: {
-        pageIndex: 0,
-        companyName: { x: 50, y: 350, size: 28 },
-        contactName: { x: 50, y: 320, size: 14 },
-        proposalNumber: { x: 700, y: 30, size: 10 },
-        date: { x: 700, y: 20, size: 10 },
-      },
-      summary: {
-        pageIndex: 2, // Geralmente o terceiro slide (Apresentação do Projeto)
-        itemsX: 60,
-        itemsStartY: 450,
-        totalX: 60,
-        totalY: 100,
-        totalSize: 22
-      }
-    };
+    // Ajuste de Coordenadas
+    const cover = pages[0];
+    const { width, height } = cover.getSize();
+    cover.drawText(data.companyName.toUpperCase(), { x: 50, y: height - 150, size: 28, font: fontBold, color: rgb(1, 1, 1) });
+    cover.drawText(`Nº: ${data.proposalNumber}`, { x: width - 150, y: 50, size: 10, font, color: rgb(1, 1, 1) });
 
-    // 1. Preencher Capa
-    const coverPage = pages[config.cover.pageIndex];
-    if (coverPage) {
-      coverPage.drawText(data.companyName.toUpperCase(), { 
-        x: config.cover.companyName.x, 
-        y: config.cover.companyName.y, 
-        size: config.cover.companyName.size, 
-        font: fontBold, 
-        color: rgb(1, 1, 1) 
-      });
-      coverPage.drawText(`A/C: ${data.contactName}`, { 
-        x: config.cover.contactName.x, 
-        y: config.cover.contactName.y, 
-        size: config.cover.contactName.size, 
-        font: font, 
-        color: rgb(0.9, 0.9, 0.9) 
-      });
-      coverPage.drawText(`NÚMERO: ${data.proposalNumber}`, { 
-        x: config.cover.proposalNumber.x, 
-        y: config.cover.proposalNumber.y, 
-        size: config.cover.proposalNumber.size, 
-        font, 
-        color: rgb(0.8, 0.8, 0.8) 
-      });
-    }
-
-    // 2. Preencher Lista de Produtos (Sumário)
-    const summaryPage = pages[config.summary.pageIndex];
-    if (summaryPage) {
-      let currentY = config.summary.itemsStartY;
-      data.items.forEach((it) => {
-        summaryPage.drawText(`• ${it.product.description} x ${it.quantity}`, { 
-          x: config.summary.itemsX, 
-          y: currentY, 
-          size: 11, 
-          font 
-        });
-        currentY -= 18; // Espaçamento entre linhas
-      });
-
-      const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
-        ? Number(data.overrideTotal)
-        : (data.totalPrice || 0);
-      const totalStr = new Intl.NumberFormat("pt-BR", { style: 'currency', currency: 'BRL' }).format(computedTotal);
-      
-      summaryPage.drawText(totalStr, { 
-        x: config.summary.totalX, 
-        y: config.summary.totalY, 
-        size: config.summary.totalSize, 
-        font: fontBold, 
-        color: rgb(0.86, 0.08, 0.24) // Cor Vermelho Control iD
-      });
-    }
-
-    // 3. Lógica de Pruning (Remover páginas não utilizadas)
+    // Lógica de páginas a manter
     const keepPages = [1, 3, 4];
     for (let i = 5; i <= 18; i++) keepPages.push(i);
-    keepPages.push(46, 55, 57);
-
-    const hasCatraca = data.items.some(it => {
-      const model = (it.product.model || "").toLowerCase();
-      return model.includes("idblock") || model.includes("torniquete");
-    });
-    if (hasCatraca) keepPages.push(54);
-    if (data.includeApprovalPage) keepPages.push(56);
+    keepPages.push(46, 54, 55, 56, 57);
 
     data.items.forEach(it => {
       const modelLower = (it.product.model || "").toLowerCase().trim();
@@ -272,8 +193,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
 
     const pdfBytes = await finalPdf.save();
     return new Blob([pdfBytes], { type: "application/pdf" });
-
-  } catch (err: any) {
+  } catch (err) {
     console.error("Erro PDF:", err);
     throw err;
   }
