@@ -50,11 +50,13 @@ export function AppSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="p-4 border-b flex items-center justify-center">
-        <img 
-          src="/logo.png" 
-          alt="Control iD" 
-          className="h-8 w-auto object-contain"
-        />
+        <div className="logo-light">
+          <img 
+            src="/logo.png" 
+            alt="Control iD" 
+            className="h-8 w-auto object-contain"
+          />
+        </div>
       </SidebarHeader>
       
       <SidebarContent>

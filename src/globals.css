@@ -284,6 +284,60 @@
       color: hsl(var(--card-foreground)) !important;
     }
   }
+
+  /* Logo 'light' — subtle square that lights up with a yellow glow when dark mode is activated.
+     Use the .logo-light class on the container wrapping your logo image.
+  */
+  .logo-light {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem;
+    border-radius: 0.75rem;
+    background-color: #ffffff; /* keep light in light mode */
+    transition: background-color 320ms ease, box-shadow 420ms ease, transform 220ms ease;
+    will-change: background-color, box-shadow;
+  }
+
+  /* Keyframes for the 'light turning on' effect */
+  @keyframes logoLightOn {
+    0% {
+      background-color: rgba(255, 248, 220, 0.02);
+      box-shadow: 0 0 0 rgba(255, 200, 50, 0);
+      transform: scale(0.995);
+      filter: brightness(0.96);
+    }
+    50% {
+      background-color: rgba(255, 244, 179, 0.18);
+      box-shadow: 0 6px 18px rgba(255, 200, 50, 0.08), 0 2px 8px rgba(255, 180, 40, 0.06) inset;
+      transform: scale(1.003);
+      filter: brightness(1.03);
+    }
+    100% {
+      background-color: rgba(255, 244, 179, 0.20);
+      box-shadow: 0 10px 30px rgba(255, 200, 50, 0.12), 0 3px 10px rgba(255, 180, 40, 0.06) inset;
+      transform: scale(1);
+      filter: none;
+    }
+  }
+
+  /* Dark-mode variant: more subtle by default but animate when .dark becomes active */
+  .dark .logo-light {
+    background-color: rgba(255, 244, 179, 0.10) !important; /* pale warm yellow */
+    box-shadow: 0 6px 18px rgba(255, 200, 50, 0.06), 0 2px 6px rgba(255,180,40,0.04) inset !important;
+    animation: logoLightOn 1.0s ease-in-out both;
+  }
+
+  /* Reduce intensity on small screens slightly */
+  @media (max-width: 640px) {
+    .logo-light {
+      padding: 0.4rem;
+      border-radius: 0.625rem;
+    }
+    .dark .logo-light {
+      box-shadow: 0 6px 14px rgba(255,200,50,0.06) !important;
+    }
+  }
 }
 
 /* Keep a few utility helpers unchanged (light theme) but ensure transitions are smooth */
