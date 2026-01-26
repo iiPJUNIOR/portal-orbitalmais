@@ -212,7 +212,7 @@ export default function Settings() {
           {hasFullAccess ? (
             <>
               <Card className="border-primary/20 shadow-lg">
-                <CardHeader className="bg-primary/5">
+                <CardHeader className="bg-primary/10 dark:bg-primary/5">
                   <CardTitle className="flex items-center gap-2">
                     <ScanText className="h-5 w-5" />
                     Mapeamento de Tokens do Template
@@ -244,7 +244,7 @@ export default function Settings() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Aba</Label>
-                        <select className="w-full border rounded p-2" value={selectedSheet || ""} onChange={e => setSelectedSheet(e.target.value)}>
+                        <select className="w-full border rounded p-2 bg-background" value={selectedSheet || ""} onChange={e => setSelectedSheet(e.target.value)}>
                           {sheetTitles.map(t => <option key={t} value={t}>{t}</option>)}
                         </select>
                       </div>
@@ -263,7 +263,7 @@ export default function Settings() {
                 <CardHeader><CardTitle>Bases Salvas e Mapeamento</CardTitle></CardHeader>
                 <CardContent className="space-y-6">
                   {bases.map(base => (
-                    <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-gray-50/50 shadow-sm">
+                    <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-muted/30 dark:bg-muted/10 shadow-sm">
                       <div className="flex items-center justify-between border-b pb-4">
                         <div className="flex items-center gap-2">
                           <SettingsIcon className="h-5 w-5 text-primary" />
@@ -283,7 +283,7 @@ export default function Settings() {
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
                           <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-white" 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
                             value={base.name_column || ""} 
                             onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                           >
@@ -294,7 +294,7 @@ export default function Settings() {
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
                           <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-white" 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
                             value={base.description_column || ""} 
                             onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                           >
@@ -309,10 +309,10 @@ export default function Settings() {
               </Card>
             </>
           ) : (
-            <Card className="bg-neutral-50 border-dashed">
+            <Card className="bg-muted/20 border-dashed">
               <CardContent className="flex flex-col items-center justify-center py-12 text-center">
                 <Lock className="h-12 w-12 text-neutral-300 mb-4" />
-                <h3 className="text-lg font-bold text-neutral-900">Configurações Avançadas Restritas</h3>
+                <h3 className="text-lg font-bold">Configurações Avançadas Restritas</h3>
                 <p className="text-sm text-neutral-500 max-w-sm mt-2">
                   As opções de importação de bases e mapeamento de tokens estão disponíveis apenas para administradores autorizados.
                 </p>
@@ -322,7 +322,7 @@ export default function Settings() {
 
           {/* Gestão de Acessos (Apenas para Paulo) */}
           {isSuperAdmin && (
-            <Card className="border-green-100 bg-green-50/30">
+            <Card className="border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-green-600" />
@@ -333,7 +333,7 @@ export default function Settings() {
               <CardContent>
                 <div className="space-y-2">
                   {allUsers.map(u => (
-                    <div key={u.user_id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-green-100 shadow-sm">
+                    <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
                       <div>
                         <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
                         <p className="text-xs text-muted-foreground">{u.seller_email}</p>
@@ -356,8 +356,8 @@ export default function Settings() {
         </div>
 
         {/* Perfil do Vendedor (Sempre visível) */}
-        <Card className="h-fit lg:sticky lg:top-6 shadow-md">
-          <CardHeader className="border-b bg-neutral-50/50">
+        <Card className="h-fit lg:sticky lg:top-6 shadow-md overflow-hidden">
+          <CardHeader className="border-b bg-muted/30 dark:bg-muted/20">
             <CardTitle className="flex items-center gap-2">
               <ShieldCheck className="h-5 w-5 text-primary" />
               Perfil do Vendedor
