@@ -1,15 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Switch } from "@/components/ui/switch";
 import { Sun, Moon } from "lucide-react";
-
-/**
- * ThemeToggle
- * - Persistência: localStorage key 'theme' ('dark' | 'light')
- * - Comportamento: por solicitação, inicia em dark quando não há preferência salva.
- * - Aplica a classe 'dark' ao document.documentElement para ativar as variáveis CSS existentes.
- */
 
 const THEME_KEY = "theme";
 
@@ -19,7 +11,7 @@ export default function ThemeToggle() {
       const stored = localStorage.getItem(THEME_KEY);
       if (stored === "dark") return true;
       if (stored === "light") return false;
-      // Default: dark (solicitado pelo usuário)
+      // Default: dark
       return true;
     } catch {
       return true;
@@ -42,7 +34,7 @@ export default function ThemeToggle() {
     }
   }, [isDark]);
 
-  // Ensure theme applied on first mount (helps when JS rehydrates)
+  // Ensure theme applied on first mount
   useEffect(() => {
     try {
       const root = document.documentElement;
@@ -53,10 +45,28 @@ export default function ThemeToggle() {
   }, []);
 
   return (
-    <div className="flex items-center gap-3">
-      <Moon className="h-4 w-4 text-muted-foreground" />
-      <Switch checked={isDark} onCheckedChange={(v) => setIsDark(!!v)} />
-      <Sun className="h-4 w-4 text-muted-foreground" />
+    <div className="flex items-center gap-2">
+      <button
+        aria-label="Ativar modo escuro"
+        title="Modo escuro"
+        onClick={() => setIsDark(true)}
+        className={`p-1 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+          isDark ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-gray-100/60 dark:hover:bg-white/5"
+        }`}
+      >
+        <Moon className="h-4 w-4" />
+      </button>
+
+      <button
+        aria-label="Ativar modo claro"
+        title="Modo claro"
+        onClick={() => setIsDark(false)}
+        className={`p-1 rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 ${
+          !isDark ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-gray-100/60 dark:hover:bg-white/5"
+        }`}
+      >
+        <Sun className="h-4 w-4" />
+      </button>
     </div>
   );
 }
