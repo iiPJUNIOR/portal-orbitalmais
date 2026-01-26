@@ -7,11 +7,14 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Loader2, Eye, EyeOff, ArrowLeft, Mail, KeyRound } from "lucide-react";
+import { Loader2, Eye, EyeOff, ArrowLeft, Mail } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import Logo from "@/components/Logo";
 
 type AuthMode = "sign-in" | "sign-up" | "reset-password";
+
+// URL de produção definida para garantir redirecionamentos corretos via e-mail
+const PROD_URL = "https://orcamentosacesso.vercel.app";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -83,7 +86,8 @@ export default function Login() {
     if (e) e.preventDefault();
     setLoading(true);
     try {
-      const redirectTo = `${window.location.origin}/auth-status`;
+      // Usamos a URL de produção fixa para o link de confirmação no e-mail
+      const redirectTo = `${PROD_URL}/auth-status`;
       
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
@@ -115,7 +119,8 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const redirectTo = `${window.location.origin}/reset-password`;
+      // Usamos a URL de produção fixa para o link de redefinição no e-mail
+      const redirectTo = `${PROD_URL}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
       });
