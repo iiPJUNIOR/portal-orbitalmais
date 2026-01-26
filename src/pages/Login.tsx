@@ -138,7 +138,6 @@ export default function Login() {
           <div className="relative z-10 text-sm text-gray-500">&copy; {new Date().getFullYear()} Control iD. Inovação Brasileira.</div>
         </div>
 
-        {/* Lado do login com fundo cinza para destacar o card branco */}
         <div className="flex items-center justify-center p-8 bg-background overflow-y-auto">
           <div className="w-full max-w-[480px]">
             <Card className="proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl">
@@ -161,7 +160,7 @@ export default function Login() {
               <CardContent className="p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
-                    <Label htmlFor="email" className="text-sm">E-mail</Label>
+                    <Label htmlFor="email" className="text-sm font-semibold">E-mail</Label>
                     <div className="mt-2 relative border-b border-neutral-200 focus-within:border-primary transition-colors">
                       <Input
                         id="email"
@@ -170,13 +169,13 @@ export default function Login() {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 placeholder:text-muted-foreground"
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none placeholder:text-muted-foreground"
                       />
                     </div>
                   </div>
 
                   <div>
-                    <Label htmlFor="password" className="text-sm">Senha</Label>
+                    <Label htmlFor="password" className="text-sm font-semibold">Senha</Label>
                     <div className="mt-2 relative border-b border-neutral-200 pr-12 focus-within:border-primary transition-colors">
                       <Input
                         id="password"
@@ -185,34 +184,34 @@ export default function Login() {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
-                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 placeholder:text-muted-foreground"
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none placeholder:text-muted-foreground"
                       />
                       <button
                         type="button"
                         onClick={() => setShowPassword((s) => !s)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full bg-white border border-neutral-200 text-neutral-700"
+                        className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-neutral-400 hover:text-primary transition-colors"
                       >
-                        {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                       </button>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <input id="remember" type="checkbox" className="h-4 w-4 rounded border-gray-300" />
-                      <label htmlFor="remember" className="text-sm text-muted-foreground">Lembrar</label>
+                      <input id="remember" type="checkbox" className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary" />
+                      <label htmlFor="remember" className="text-sm text-muted-foreground cursor-pointer">Lembrar</label>
                     </div>
                     <button
                       type="button"
                       onClick={() => toast.info("Funcionalidade em desenvolvimento")}
-                      className="text-sm text-muted-foreground underline"
+                      className="text-sm text-muted-foreground hover:text-primary transition-colors"
                     >
                       Esqueceu a senha?
                     </button>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <Button type="submit" className="h-12 text-base font-bold" disabled={loading}>
+                  <div className="flex flex-col gap-2 pt-2">
+                    <Button type="submit" className="h-12 text-base font-bold rounded-xl" disabled={loading}>
                       {loading ? <Loader2 className="animate-spin h-5 w-5 mr-2" /> : null}
                       {mode === "sign-in" ? "Entrar no Sistema" : "Cadastrar Agora"}
                     </Button>
