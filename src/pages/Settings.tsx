@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2 } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
-import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess } from "@/services/settingsService";
+import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -36,6 +36,8 @@ export default function Settings() {
   
   const [hasFullAccess, setHasFullAccess] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
+  const [newEmailToGrant, setNewEmailToGrant] = useState("");
+  const [grantingAccess, setGrantingAccess] = useState(false);
 
   const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
 
@@ -151,6 +153,23 @@ export default function Settings() {
       loadAllUsers();
     } catch (err) {
       toast.error("Erro ao atualizar acesso");
+    }
+  };
+
+  const handleGrantAccessByEmail = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newEmailToGrant) return;
+    
+    setGrantingAccess(true);
+    try {
+      await grantAccessByEmail(newEmailToGrant);
+      toast.success(`Acesso total concedido para ${newEmailToGrant}`);
+      setNewEmailToGrant("");
+      loadAllUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao conceder acesso");
+    } finally {
+      setGrantingAccess(false);
     }
   };
 
@@ -330,8 +349,27 @@ export default function Settings() {
                 </CardTitle>
                 <CardDescription>Libere o acesso às configurações avançadas para outros usuários.</CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+              <CardContent className="space-y-6">
+                <form onSubmit={handleGrantAccessByEmail} className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Acesso Total por E-mail</Label>
+                  <div className="flex gap-2">
+                    <Input 
+                      type="email" 
+                      placeholder="vendedor@controlid.com.br" 
+                      value={newEmailToGrant}
+                      onChange={e => setNewEmailToGrant(e.target.value)}
+                      required
+                    />
+                    <Button type="submit" disabled={grantingAccess}>
+                      {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
+                      Conceder
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">O usuário já deve ter logado no sistema pelo menos uma vez.</p>
+                </form>
+
+                <div className="space-y-2 border-t pt-4">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários</Label>
                   {allUsers.map(u => (
                     <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
                       <div>
