@@ -1,81 +1,89 @@
-<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN"
+  "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml" lang="pt-BR">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="format-detection" content="telephone=no">
-  <title>Confirmação de Cadastro - Control iD</title>
+  <title>Bem-vindo à Control iD</title>
   <style type="text/css">
-    /* Basic, inline-friendly CSS for email clients */
-    body { margin:0; padding:0; -webkit-text-size-adjust:100%; -ms-text-size-adjust:100%; background-color:#f4f4f7; color:#333333; font-family: Arial, sans-serif; }
+    /* General email-safe styles (keep simple) */
+    body { margin:0; padding:0; background-color:#f4f4f7; color:#333333; font-family: Arial, Helvetica, sans-serif; }
     img { border:0; outline:none; text-decoration:none; -ms-interpolation-mode:bicubic; display:block; }
     a { color:#7c3aed; text-decoration:none; }
     .preheader { display:none !important; visibility:hidden; mso-hide:all; font-size:1px; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden; }
-    .container { width:100%; background-color:#f4f4f7; padding:20px 0; }
-    .content { max-width:600px; margin:0 auto; background:#ffffff; border-radius:8px; border:1px solid #eaeaea; overflow:hidden; }
-    .spacer { height:20px; }
-    .inner { padding:28px; }
-    .title { font-size:20px; font-weight:700; color:#111827; margin:0 0 12px 0; }
-    .lead { font-size:15px; color:#555; margin:0 0 20px 0; line-height:1.5; }
-    .button { display:inline-block; background:#7c3aed; color:#fff; padding:12px 20px; border-radius:8px; font-weight:700; }
-    .footer { font-size:12px; color:#8b8b8b; text-align:center; padding:18px; }
+    .btn { display:inline-block; background-color:#7c3aed; color:#ffffff; padding:12px 24px; border-radius:10px; font-weight:700; text-decoration:none; }
     @media only screen and (max-width:480px){
-      .inner { padding:16px; }
-      .title { font-size:18px; }
+      .container { padding:16px !important; }
+      .card { padding:20px !important; border-radius:12px !important; }
+      .title { font-size:20px !important; }
     }
   </style>
 </head>
 <body>
-  <!-- Preheader text (visible in inbox preview; keep short) -->
-  <div class="preheader">Confirme seu e-mail para ativar o acesso ao Gerador de Propostas Control iD.</div>
+  <!-- Preheader (short, shows in inbox preview) -->
+  <div class="preheader">Confirme sua conta para começar a usar o Gerador de Propostas Control iD.</div>
 
-  <!-- Plain-text fallback for systems that parse HTML-only templates.
-       Many mail platforms accept a plain text part separately; this hidden block helps validators. -->
+  <!-- Plain-text fallback (helpful for validators) -->
   <div style="display:none; font-size:1px; color:#fff; line-height:1px; max-height:0; max-width:0; opacity:0; overflow:hidden;">
-    Confirme seu e-mail para ativar o acesso ao Gerador de Propostas Control iD.
+    Confirme sua conta: {{ .ConfirmationURL }}
   </div>
 
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="container">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f7; width:100%;">
     <tr>
       <td align="center">
-        <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="content" style="width:100%; max-width:600px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" class="container" style="width:100%; max-width:600px; margin:0 auto; padding:40px 20px;">
           <tr>
-            <td align="center" style="padding:22px 0; background:#ffffff;">
-              <img src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/public-assets/logo.png" alt="Control iD" width="160" style="display:block; height:auto;">
-            </td>
-          </tr>
+            <td>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" class="card" style="background:#ffffff; border-radius:24px; padding:40px; box-shadow:0 10px 25px rgba(0,0,0,0.06); border:1px solid #e8e8ee;">
+                <tr>
+                  <td align="center" style="padding-bottom:18px;">
+                    <img src="https://brbqsbvuitdxrtzqyopj.supabase.co/storage/v1/object/public/public-assets/logo.png" alt="Control iD" width="160" style="display:block; height:auto;" />
+                  </td>
+                </tr>
 
-          <tr>
-            <td class="inner" style="background:#ffffff;">
-              <h1 class="title">Verifique seu e-mail</h1>
-              <p class="lead">Falta pouco! Clique no botão abaixo para confirmar seu cadastro no <strong>Gerador de Propostas Control iD</strong> e começar a utilizar o sistema.</p>
+                <tr>
+                  <td align="center" style="padding-bottom:12px;">
+                    <h1 class="title" style="margin:0; font-size:24px; font-weight:800; color:#1a1a1a;">Bem-vindo à Control iD!</h1>
+                  </td>
+                </tr>
 
-              <p style="text-align:center; margin:22px 0;">
-                <a href="{{ .ConfirmationURL }}" class="button" target="_blank" rel="noopener">Confirmar meu cadastro</a>
-              </p>
+                <tr>
+                  <td align="center" style="padding:0 10px 22px 10px;">
+                    <p style="margin:0; font-size:16px; line-height:1.6; color:#666666; text-align:center;">
+                      Olá! Ficamos felizes em ter você no <strong>Gerador de Propostas</strong>.<br/>
+                      Para começar a criar seus orçamentos, confirme sua conta clicando no botão abaixo.
+                    </p>
+                  </td>
+                </tr>
 
-              <p style="font-size:13px; color:#666; line-height:1.5;">
-                Caso você não tenha solicitado esse cadastro, apenas ignore este e-mail e nada será alterado.
-              </p>
-            </td>
-          </tr>
+                <tr>
+                  <td align="center" style="padding-bottom:22px;">
+                    <a href="{{ .ConfirmationURL }}" class="btn" target="_blank" rel="noopener" style="display:inline-block; background:#7c3aed; color:#fff; padding:14px 28px; border-radius:12px; font-weight:700; text-decoration:none;">Confirmar Minha Conta</a>
+                  </td>
+                </tr>
 
-          <tr>
-            <td style="background:#fafafa; text-align:center;">
-              <div style="padding:16px 20px;">
-                <p style="margin:0; font-size:13px; color:#8b8b8b;">
-                  Precisa de ajuda? Entre em contato: <a href="mailto:support@controlid.com.br">support@controlid.com.br</a>
-                </p>
-                <p style="margin:6px 0 0 0; font-size:12px; color:#9aa0a6;">
-                  Recebeu este e-mail por engano? <a href="mailto:unsubscribe@controlid.com.br?subject=Remover%20do%20mailing">Remover</a>
-                </p>
-              </div>
-            </td>
-          </tr>
+                <tr>
+                  <td style="padding-top:12px; padding-bottom:12px;">
+                    <div style="height:1px; background:#eeeeee; margin:0 0 22px 0;"></div>
+                    <p style="margin:0; font-size:14px; color:#666666; text-align:center;">
+                      Se você não criou esta conta, pode simplesmente ignorar este e-mail.
+                    </p>
+                  </td>
+                </tr>
 
-          <tr>
-            <td class="footer" style="background:#ffffff;">
-              Esta é uma mensagem automática da Control iD. &copy; Control iD - Inovação Brasileira
+              </table>
+
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:20px;">
+                <tr>
+                  <td align="center" style="font-size:12px; color:#999999; padding-top:18px;">
+                    &copy; 2024 Control iD - Inovação e Tecnologia Brasileira<br/>
+                    Esta é uma mensagem automática, por favor não responda.<br/>
+                    Precisa de ajuda? <a href="mailto:support@controlid.com.br" style="color:#7c3aed;">support@controlid.com.br</a>
+                  </td>
+                </tr>
+              </table>
+
             </td>
           </tr>
         </table>
