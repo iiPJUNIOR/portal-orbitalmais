@@ -131,11 +131,44 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     });
   }, [availableBases]);
 
-  const filteredProducts = allProducts.filter(p => 
-    p.name.toLowerCase().includes(productSearch.toLowerCase()) || 
-    p.sku.toLowerCase().includes(productSearch.toLowerCase()) ||
-    p.extras.some((ex: any) => ex.value.toLowerCase().includes(productSearch.toLowerCase()))
-  );
+  // Map of selected product id -> quantity (used to prioritize sorting)
+  const selectedMap = React.useMemo(() => {
+    const m = new Map<string, number>();
+    (formData.selectedProducts || []).forEach((sp: any) => {
+      const key = sp.baseId || sp.id;
+      m.set(key, Number(sp.quantity) || 1);
+    });
+    return m;
+  }, [formData.selectedProducts]);
+
+  const filteredProducts = React.useMemo(() => {
+    const q = productSearch.toLowerCase();
+    const arr = allProducts.filter((p) => {
+      return (
+        p.name.toLowerCase().includes(q) ||
+        p.sku.toLowerCase().includes(q) ||
+        p.extras.some((ex: any) => ex.value.toLowerCase().includes(q))
+      );
+    });
+
+    // Sort so selected products come first. Among selected, order by selected quantity descending.
+    arr.sort((a, b) => {
+      const aq = selectedMap.get(a.id) ?? 0;
+      const bq = selectedMap.get(b.id) ?? 0;
+
+      // If one is selected and the other not, the selected one goes first
+      if (aq > 0 && bq === 0) return -1;
+      if (aq === 0 && bq > 0) return 1;
+
+      // If both selected, sort by quantity descending
+      if (aq > 0 && bq > 0) return bq - aq;
+
+      // Otherwise keep original relative order (return 0)
+      return 0;
+    });
+
+    return arr;
+  }, [allProducts, productSearch, selectedMap]);
 
   const fetchCnpjData = async (rawCnpj: string) => {
     if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
