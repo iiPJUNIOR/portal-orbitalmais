@@ -2,6 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Root variables (light by default) */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -13,8 +14,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 0 0% 3.9%;
 
-    /* COR PRIMÁRIA ALTERADA PARA ROXO */
-    --primary: 270 60% 50%; /* Roxo intenso */
+    --primary: 270 60% 50%;
     --primary-foreground: 0 0% 98%;
 
     --secondary: 0 0% 96.1%;
@@ -45,75 +45,85 @@
     --sidebar-ring: 270 60% 50%;
   }
 
+  /* Dark theme variables — these keep the same semantic roles but with dark values */
   .dark {
-    --background: 0 0% 3.9%;
-    --foreground: 0 0% 98%;
+    --background: 210 9% 6%;          /* slightly blueish dark */
+    --foreground: 0 0% 96%;
 
-    --card: 0 0% 6.5%;
-    --card-foreground: 0 0% 98%;
+    --card: 210 8% 8%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 0 0% 6.5%;
-    --popover-foreground: 0 0% 98%;
+    --popover: 210 8% 9%;
+    --popover-foreground: 0 0% 96%;
 
     --primary: 270 60% 50%;
-    --primary-foreground: 0 0% 9%;
+    --primary-foreground: 0 0% 98%;
 
-    --secondary: 0 0% 14.9%;
-    --secondary-foreground: 0 0% 98%;
+    --secondary: 210 8% 12%;
+    --secondary-foreground: 0 0% 96%;
 
-    --muted: 0 0% 14.9%;
-    --muted-foreground: 0 0% 63.9%;
+    --muted: 210 8% 12%;
+    --muted-foreground: 0 0% 67%;
 
-    --accent: 0 0% 14.9%;
-    --accent-foreground: 0 0% 98%;
+    --accent: 210 8% 12%;
+    --accent-foreground: 0 0% 96%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 0 0% 14.9%;
-    --input: 0 0% 14.9%;
+    --border: 210 9% 14%;
+    --input: 210 9% 12%;
     --ring: 270 60% 50%;
+
+    --sidebar-background: 210 7% 7%;
+    --sidebar-foreground: 220 5% 82%;
+    --sidebar-primary: 270 60% 50%;
+    --sidebar-primary-foreground: 0 0% 98%;
   }
 }
 
+/* Base mapping and neutral styles that respect the CSS variables */
 @layer base {
   * {
-    @apply border-border;
+    box-sizing: border-box;
+  }
+
+  html, body, #root {
+    height: 100%;
   }
 
   body {
-    @apply bg-background text-foreground;
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
-  /* Dark-mode utility overrides
-     Many components in the app use explicit utility classes like bg-white, bg-neutral-50,
-     text-black, border-gray-100, etc. — those do not change automatically with CSS variables.
-     The rules below map those common utility classes to the theme variables when .dark is active,
-     ensuring the UI becomes dark in practice (not only icon/text color).
+  /*
+    Dark-mode overrides for common Tailwind utility classes and elements.
+    We use the semantic variables defined above so the visual hierarchy
+    (cards, popovers, inputs, text, borders, etc.) stays consistent
+    with the light theme while using darker backgrounds and readable contrast.
   */
   .dark {
-    /* Backgrounds */
-    --_card-bg: hsl(var(--card));
-    --_popover-bg: hsl(var(--popover));
-    --_background-bg: hsl(var(--background));
-
-    /* Map common white/light backgrounds to card/popover variables */
+    /* Generic background replacements */
     .bg-white,
     .bg-neutral-50,
     .bg-gray-50,
-    .bg-slate-50 {
-      background-color: var(--_card-bg) !important;
+    .bg-slate-50,
+    .bg-neutral-100 {
+      background-color: hsl(var(--card)) !important;
       color: hsl(var(--card-foreground)) !important;
     }
 
+    /* Slightly elevated panels */
     .bg-gray-100,
-    .bg-neutral-100,
-    .bg-slate-100 {
+    .bg-neutral-200 {
       background-color: hsl(var(--popover)) !important;
       color: hsl(var(--popover-foreground)) !important;
     }
 
-    /* Texts */
+    /* Text color swaps for classes that force dark text */
     .text-black,
     .text-neutral-900,
     .text-gray-900,
@@ -121,72 +131,164 @@
       color: hsl(var(--card-foreground)) !important;
     }
 
-    /* Muted text class used across the app */
+    /* Muted text should appear as subtle light */
     .text-muted-foreground {
       color: rgba(255, 255, 255, 0.70) !important;
     }
 
-    /* Borders */
+    /* Border colors */
     .border,
     .border-gray-100,
     .border-neutral-100,
-    .border-slate-100 {
+    .border-slate-100,
+    hr {
       border-color: hsl(var(--border)) !important;
     }
 
-    /* Inputs / textareas */
+    /* Inputs / textareas / selects to match cards and be legible */
     input,
     textarea,
     select,
     .input,
     .auth-ui-wrapper input,
-    .auth-ui-wrapper select {
+    .auth-ui-wrapper select,
+    .auth-ui-wrapper textarea,
+    .form-control {
       background-color: hsl(var(--input)) !important;
       color: hsl(var(--card-foreground)) !important;
       border-color: hsl(var(--border)) !important;
     }
 
-    /* Cards / panels */
+    /* Placeholder and helper text */
+    ::placeholder {
+      color: rgba(255, 255, 255, 0.45) !important;
+      opacity: 1;
+    }
+
+    /* Buttons that used white/neutral backgrounds should adopt card or popover */
+    .bg-neutral-100,
+    .bg-neutral-200,
+    .bg-gray-100,
+    .btn-neutral,
+    .btn-ghost {
+      background-color: transparent !important;
+      color: hsl(var(--card-foreground)) !important;
+      border-color: hsl(var(--border)) !important;
+    }
+
+    /* Primary buttons keep primary color but ensure contrast */
+    .bg-primary,
+    .bg-primary-500,
+    .btn-primary {
+      background-color: color-mix(in srgb, hsl(var(--primary)) 80%, black 10%) !important;
+      color: hsl(var(--primary-foreground)) !important;
+      border-color: transparent !important;
+    }
+
+    /* Cards and panels */
     .card,
     .card-header,
     .card-content,
     .rounded-2xl,
     .rounded-xl,
-    .rounded-lg {
-      background-color: var(--_card-bg) !important;
+    .rounded-lg,
+    .panel,
+    .panel-body {
+      background-color: hsl(var(--card)) !important;
       color: hsl(var(--card-foreground)) !important;
+      border-color: hsl(var(--border)) !important;
     }
 
-    /* Sidebar specific */
+    /* Sidebar areas */
     .sidebar,
     .sidebar-footer,
     .sidebar-header,
-    .sidebar-content {
+    .sidebar-content,
+    .app-sidebar {
       background-color: hsl(var(--sidebar-background)) !important;
       color: hsl(var(--sidebar-foreground)) !important;
+      border-color: hsl(var(--sidebar-border)) !important;
     }
 
-    /* Tables: alternate backgrounds */
-    .table tr:nth-child(even) td {
-      background-color: rgba(255,255,255,0.02) !important;
+    /* Tables */
+    table,
+    thead,
+    tbody,
+    tr,
+    td,
+    th {
+      color: hsl(var(--card-foreground)) !important;
+    }
+    table {
+      border-color: hsl(var(--border)) !important;
+    }
+    tbody tr:nth-child(even) td {
+      background-color: color-mix(in srgb, hsl(var(--card)) 92%, black 4%) !important;
+    }
+    tbody tr:hover td {
+      background-color: color-mix(in srgb, hsl(var(--card)) 88%, black 6%) !important;
     }
 
-    /* Buttons that used neutral backgrounds */
-    .bg-neutral-100, .bg-neutral-200, .bg-gray-100 {
-      background-color: transparent !important;
-    }
-
-    /* Toaster / Sonner (if present) */
-    .sonner-toast {
-      background-color: var(--_card-bg) !important;
+    /* Toasts / sonner / toasters */
+    .sonner-toast,
+    .toast,
+    .toaster,
+    .radix-toast {
+      background-color: hsl(var(--card)) !important;
       color: hsl(var(--card-foreground)) !important;
       border: 1px solid hsl(var(--border)) !important;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.45) !important;
     }
 
-    /* Ensure SVG icons that use currentColor invert appropriately (they inherit text color) */
+    /* Dialog / Modal */
+    .dialog,
+    .modal,
+    .modal-content,
+    [role="dialog"] {
+      background-color: hsl(var(--card)) !important;
+      color: hsl(var(--card-foreground)) !important;
+      border-color: hsl(var(--border)) !important;
+    }
+
+    /* Links */
+    a,
+    .link {
+      color: color-mix(in srgb, hsl(var(--primary)) 100%, white 0%) !important;
+    }
+
+    /* Small UI tweaks for better contrast in dark mode */
+    .shadow,
+    .shadow-sm,
+    .shadow-md,
+    .shadow-lg {
+      --tw-shadow-color: rgba(0,0,0,0.55) !important;
+    }
+
+    /* Ensure icons that inherit currentColor match the text color */
     svg {
       color: inherit;
       fill: currentColor;
     }
+
+    /* Keep subtle hover states readable */
+    .hover\\:bg-gray-50:hover,
+    .hover\\:bg-white:hover,
+    .hover\\:bg-neutral-50:hover {
+      background-color: color-mix(in srgb, hsl(var(--card)) 86%, black 6%) !important;
+    }
+
+    /* Specific fixes for components that rely on bg-white/ text-black */
+    .auth-ui-wrapper .supabase-ui-auth-card,
+    .auth-ui-wrapper .supabase-ui-auth-card * {
+      background-color: hsl(var(--card)) !important;
+      color: hsl(var(--card-foreground)) !important;
+    }
+  }
+}
+
+/* Keep a few utility helpers unchanged (light theme) but ensure transitions are smooth */
+@layer utilities {
+  .dark-transition {
+    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
   }
 }
