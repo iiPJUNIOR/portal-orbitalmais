@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import Logo from "@/components/Logo";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -128,7 +129,7 @@ export default function Login() {
           />
           <div className="relative z-10">
             <div className="inline-block p-4 rounded-xl">
-              <img src="/logo.png" alt="Control iD" className="h-8 w-auto" />
+              <Logo className="h-8 w-auto" />
             </div>
           </div>
           <div className="relative z-10">
@@ -152,7 +153,7 @@ export default function Login() {
                     </CardDescription>
                   </div>
                   <div className="hidden sm:block">
-                    <img src="/logo.png" alt="logo" className="h-8 w-auto opacity-90" />
+                    <Logo className="h-8 w-auto opacity-90" />
                   </div>
                 </div>
               </CardHeader>

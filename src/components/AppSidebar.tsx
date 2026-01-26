@@ -22,6 +22,7 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
+import Logo from "@/components/Logo";
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -49,11 +50,7 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r">
       <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
-        <img 
-          src="/logo.png" 
-          alt="Control iD" 
-          className="h-7 w-auto object-contain"
-        />
+        <Logo className="h-7 w-auto object-contain" />
       </SidebarHeader>
       
       <SidebarContent>
