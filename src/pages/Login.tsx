@@ -1,19 +1,25 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { Auth } from "@supabase/auth-ui-react";
-import { ThemeSupa } from "@supabase/auth-ui-shared";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
-import { Loader2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Loader2, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
   const navigate = useNavigate();
-  const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
+  const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     let mounted = true;
-    
+
     const checkSession = async () => {
       try {
         // @ts-ignore
@@ -22,7 +28,7 @@ export default function Login() {
         if (currentSession && mounted) {
           navigate("/", { replace: true });
         }
-      } catch (err) {
+      } catch {
         // ignore
       }
     };
@@ -32,47 +38,81 @@ export default function Login() {
     // @ts-ignore
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
-      
       if (event === "SIGNED_IN" && session) {
-        setIsLoggingIn(true);
-        setTimeout(() => {
-          if (mounted) {
-            navigate("/", { replace: true });
-          }
-        }, 800);
+        navigate("/", { replace: true });
       }
     });
 
     return () => {
       mounted = false;
-      subscription.unsubscribe();
+      try {
+        subscription.unsubscribe();
+      } catch {}
     };
   }, [navigate]);
 
+  const handleSignIn = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        console.error("signIn error", error);
+        toast.error("Falha ao entrar: " + (error.message || "erro desconhecido"));
+        return;
+      }
+
+      if (data?.user) {
+        toast.success("Login bem-sucedido");
+        navigate("/", { replace: true });
+      } else {
+        // In some setups, session may be created asynchronously (magic link etc.)
+        toast.success("Verifique seu e-mail para confirmar (se aplicável).");
+      }
+    } catch (err: any) {
+      console.error("signIn exception", err);
+      toast.error("Erro ao autenticar: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+      });
+
+      if (error) {
+        console.error("signUp error", error);
+        toast.error("Falha ao criar conta: " + (error.message || "erro desconhecido"));
+        return;
+      }
+
+      toast.success("Conta criada! Verifique seu e-mail para confirmar.");
+      setMode("sign-in");
+    } catch (err: any) {
+      console.error("signUp exception", err);
+      toast.error("Erro ao criar conta: " + (err?.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    if (mode === "sign-in") return void handleSignIn(e);
+    return void handleSignUp(e);
+  };
+
   return (
     <div className="min-h-screen w-full relative bg-white overflow-hidden">
-      {/* Overlay de Transição Fluida */}
-      {isLoggingIn && (
-        <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-white animate-in fade-in duration-500">
-          <div className="flex flex-col items-center space-y-4">
-            <div className="p-6 rounded-2xl">
-              <img 
-                src="/logo.png" 
-                alt="Control iD" 
-                className="h-10 w-auto"
-              />
-            </div>
-            <div className="text-center">
-              <h2 className="text-2xl font-bold text-gray-900">Bem-vindo de volta!</h2>
-              <p className="text-gray-500 flex items-center justify-center gap-2 mt-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Preparando seu painel...
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
         {/* Lado Esquerdo: Imagem (Apenas Desktop) */}
         <div className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white">
@@ -121,73 +161,95 @@ export default function Login() {
               </div>
             </div>
 
-            <div className="mb-10 text-center lg:text-left">
+            <div className="mb-6 text-center lg:text-left">
               <h1 className="text-4xl font-black tracking-tighter text-gray-900 mb-2">Login</h1>
               <p className="text-gray-500">Acesse sua conta para continuar.</p>
             </div>
 
-            <div className="auth-ui-wrapper">
-              <Auth
-                supabaseClient={supabase}
-                providers={[]}
-                appearance={{
-                  theme: ThemeSupa,
-                  style: {
-                    button: { 
-                      borderRadius: '8px', 
-                      padding: '12px',
-                      fontSize: '15px',
-                      fontWeight: '600',
-                    },
-                    input: { 
-                      borderRadius: '8px',
-                      padding: '10px',
-                      fontSize: '15px',
-                    },
-                    label: {
-                      fontSize: '14px',
-                      fontWeight: '500',
-                      marginBottom: '4px'
-                    },
-                  },
-                  variables: {
-                    default: {
-                      colors: {
-                        brand: '#000000',
-                        brandAccent: '#333333',
-                      },
-                    },
-                  },
-                }}
-                theme="light"
-                localization={{
-                  variables: {
-                    sign_in: {
-                      email_label: 'Endereço de e-mail',
-                      password_label: 'Sua senha',
-                      button_label: 'Acessar Painel',
-                      loading_button_label: 'Entrando...',
-                      link_text: 'Não tem uma conta? Cadastre-se',
-                    },
-                    sign_up: {
-                      email_label: 'Endereço de e-mail',
-                      password_label: 'Crie uma senha',
-                      button_label: 'Criar conta',
-                      loading_button_label: 'Criando...',
-                      link_text: 'Já possui uma conta? Entre aqui',
-                    },
-                    forgotten_password: {
-                      email_label: 'Endereço de e-mail',
-                      button_label: 'Recuperar senha',
-                      loading_button_label: 'Enviando e-mail...',
-                      link_text: 'Esqueceu sua senha?',
-                    },
-                  }
-                }}
-              />
-            </div>
-            
-            <div className="mt-12 pt-8 border-t border-gray-100 text-center text-sm text-gray-400">
+            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-xl shadow-sm border">
+              <div>
+                <Label htmlFor="email">E-mail</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="email@empresa.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="password">Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Sua senha"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                  />
+                  <button
+                    type="button"
+                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground p-1 rounded focus:outline-none"
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <input id="remember" type="checkbox" className="h-4 w-4" />
+                  <label htmlFor="remember" className="text-sm text-muted-foreground">Lembrar</label>
+                </div>
+
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      // Minimal forgotten password flow: request password reset email
+                      if (!email) return toast.error("Preencha o e-mail para recuperar a senha");
+                      setLoading(true);
+                      supabase.auth.resetPasswordForEmail(email).then(({ data, error }) => {
+                        if (error) toast.error("Erro ao enviar link de recuperação: " + (error.message || ""));
+                        else toast.success("Link de recuperação enviado para o seu e-mail");
+                      }).finally(() => setLoading(false));
+                    }}
+                    className="text-sm text-muted-foreground underline"
+                  >
+                    Esqueceu a senha?
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <Button type="submit" className="h-11" disabled={loading}>
+                  {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2 inline" /> : null}
+                  {mode === "sign-in" ? "Acessar Painel" : "Criar Conta"}
+                </Button>
+
+                <div className="text-center text-sm text-muted-foreground">
+                  {mode === "sign-in" ? (
+                    <>
+                      Não tem conta?{" "}
+                      <button type="button" className="underline" onClick={() => setMode("sign-up")}>Criar conta</button>
+                    </>
+                  ) : (
+                    <>
+                      Já tem conta?{" "}
+                      <button type="button" className="underline" onClick={() => setMode("sign-in")}>Entrar</button>
+                    </>
+                  )}
+                </div>
+              </div>
+            </form>
+
+            <div className="mt-6 pt-6 border-t text-center text-sm text-gray-400">
               Precisa de ajuda? <span className="text-black font-semibold cursor-pointer hover:underline">Fale com o suporte</span>
             </div>
           </div>
