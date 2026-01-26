@@ -49,10 +49,10 @@
     --background: 0 0% 3.9%;
     --foreground: 0 0% 98%;
 
-    --card: 0 0% 3.9%;
+    --card: 0 0% 6.5%;
     --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 3.9%;
+    --popover: 0 0% 6.5%;
     --popover-foreground: 0 0% 98%;
 
     --primary: 270 60% 50%;
@@ -83,5 +83,110 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Dark-mode utility overrides
+     Many components in the app use explicit utility classes like bg-white, bg-neutral-50,
+     text-black, border-gray-100, etc. — those do not change automatically with CSS variables.
+     The rules below map those common utility classes to the theme variables when .dark is active,
+     ensuring the UI becomes dark in practice (not only icon/text color).
+  */
+  .dark {
+    /* Backgrounds */
+    --_card-bg: hsl(var(--card));
+    --_popover-bg: hsl(var(--popover));
+    --_background-bg: hsl(var(--background));
+
+    /* Map common white/light backgrounds to card/popover variables */
+    .bg-white,
+    .bg-neutral-50,
+    .bg-gray-50,
+    .bg-slate-50 {
+      background-color: var(--_card-bg) !important;
+      color: hsl(var(--card-foreground)) !important;
+    }
+
+    .bg-gray-100,
+    .bg-neutral-100,
+    .bg-slate-100 {
+      background-color: hsl(var(--popover)) !important;
+      color: hsl(var(--popover-foreground)) !important;
+    }
+
+    /* Texts */
+    .text-black,
+    .text-neutral-900,
+    .text-gray-900,
+    .text-primary-foreground {
+      color: hsl(var(--card-foreground)) !important;
+    }
+
+    /* Muted text class used across the app */
+    .text-muted-foreground {
+      color: rgba(255, 255, 255, 0.70) !important;
+    }
+
+    /* Borders */
+    .border,
+    .border-gray-100,
+    .border-neutral-100,
+    .border-slate-100 {
+      border-color: hsl(var(--border)) !important;
+    }
+
+    /* Inputs / textareas */
+    input,
+    textarea,
+    select,
+    .input,
+    .auth-ui-wrapper input,
+    .auth-ui-wrapper select {
+      background-color: hsl(var(--input)) !important;
+      color: hsl(var(--card-foreground)) !important;
+      border-color: hsl(var(--border)) !important;
+    }
+
+    /* Cards / panels */
+    .card,
+    .card-header,
+    .card-content,
+    .rounded-2xl,
+    .rounded-xl,
+    .rounded-lg {
+      background-color: var(--_card-bg) !important;
+      color: hsl(var(--card-foreground)) !important;
+    }
+
+    /* Sidebar specific */
+    .sidebar,
+    .sidebar-footer,
+    .sidebar-header,
+    .sidebar-content {
+      background-color: hsl(var(--sidebar-background)) !important;
+      color: hsl(var(--sidebar-foreground)) !important;
+    }
+
+    /* Tables: alternate backgrounds */
+    .table tr:nth-child(even) td {
+      background-color: rgba(255,255,255,0.02) !important;
+    }
+
+    /* Buttons that used neutral backgrounds */
+    .bg-neutral-100, .bg-neutral-200, .bg-gray-100 {
+      background-color: transparent !important;
+    }
+
+    /* Toaster / Sonner (if present) */
+    .sonner-toast {
+      background-color: var(--_card-bg) !important;
+      color: hsl(var(--card-foreground)) !important;
+      border: 1px solid hsl(var(--border)) !important;
+    }
+
+    /* Ensure SVG icons that use currentColor invert appropriately (they inherit text color) */
+    svg {
+      color: inherit;
+      fill: currentColor;
+    }
   }
 }
