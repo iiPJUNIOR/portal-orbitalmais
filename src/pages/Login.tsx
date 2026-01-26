@@ -184,11 +184,11 @@ export default function Login() {
                 </div>
               </div>
 
-              {/* Password - minimal input + eye button */}
+              {/* Password - minimal input + eye button (solid background) */}
               <div>
                 <Label htmlFor="password" className="text-sm">Senha</Label>
                 <div className="mt-2 relative">
-                  <div className="border-b border-neutral-200 dark:border-neutral-700 pr-10">
+                  <div className="border-b border-neutral-200 dark:border-neutral-700 pr-12">
                     <Input
                       id="password"
                       type={showPassword ? "text" : "password"}
@@ -205,13 +205,14 @@ export default function Login() {
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 p-1 rounded-full focus:outline-none"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none shadow-sm
+                      bg-white border border-neutral-200 text-neutral-700
+                      dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
                   >
-                    {/* Icon styling: white in dark, muted in light. EyeOff includes the slash */}
                     {showPassword ? (
-                      <EyeOff className="h-5 w-5 text-neutral-600 dark:text-white" />
+                      <EyeOff className="h-4 w-4" />
                     ) : (
-                      <Eye className="h-5 w-5 text-neutral-600 dark:text-white" />
+                      <Eye className="h-4 w-4" />
                     )}
                   </button>
                 </div>
