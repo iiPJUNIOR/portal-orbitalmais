@@ -10,6 +10,7 @@ import Settings from "./pages/Settings";
 import TokenScanner from "./pages/TokenScanner";
 import Login from "./pages/Login";
 import AuthStatus from "./pages/AuthStatus";
+import ResetPassword from "./pages/ResetPassword";
 import { SessionProvider, useSession } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -51,6 +52,7 @@ const AppContent = () => {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/auth-status" element={<AuthStatus />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route 
         path="/*" 
         element={
