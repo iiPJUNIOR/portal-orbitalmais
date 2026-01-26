@@ -86,28 +86,63 @@ html.font-extra-large { font-size: 20px; }
 @layer components {
   /* Light-mode proposal highlight (used by wizard & login card) */
   .proposal-highlight {
-    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.97) 100%);
+    position: relative;
+    z-index: 1;
+    background: linear-gradient(180deg, rgba(255,255,255,0.96) 0%, rgba(255,255,255,0.99) 100%);
     border-radius: 1rem;
-    /* Shadow increased for stronger contrast (visible on light backgrounds) */
+    /* Much stronger shadow for clearer separation from background */
     box-shadow:
-      0 6px 18px rgba(2,6,23,0.10),
-      0 18px 40px rgba(2,6,23,0.14),
-      0 40px 80px rgba(2,6,23,0.12);
-    /* Slightly stronger border to help separation */
-    border: 1px solid rgba(2,6,23,0.06);
-    /* Add subtle uplift to emphasize the card */
+      0 30px 90px rgba(2,6,23,0.28),
+      0 12px 36px rgba(2,6,23,0.20),
+      0 4px 12px rgba(2,6,23,0.12);
+    /* Stronger border to emphasize edge */
+    border: 1px solid rgba(2,6,23,0.08);
+    overflow: visible;
     transform: translateZ(0);
   }
 
-  /* Dark mode: use deeper shadow and subtle light border to separate from dark background */
+  /* Subtle halo behind the card for extra depth (works in light mode) */
+  .proposal-highlight::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% + 80px);
+    height: calc(100% + 80px);
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(60% 40% at 50% 50%, rgba(2,6,23,0.18) 0%, rgba(2,6,23,0.06) 40%, transparent 65%);
+    filter: blur(34px);
+    z-index: -1;
+    opacity: 1;
+  }
+
+  /* Dark mode: use deeper background and adjusted shadow/halo */
   .dark .proposal-highlight {
-    background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
+    background: linear-gradient(180deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
     border-radius: 1rem;
     box-shadow:
-      0 8px 24px rgba(0,0,0,0.35),
-      0 28px 64px rgba(0,0,0,0.45),
-      0 60px 120px rgba(0,0,0,0.38);
-    border: 1px solid rgba(255,255,255,0.04);
+      0 36px 120px rgba(0,0,0,0.6),
+      0 18px 60px rgba(0,0,0,0.45),
+      0 6px 18px rgba(0,0,0,0.25);
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  .dark .proposal-highlight::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+    width: calc(100% + 90px);
+    height: calc(100% + 90px);
+    pointer-events: none;
+    border-radius: inherit;
+    background: radial-gradient(60% 40% at 50% 50%, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.25) 40%, transparent 70%);
+    filter: blur(40px);
+    z-index: -1;
+    opacity: 1;
   }
 
   .header-blur {
