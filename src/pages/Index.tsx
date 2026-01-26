@@ -108,8 +108,8 @@ export default function Index() {
         {step === "welcome" && (
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center space-y-4">
-              <h1 className="text-5xl font-black tracking-tight text-neutral-900">
-                Gerador de Propostas <span className="text-neutral-900">Control iD</span>
+              <h1 className="text-5xl font-black tracking-tight text-neutral-900 dark:text-white">
+                Gerador de Propostas <span className="text-neutral-900 dark:text-white">Control iD</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
                 Crie apresentações profissionais em PPTX seguindo o padrão oficial da Control iD em poucos minutos.
@@ -119,7 +119,7 @@ export default function Index() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-10">
               <button 
                 onClick={() => setStep("wizard")}
-                className="group p-8 bg-white border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
+                className="group p-8 bg-card border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-primary/10 rounded-2xl w-fit group-hover:bg-primary group-hover:text-white transition-colors">
                   <PlusCircle className="h-8 w-8" />
@@ -132,9 +132,9 @@ export default function Index() {
 
               <button 
                 onClick={() => setStep("history")}
-                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
+                className="group p-8 bg-card border-2 border-neutral-100 dark:border-neutral-800 hover:border-neutral-900 dark:hover:border-white rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
-                <div className="p-3 bg-neutral-100 rounded-2xl w-fit group-hover:bg-neutral-900 group-hover:text-white transition-colors">
+                <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-2xl w-fit group-hover:bg-neutral-900 dark:group-hover:bg-white dark:group-hover:text-neutral-900 group-hover:text-white transition-colors">
                   <History className="h-8 w-8" />
                 </div>
                 <div>
@@ -145,9 +145,9 @@ export default function Index() {
 
               <button 
                 onClick={() => navigate("/settings")}
-                className="group p-8 bg-white border-2 border-neutral-100 hover:border-neutral-900 rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
+                className="group p-8 bg-card border-2 border-neutral-100 dark:border-neutral-800 hover:border-neutral-900 dark:hover:border-white rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
-                <div className="p-3 bg-neutral-100 rounded-2xl w-fit group-hover:bg-neutral-900 group-hover:text-white transition-colors">
+                <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-2xl w-fit group-hover:bg-neutral-900 dark:group-hover:bg-white dark:group-hover:text-neutral-900 group-hover:text-white transition-colors">
                   <SettingsIcon className="h-8 w-8" />
                 </div>
                 <div>
@@ -180,7 +180,7 @@ export default function Index() {
         )}
       </main>
 
-      <footer className="py-6 border-t bg-white">
+      <footer className="py-6 border-t bg-card">
         <MadeWithDyad />
       </footer>
     </div>

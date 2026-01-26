@@ -249,15 +249,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={e => setProductSearch(e.target.value)} />
             </div>
-            <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-white">
+            <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-card">
               {filteredProducts.map(p => {
                 const isSelected = formData.selectedProducts.some(sp => sp.baseId === p.id);
                 return (
-                  <div key={p.id} className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+                  <div key={p.id} className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm">{p.name}</span>
-                        <span className="text-[9px] bg-neutral-100 px-1.5 py-0.5 rounded text-neutral-500 uppercase font-medium">{p.baseName}</span>
+                        <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-medium">{p.baseName}</span>
                       </div>
                       <div className="text-[10px] text-muted-foreground">{p.sku} | {p.description}</div>
                     </div>
@@ -275,7 +275,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                   <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
                     <div className="flex-1"><span className="font-bold text-sm">{p.name}</span></div>
                     <div className="flex items-center gap-3 ml-4">
-                      <Input type="number" className="w-16 h-8 text-xs bg-white text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
+                      <Input type="number" className="w-16 h-8 text-xs bg-card text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
                       <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
@@ -308,7 +308,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-2xl bg-white shadow-sm">
+              <div className="flex items-center justify-between p-4 border rounded-2xl bg-card shadow-sm">
                 <div className="space-y-0.5">
                   <Label className="text-base font-bold">Página de Aprovação</Label>
                   <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
@@ -320,7 +320,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </div>
 
               {formData.includeApprovalPage && (
-                <div className="p-4 border border-dashed rounded-2xl bg-neutral-50 space-y-3 animate-in fade-in slide-in-from-top-2">
+                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-2 text-primary">
                     <LinkIcon className="h-4 w-4" />
                     <Label className="font-bold">Link do Gerador de Aprovação</Label>
@@ -329,7 +329,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                     placeholder="Cole aqui o link gerado no Gerador de Aprovação" 
                     value={formData.approvalLink}
                     onChange={e => setFormData(prev => ({ ...prev, approvalLink: e.target.value }))}
-                    className="bg-white"
+                    className="bg-card"
                   />
                   <p className="text-[10px] text-muted-foreground">O link inserido será incorporado no botão de aprovação da proposta.</p>
                 </div>
@@ -346,11 +346,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <CheckCircle2 className="h-16 w-16 text-green-600" />
             </div>
             <div className="space-y-2">
-              <h2 className="text-3xl font-black text-neutral-900">Proposta Gerada!</h2>
+              <h2 className="text-3xl font-black text-neutral-900 dark:text-white">Proposta Gerada!</h2>
               <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado.</p>
             </div>
             
-            <div className="w-full p-4 bg-neutral-50 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
+            <div className="w-full p-4 bg-muted/30 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
               <div className="flex items-center gap-2 text-primary font-bold text-sm">
                 <Info className="h-4 w-4" />
                 Dica: Como gerar o PDF
