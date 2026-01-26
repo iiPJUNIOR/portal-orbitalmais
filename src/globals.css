@@ -86,15 +86,28 @@ html.font-extra-large { font-size: 20px; }
 @layer components {
   /* Light-mode proposal highlight (used by wizard & login card) */
   .proposal-highlight {
-    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.98) 100%);
-    box-shadow: 0 20px 40px rgba(2,6,23,0.06);
+    background: linear-gradient(180deg, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.97) 100%);
     border-radius: 1rem;
-    border: 1px solid rgba(2,6,23,0.03);
+    /* Shadow increased for stronger contrast (visible on light backgrounds) */
+    box-shadow:
+      0 6px 18px rgba(2,6,23,0.10),
+      0 18px 40px rgba(2,6,23,0.14),
+      0 40px 80px rgba(2,6,23,0.12);
+    /* Slightly stronger border to help separation */
+    border: 1px solid rgba(2,6,23,0.06);
+    /* Add subtle uplift to emphasize the card */
+    transform: translateZ(0);
   }
 
+  /* Dark mode: use deeper shadow and subtle light border to separate from dark background */
   .dark .proposal-highlight {
     background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
-    @apply shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-white/5;
+    border-radius: 1rem;
+    box-shadow:
+      0 8px 24px rgba(0,0,0,0.35),
+      0 28px 64px rgba(0,0,0,0.45),
+      0 60px 120px rgba(0,0,0,0.38);
+    border: 1px solid rgba(255,255,255,0.04);
   }
 
   .header-blur {
