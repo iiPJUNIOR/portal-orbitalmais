@@ -7,12 +7,13 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -31,6 +32,7 @@ export default function Settings() {
   const [sellerRole, setSellerRole] = useState("");
   const [sellerEmail, setSellerEmail] = useState("");
   const [sellerPhone, setSellerPhone] = useState("");
+  const [fontSize, setFontSize] = useState<string>("medium");
   
   const [hasFullAccess, setHasFullAccess] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -65,6 +67,7 @@ export default function Settings() {
         setSellerEmail(s.seller_email || "");
         setSellerPhone(s.seller_phone || "");
         setSpreadsheetLink(s.spreadsheet_link || "");
+        setFontSize(s.font_size || "medium");
         setHasFullAccess(!!s.has_full_access || isSuperAdmin);
       } else if (isSuperAdmin) {
         setHasFullAccess(true);
@@ -151,6 +154,16 @@ export default function Settings() {
     }
   };
 
+  const handleSaveFontSize = async (value: string) => {
+    try {
+      setFontSize(value);
+      await saveUserSettings({ font_size: value as any });
+      toast.success("Tamanho da fonte atualizado!");
+    } catch (err) {
+      toast.error("Erro ao salvar tamanho da fonte");
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
@@ -167,6 +180,34 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
+          {/* Seção acessível a todos: Preferências */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Type className="h-5 w-5" />
+                Preferências de Interface
+              </CardTitle>
+              <CardDescription>Ajuste como o sistema aparece para você.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Tamanho do Texto Global</Label>
+                <Select value={fontSize} onValueChange={handleSaveFontSize}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Escolha um tamanho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="small">Pequeno (Compacto)</SelectItem>
+                    <SelectItem value="medium">Médio (Padrão)</SelectItem>
+                    <SelectItem value="large">Grande</SelectItem>
+                    <SelectItem value="extra-large">Extra Grande</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">Isso ajustará o tamanho de todos os textos do sistema.</p>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Seções Restritas */}
           {hasFullAccess ? (
             <>

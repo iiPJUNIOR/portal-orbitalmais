@@ -13,6 +13,7 @@ export type UserSettings = {
   complement_com_ids_column?: string | null;
   complement_sem_ids_column?: string | null;
   has_full_access?: boolean;
+  font_size?: 'small' | 'medium' | 'large' | 'extra-large';
   created_at?: string | null;
   updated_at?: string | null;
 };

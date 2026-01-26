@@ -36,36 +36,33 @@
   }
 
   .dark {
-    /* Paleta Deep Zinc para um modo noturno premium */
-    --background: 240 10% 3.9%; /* Black */
+    --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
-
-    --card: 240 10% 6%; /* Quase black */
+    --card: 240 10% 6%;
     --card-foreground: 0 0% 98%;
-
     --popover: 240 10% 8%;
     --popover-foreground: 0 0% 98%;
-
-    --primary: 263 70% 50%; /* Roxo um pouco mais suave para o escuro */
+    --primary: 263 70% 50%;
     --primary-foreground: 210 40% 98%;
-
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
-
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
-
     --accent: 240 3.7% 15.9%;
     --accent-foreground: 0 0% 98%;
-
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
-
-    --border: 240 3.7% 15.9%; /* Bordas muito sutis */
+    --border: 240 3.7% 15.9%;
     --input: 240 3.7% 15.9%;
     --ring: 262 83% 58%;
   }
 }
+
+/* Font Scaling Logic */
+html.font-small { font-size: 14px; }
+html.font-medium { font-size: 16px; }
+html.font-large { font-size: 18px; }
+html.font-extra-large { font-size: 20px; }
 
 @layer base {
   * {
@@ -78,19 +75,16 @@
 }
 
 @layer components {
-  /* Efeito de vidro sutil para cards no modo escuro */
   .dark .proposal-highlight {
     background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
     @apply shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-white/5;
   }
 
-  /* Ajuste para que as bordas do sidebar e do header pareçam uma única linha contínua */
   .header-blur {
     @apply backdrop-blur-md bg-background/80 border-b sticky top-0 z-50;
   }
 }
 
-/* Scrollbar personalizada para o modo noturno */
 .dark ::-webkit-scrollbar {
   width: 10px;
 }
