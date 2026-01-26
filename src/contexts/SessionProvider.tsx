@@ -37,14 +37,24 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     const initializeAuth = async () => {
       try {
-        // Detecção manual via Hash (Backup para quando o onAuthStateChange demora)
         const hash = window.location.hash;
-        if (hash.includes("type=recovery") || hash.includes("access_token=")) {
-          console.log("[SessionProvider] Detectado link de recuperação via Hash");
-          // Pequeno delay para garantir que o Supabase processou o token antes do redirecionamento
+        
+        // Verificação específica para recuperação de senha
+        if (hash.includes("type=recovery")) {
+          console.log("[SessionProvider] Detectado link de RECUPERAÇÃO via Hash");
           setTimeout(() => {
             if (mounted) safeNavigate("/reset-password");
           }, 100);
+        } 
+        // Verificação específica para confirmação de cadastro
+        else if (hash.includes("type=signup")) {
+          console.log("[SessionProvider] Detectado link de CONFIRMAÇÃO de cadastro");
+          // Deixamos a rota /auth-status lidar com isso ou redirecionamos para lá se não estivermos nela
+          if (location.pathname !== "/auth-status") {
+            setTimeout(() => {
+              if (mounted) safeNavigate("/auth-status");
+            }, 100);
+          }
         }
 
         const resp = await supabase.auth.getSession();
@@ -70,7 +80,6 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       setSession(s);
       setUser(s?.user ?? null);
       
-      // O Supabase dispara PASSWORD_RECOVERY quando detecta o token na URL
       if (event === "PASSWORD_RECOVERY") {
         safeNavigate("/reset-password");
       } else if (event === "SIGNED_OUT") {
@@ -91,8 +100,13 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     const path = location.pathname;
     const hash = window.location.hash;
     
-    // Ignora redirecionamento se estivermos em fluxo de recuperação
-    if (hash.includes("type=recovery") || path === "/reset-password" || path === "/auth-status") {
+    // Ignora redirecionamento automático em rotas de fluxo de auth
+    if (
+      hash.includes("type=recovery") || 
+      hash.includes("type=signup") ||
+      path === "/reset-password" || 
+      path === "/auth-status"
+    ) {
       return;
     }
 
