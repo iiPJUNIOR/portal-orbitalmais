@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useLayoutEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -17,6 +17,21 @@ export default function Login() {
   const [mode, setMode] = useState<"sign-in" | "sign-up">("sign-in");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  // Force light mode while on the login page by temporarily removing the 'dark' class.
+  // Restore the previous state when the component unmounts.
+  useLayoutEffect(() => {
+    const html = document.documentElement;
+    const hadDark = html.classList.contains("dark");
+    if (hadDark) {
+      html.classList.remove("dark");
+    }
+    return () => {
+      if (hadDark) {
+        html.classList.add("dark");
+      }
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
