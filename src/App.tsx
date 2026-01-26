@@ -9,6 +9,7 @@ import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import TokenScanner from "./pages/TokenScanner";
 import Login from "./pages/Login";
+import AuthStatus from "./pages/AuthStatus";
 import { SessionProvider, useSession } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -49,6 +50,7 @@ const AppContent = () => {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/auth-status" element={<AuthStatus />} />
       <Route 
         path="/*" 
         element={

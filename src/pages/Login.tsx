@@ -80,9 +80,15 @@ export default function Login() {
     if (e) e.preventDefault();
     setLoading(true);
     try {
+      // Configuramos o redirecionamento para a nossa nova página de status
+      const redirectTo = `${window.location.origin}/auth-status`;
+      
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
+        options: {
+          emailRedirectTo: redirectTo,
+        }
       });
 
       if (error) {
