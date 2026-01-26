@@ -70,7 +70,6 @@ export default function Login() {
         toast.success("Login bem-sucedido");
         navigate("/", { replace: true });
       } else {
-        // In some setups, session may be created asynchronously (magic link etc.)
         toast.success("Verifique seu e-mail para confirmar (se aplicável).");
       }
     } catch (err: any) {
@@ -167,37 +166,53 @@ export default function Login() {
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-xl shadow-sm border">
+              {/* Email - minimal input with underline */}
               <div>
-                <Label htmlFor="email">E-mail</Label>
-                <Input
-                  id="email"
-                  type="email"
-                  placeholder="email@empresa.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
+                <Label htmlFor="email" className="text-sm">E-mail</Label>
+                <div className="mt-2 relative">
+                  <div className="border-b border-neutral-200 dark:border-neutral-700">
+                    <Input
+                      id="email"
+                      type="email"
+                      placeholder="email@empresa.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      required
+                      className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+                </div>
               </div>
 
+              {/* Password - minimal input + eye button */}
               <div>
-                <Label htmlFor="password">Senha</Label>
-                <div className="relative">
-                  <Input
-                    id="password"
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Sua senha"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
+                <Label htmlFor="password" className="text-sm">Senha</Label>
+                <div className="mt-2 relative">
+                  <div className="border-b border-neutral-200 dark:border-neutral-700 pr-10">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Sua senha"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      required
+                      className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                    />
+                  </div>
+
                   <button
                     type="button"
                     aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                     onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground p-1 rounded focus:outline-none"
+                    className="absolute right-0 top-1/2 -translate-y-1/2 p-1 rounded-full focus:outline-none"
                   >
-                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    {/* Icon styling: white in dark, muted in light. EyeOff includes the slash */}
+                    {showPassword ? (
+                      <EyeOff className="h-5 w-5 text-neutral-600 dark:text-white" />
+                    ) : (
+                      <Eye className="h-5 w-5 text-neutral-600 dark:text-white" />
+                    )}
                   </button>
                 </div>
               </div>
@@ -212,7 +227,6 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => {
-                      // Minimal forgotten password flow: request password reset email
                       if (!email) return toast.error("Preencha o e-mail para recuperar a senha");
                       setLoading(true);
                       supabase.auth.resetPasswordForEmail(email).then(({ data, error }) => {
