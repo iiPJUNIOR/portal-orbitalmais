@@ -166,7 +166,7 @@ export default function Login() {
         {/* Right side: centered Card matching ProposalWizard steps */}
         <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
           <div className="w-full max-w-[480px]">
-            <Card>
+            <Card className="proposal-highlight rounded-3xl overflow-hidden border-none">
               <CardHeader className="bg-primary text-white p-8">
                 <div className="flex items-start justify-between">
                   <div>
@@ -187,35 +187,31 @@ export default function Login() {
                 <form onSubmit={handleSubmit} className="space-y-6">
                   <div>
                     <Label htmlFor="email" className="text-sm">E-mail</Label>
-                    <div className="mt-2 relative">
-                      <div className="border-b border-neutral-200 dark:border-neutral-700">
-                        <Input
-                          id="email"
-                          type="email"
-                          placeholder="email@empresa.com"
-                          value={email}
-                          onChange={(e) => setEmail(e.target.value)}
-                          required
-                          className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
-                        />
-                      </div>
+                    <div className="mt-2 relative border-b border-neutral-200 dark:border-neutral-700 focus-within:border-transparent focus-within:dark:border-transparent transition-colors">
+                      <Input
+                        id="email"
+                        type="email"
+                        placeholder="email@empresa.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        required
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                      />
                     </div>
                   </div>
 
                   <div>
                     <Label htmlFor="password" className="text-sm">Senha</Label>
-                    <div className="mt-2 relative">
-                      <div className="border-b border-neutral-200 dark:border-neutral-700 pr-12">
-                        <Input
-                          id="password"
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Sua senha"
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          required
-                          className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
-                        />
-                      </div>
+                    <div className="mt-2 relative border-b border-neutral-200 dark:border-neutral-700 pr-12 focus-within:border-transparent focus-within:dark:border-transparent transition-colors">
+                      <Input
+                        id="password"
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Sua senha"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                      />
 
                       <button
                         type="button"
@@ -223,8 +219,7 @@ export default function Login() {
                         title={showPassword ? "Ocultar senha" : "Mostrar senha"}
                         onClick={() => setShowPassword((s) => !s)}
                         className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none shadow-sm
-                          bg-white border border-neutral-200 text-neutral-700
-                          dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
+                          bg-white border border-neutral-200 text-neutral-700"
                       >
                         {showPassword ? (
                           <EyeOff className="h-4 w-4" />

@@ -84,6 +84,14 @@ html.font-extra-large { font-size: 20px; }
 }
 
 @layer components {
+  /* Light-mode proposal highlight (used by wizard & login card) */
+  .proposal-highlight {
+    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(255,255,255,0.98) 100%);
+    box-shadow: 0 20px 40px rgba(2,6,23,0.06);
+    border-radius: 1rem;
+    border: 1px solid rgba(2,6,23,0.03);
+  }
+
   .dark .proposal-highlight {
     background: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%), hsl(var(--card));
     @apply shadow-[0_8px_32px_rgba(0,0,0,0.5)] border-white/5;
