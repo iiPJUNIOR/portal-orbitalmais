@@ -1,4 +1,3 @@
-' dentro do JSX para evitar erros de sintaxe.">
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
