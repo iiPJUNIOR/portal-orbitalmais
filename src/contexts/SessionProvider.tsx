@@ -37,6 +37,14 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     const initializeAuth = async () => {
       try {
+        // Verifica se chegamos aqui via link de recuperação (recovery)
+        const hash = window.location.hash;
+        if (hash.includes("type=recovery")) {
+          // Supabase já autenticou o usuário via fragmento da URL, 
+          // agora levamos ele para a página de reset
+          safeNavigate("/reset-password");
+        }
+
         // @ts-ignore
         const resp = await supabase.auth.getSession?.();
         const currentSession = resp?.data?.session ?? resp?.session ?? null;
@@ -61,7 +69,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       setSession(s);
       setUser(s?.user ?? null);
       
-      if (event === "SIGNED_OUT") {
+      if (event === "PASSWORD_RECOVERY") {
+        safeNavigate("/reset-password");
+      } else if (event === "SIGNED_OUT") {
         safeNavigate("/login");
       }
     });
@@ -78,8 +88,15 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     const path = location.pathname;
     const isLoginPage = path === "/login";
+    const isAuthStatus = path === "/auth-status";
+    const isResetPassword = path === "/reset-password";
 
-    if (!session && !isLoginPage) {
+    // Se estiver em recuperação, não redireciona para login
+    if (window.location.hash.includes("type=recovery") || isResetPassword) {
+      return;
+    }
+
+    if (!session && !isLoginPage && !isAuthStatus) {
       safeNavigate("/login");
     } else if (session && isLoginPage) {
       safeNavigate("/");
