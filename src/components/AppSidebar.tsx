@@ -22,7 +22,6 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
-import ThemeToggle from "./ThemeToggle";
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -49,23 +48,12 @@ export function AppSidebar() {
 
   return (
     <Sidebar>
-      <SidebarHeader className="p-3 border-b flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className="logo-light">
-            <img 
-              src="/logo.png" 
-              alt="Control iD" 
-              className="h-8 w-auto object-contain"
-            />
-          </div>
-          <div className="hidden md:block">
-            <span className="text-sm font-semibold">Control iD</span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-        </div>
+      <SidebarHeader className="p-3 border-b flex items-center justify-center">
+        <img 
+          src="/logo.png" 
+          alt="Control iD" 
+          className="h-8 w-auto object-contain"
+        />
       </SidebarHeader>
       
       <SidebarContent>

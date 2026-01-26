@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import { SessionProvider } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const queryClient = new QueryClient();
 
@@ -23,9 +24,12 @@ const AppContent = () => (
         <div className="flex min-h-screen w-full">
           <AppSidebar />
           <main className="flex-1 overflow-auto bg-gray-50">
-            <div className="p-4 flex items-center border-b bg-white sticky top-0 z-40 lg:hidden">
+            <div className="p-4 flex items-center border-b bg-white sticky top-0 z-40">
               <SidebarTrigger />
               <span className="ml-4 font-semibold">Menu</span>
+              <div className="ml-auto">
+                <ThemeToggle />
+              </div>
             </div>
             <Routes>
               <Route path="/" element={<Index />} />

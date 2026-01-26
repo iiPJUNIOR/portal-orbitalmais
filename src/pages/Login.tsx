@@ -55,7 +55,7 @@ export default function Login() {
       {isLoggingIn && (
         <div className="absolute inset-0 z-[100] flex flex-col items-center justify-center bg-white animate-in fade-in duration-500">
           <div className="flex flex-col items-center space-y-4">
-            <div className="logo-light p-6 rounded-2xl animate-bounce">
+            <div className="p-6 rounded-2xl">
               <img 
                 src="/logo.png" 
                 alt="Control iD" 
@@ -84,7 +84,7 @@ export default function Login() {
           />
           
           <div className="relative z-10">
-            <div className="logo-light inline-block p-4 rounded-xl">
+            <div className="inline-block p-4 rounded-xl">
               <img 
                 src="/logo.png" 
                 alt="Control iD" 
@@ -112,7 +112,7 @@ export default function Login() {
         <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
           <div className="w-full max-w-[420px] py-8">
             <div className="lg:hidden flex justify-center mb-8">
-              <div className="logo-light p-2 rounded-xl">
+              <div className="p-2 rounded-xl">
                 <img 
                   src="/logo.png" 
                   alt="Control iD" 
