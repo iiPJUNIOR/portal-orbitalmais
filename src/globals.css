@@ -67,6 +67,12 @@
   }
 }
 
+/* Prevent vertical scroll on the document root while allowing internal scroll on components that explicitly use overflow-auto */
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
 html.font-small { font-size: 14px; }
 html.font-medium { font-size: 16px; }
 html.font-large { font-size: 18px; }
