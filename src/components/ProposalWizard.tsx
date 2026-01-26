@@ -1,3 +1,4 @@
+' characters with HTML entities in the help text.">
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
