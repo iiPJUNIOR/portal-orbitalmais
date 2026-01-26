@@ -1,3 +1,4 @@
+'}' para escapar o caractere '>'.">
 "use client";
 
 import React, { useState, useEffect, useRef } from 'react';
@@ -409,7 +410,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
-                <span className="font-bold">Arquivo > Exportar > Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
+                <span className="font-bold">Arquivo {'>'} Exportar {'>'} Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
               </p>
             </div>
             
