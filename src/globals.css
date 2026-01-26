@@ -36,7 +36,6 @@
   }
 
   .dark {
-    /* Paleta Deep Slate/Zinc */
     --background: 220 14% 10%; 
     --foreground: 210 40% 98%;
 
@@ -46,7 +45,7 @@
     --popover: 220 14% 14%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 262 83% 65%; /* Roxo mais vibrante no escuro */
+    --primary: 262 83% 65%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 220 14% 18%;
@@ -61,13 +60,12 @@
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
 
-    --border: 220 14% 25%; /* Bordas mais visíveis para estrutura */
+    --border: 220 14% 25%;
     --input: 220 14% 18%;
     --ring: 262 83% 65%;
   }
 }
 
-/* Font Scaling Logic */
 html.font-small { font-size: 14px; }
 html.font-medium { font-size: 16px; }
 html.font-large { font-size: 18px; }
@@ -84,37 +82,29 @@ html.font-extra-large { font-size: 20px; }
 }
 
 @layer components {
-  /* Estilo refinado para o card com foco nas sombras de borda */
+  /* Sombra muito mais intensa e profunda para o card 'popar' do fundo */
   .proposal-highlight {
     position: relative;
-    z-index: 1;
+    z-index: 10;
     background: hsl(var(--card));
     border-radius: 1.5rem;
     
-    /* Sombra de borda profunda e focada (Drop Shadow) */
+    /* Mix de sombras para criar profundidade real nas bordas */
     box-shadow: 
-      0 0 0 1px rgba(0, 0, 0, 0.05),
-      0 10px 15px -3px rgba(0, 0, 0, 0.1),
-      0 20px 25px -5px rgba(0, 0, 0, 0.1),
-      0 30px 50px -12px rgba(0, 0, 0, 0.15);
+      0 0 0 1px rgba(0, 0, 0, 0.08),        /* Borda fina de definição */
+      0 10px 30px -5px rgba(0, 0, 0, 0.2),  /* Sombra de proximidade */
+      0 30px 60px -10px rgba(0, 0, 0, 0.25); /* Sombra de profundidade/distância */
 
     border: 1px solid rgba(0, 0, 0, 0.1);
     overflow: hidden;
   }
 
-  /* Removido o pseudo-elemento que criava o brilho central */
-  .proposal-highlight::before {
-    display: none;
-  }
-
-  /* Ajuste específico para o modo escuro */
   .dark .proposal-highlight {
     background: hsl(var(--card));
     box-shadow: 
-      0 0 0 1px rgba(255, 255, 255, 0.05),
-      0 20px 25px -5px rgba(0, 0, 0, 0.5),
-      0 30px 60px -12px rgba(0, 0, 0, 0.7);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+      0 0 0 1px rgba(255, 255, 255, 0.1),
+      0 25px 50px -12px rgba(0, 0, 0, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.05);
   }
 
   .header-blur {
