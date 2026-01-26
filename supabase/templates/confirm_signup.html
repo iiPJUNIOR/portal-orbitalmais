@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; background-color: #f4f4f7; color: #333; margin: 0; padding: 0; }
+    .container { width: 100%; max-width: 600px; margin: 0 auto; padding: 40px 20px; }
+    .card { background-color: #ffffff; border-radius: 24px; padding: 40px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); border: 1px solid #e1e1e8; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .logo { height: 45px; width: auto; margin-bottom: 20px; display: block; margin-left: auto; margin-right: auto; }
+    .title { font-size: 24px; font-weight: 800; color: #1a1a1a; margin-bottom: 15px; text-align: center; }
+    .text { font-size: 16px; line-height: 1.6; color: #666; margin-bottom: 30px; text-align: center; }
+    .button-container { text-align: center; }
+    .button { background-color: #7c3aed; color: #ffffff !important; padding: 16px 32px; border-radius: 12px; text-decoration: none; font-weight: bold; font-size: 16px; display: inline-block; }
+    .footer { text-align: center; font-size: 12px; color: #999; margin-top: 30px; }
+    .divider { height: 1px; background-color: #eeeeee; margin: 30px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card">
+      <div class="header">
+        <!-- LEMBRE-SE DE USAR A URL PÚBLICA DO SEU STORAGE AQUI -->
+        <img src="https://www.controlid.com.br/assets/img/logo.png" alt="Control iD" class="logo">
+      </div>
+      <h1 class="title">Bem-vindo à Control iD!</h1>
+      <p class="text">
+        Olá! Ficamos felizes em ter você no <strong>Gerador de Propostas</strong>.<br>
+        Para começar a criar seus orçamentos, precisamos apenas que você confirme sua conta clicando no botão abaixo.
+      </p>
+      <div class="button-container">
+        <a href="{{ .ConfirmationURL }}" class="button">Confirmar Minha Conta</a>
+      </div>
+      <div class="divider"></div>
+      <p class="text" style="font-size: 14px; margin-bottom: 0;">
+        Se você não criou esta conta, pode ignorar este e-mail.
+      </p>
+    </div>
+    <div class="footer">
+      &copy; 2024 Control iD - Inovação e Tecnologia Brasileira<br>
+      Este é um e-mail automático, por favor não responda.
+    </div>
+  </div>
+</body>
+</html>
