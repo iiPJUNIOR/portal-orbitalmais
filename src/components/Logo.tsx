@@ -1,11 +1,13 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
 
 type LogoProps = React.ImgHTMLAttributes<HTMLImageElement> & {
   lightSrc?: string;
   darkSrc?: string;
   alt?: string;
+  forceWhite?: boolean; // when true, prefer darkSrc or apply filter to make the image appear white
 };
 
 const THEME_KEY = "theme";
@@ -14,9 +16,11 @@ export default function Logo({
   lightSrc = "/logo.png",
   darkSrc = "/logo-branco-e-vermelho-1.svg",
   alt = "Control iD",
+  className,
+  forceWhite = false,
   ...rest
 }: LogoProps) {
-  const getInitial = () => {
+  const getInitialIsDark = () => {
     try {
       const stored = localStorage.getItem(THEME_KEY);
       if (stored === "dark") return true;
@@ -31,18 +35,17 @@ export default function Logo({
     }
   };
 
-  const [isDark, setIsDark] = useState<boolean>(getInitial);
+  const [isDark, setIsDark] = useState<boolean>(getInitialIsDark);
 
   useEffect(() => {
     const root = document.documentElement;
 
-    // Observe changes on the <html> class (to react to theme toggles)
     const mo = new MutationObserver(() => {
       setIsDark(root.classList.contains("dark"));
     });
+
     mo.observe(root, { attributes: true, attributeFilter: ["class"] });
 
-    // Also listen for storage changes (theme toggled in another tab)
     const onStorage = (e: StorageEvent) => {
       if (e.key === THEME_KEY) {
         setIsDark(e.newValue === "dark");
@@ -56,7 +59,20 @@ export default function Logo({
     };
   }, []);
 
-  const src = isDark ? darkSrc : lightSrc;
+  // If forceWhite is requested, prefer darkSrc (often a white SVG).
+  // If no darkSrc is available, use lightSrc but apply a CSS filter to visually turn it white.
+  const chosenSrc = forceWhite ? (darkSrc || lightSrc) : (isDark ? darkSrc : lightSrc);
+  const needsFilter = forceWhite && !darkSrc;
 
-  return <img src={src} alt={alt} {...rest} />;
+  // Tailwind filter utilities: use 'filter invert brightness-0' to make a raster image appear white.
+  const filterClass = needsFilter ? "filter invert brightness-0" : "";
+
+  return (
+    <img
+      src={chosenSrc}
+      alt={alt}
+      className={cn("inline-block", className ?? "", filterClass)}
+      {...rest}
+    />
+  );
 }
