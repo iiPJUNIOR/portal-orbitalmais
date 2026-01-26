@@ -47,19 +47,19 @@ export function AppSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="p-3 border-b flex items-center justify-center">
+    <Sidebar className="border-r">
+      <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
         <img 
           src="/logo.png" 
           alt="Control iD" 
-          className="h-8 w-auto object-contain"
+          className="h-7 w-auto object-contain"
         />
       </SidebarHeader>
       
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupLabel>Menu Principal</SidebarGroupLabel>
-          <SidebarGroupContent>
+          <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">Sistema</SidebarGroupLabel>
+          <SidebarGroupContent className="px-2">
             <SidebarMenu>
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
@@ -67,9 +67,10 @@ export function AppSidebar() {
                     onClick={() => navigate(item.url)}
                     isActive={location.pathname === item.url}
                     tooltip={item.title}
+                    className="rounded-lg px-3 py-2 transition-all duration-200 hover:bg-muted"
                   >
-                    <item.icon />
-                    <span>{item.title}</span>
+                    <item.icon className="h-4 w-4" />
+                    <span className="font-medium text-sm">{item.title}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -78,26 +79,28 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
 
-      <SidebarFooter className="p-4 border-t bg-gray-50/50">
-        <div className="flex items-center justify-between mb-3">
+      <SidebarFooter className="p-3 border-t bg-muted/10">
+        <div className="mb-2 px-2">
           {user ? (
-            <div className="flex items-center gap-2">
-              <User className="h-3 w-3 flex-shrink-0" />
-              <span className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</span>
+            <div className="flex items-center gap-2 overflow-hidden">
+              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                <User className="h-3 w-3 text-primary" />
+              </div>
+              <span className="text-[10px] font-medium text-muted-foreground truncate">{user.email}</span>
             </div>
           ) : (
-            <div className="text-xs text-muted-foreground">Não autenticado</div>
+            <div className="text-[10px] text-muted-foreground">Não autenticado</div>
           )}
         </div>
 
-        <SidebarMenu>
+        <SidebarMenu className="px-2">
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={handleLogout}
-              className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+              className="w-full text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/5 rounded-lg transition-colors"
             >
-              <LogOut className="h-4 w-4" />
-              <span>Sair da conta</span>
+              <LogOut className="h-3.5 w-3.5" />
+              <span>Sair do sistema</span>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>

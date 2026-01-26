@@ -2,333 +2,114 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Root variables (light by default) */
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 3.9%;
+    --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 3.9%;
+    --card-foreground: 222 47% 11%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 3.9%;
+    --popover-foreground: 222 47% 11%;
 
-    --primary: 270 60% 50%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
+    --secondary: 210 40% 96.1%;
+    --secondary-foreground: 222 47% 11.2%;
 
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
 
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222 47% 11.2%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 270 60% 50%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 262 83% 58%;
 
-    --radius: 0.75rem;
-
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 270 60% 50%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 270 60% 50%;
+    --radius: 0.5rem;
   }
 
-  /* Dark theme variables — these keep the same semantic roles but with dark values */
   .dark {
-    --background: 210 9% 6%;          /* slightly blueish dark */
-    --foreground: 0 0% 96%;
+    --background: 222 47% 4%;
+    --foreground: 210 40% 98%;
 
-    --card: 210 8% 8%;
-    --card-foreground: 0 0% 96%;
+    --card: 222 47% 6%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 210 8% 9%;
-    --popover-foreground: 0 0% 96%;
+    --popover: 222 47% 5%;
+    --popover-foreground: 210 40% 98%;
 
-    --primary: 270 60% 50%;
-    --primary-foreground: 0 0% 98%;
+    --primary: 262 83% 58%;
+    --primary-foreground: 210 40% 98%;
 
-    --secondary: 210 8% 12%;
-    --secondary-foreground: 0 0% 96%;
+    --secondary: 217.2 32.6% 12%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 210 8% 12%;
-    --muted-foreground: 0 0% 67%;
+    --muted: 217.2 32.6% 12%;
+    --muted-foreground: 215 20.2% 65.1%;
 
-    --accent: 210 8% 12%;
-    --accent-foreground: 0 0% 96%;
+    --accent: 217.2 32.6% 12%;
+    --accent-foreground: 210 40% 98%;
 
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 98%;
+    --destructive-foreground: 210 40% 98%;
 
-    /* Make borders a subtle dark-gray that doesn't draw attention */
-    --border: 210 6% 32%;
-
-    --input: 210 9% 12%;
-    --ring: 270 60% 50%;
-
-    --sidebar-background: 210 7% 7%;
-    --sidebar-foreground: 220 5% 82%;
-    --sidebar-primary: 270 60% 50%;
-    --sidebar-primary-foreground: 0 0% 98%;
+    --border: 217.2 32.6% 17.5%;
+    --input: 217.2 32.6% 17.5%;
+    --ring: 262 83% 58%;
   }
 }
 
-/* Base mapping and neutral styles that respect the CSS variables */
 @layer base {
   * {
-    box-sizing: border-box;
+    @apply border-border;
   }
-
-  html, body, #root {
-    height: 100%;
-  }
-
   body {
-    background-color: hsl(var(--background));
-    color: hsl(var(--foreground));
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
-
-  /*
-    Dark-mode overrides for common Tailwind utility classes and elements.
-    We use the semantic variables defined above so the visual hierarchy
-    (cards, popovers, inputs, text, borders, etc.) stays consistent
-    with the light theme while using darker backgrounds and readable contrast.
-  */
-  .dark {
-    /* Generic background replacements */
-    .bg-white,
-    .bg-neutral-50,
-    .bg-gray-50,
-    .bg-slate-50,
-    .bg-neutral-100 {
-      background-color: hsl(var(--card)) !important;
-      color: hsl(var(--card-foreground)) !important;
-    }
-
-    /* Slightly elevated panels */
-    .bg-gray-100,
-    .bg-neutral-200 {
-      background-color: hsl(var(--popover)) !important;
-      color: hsl(var(--popover-foreground)) !important;
-    }
-
-    /* Text color swaps for classes that force dark text */
-    .text-black,
-    .text-neutral-900,
-    .text-gray-900,
-    .text-primary-foreground {
-      color: hsl(var(--card-foreground)) !important;
-    }
-
-    /* Muted text should appear as subtle light */
-    .text-muted-foreground {
-      color: rgba(255, 255, 255, 0.70) !important;
-    }
-
-    /* Border colors: use the subtle dark-gray variable so lines are less prominent */
-    .border,
-    .border-gray-100,
-    .border-neutral-100,
-    .border-slate-100,
-    hr {
-      border-color: hsl(var(--border)) !important;
-    }
-
-    /* Inputs / textareas / selects to match cards and be legible */
-    input,
-    textarea,
-    select,
-    .input,
-    .auth-ui-wrapper input,
-    .auth-ui-wrapper select,
-    .auth-ui-wrapper textarea,
-    .form-control {
-      background-color: hsl(var(--input)) !important;
-      color: hsl(var(--card-foreground)) !important;
-      border-color: hsl(var(--border)) !important;
-    }
-
-    /* Placeholder and helper text */
-    ::placeholder {
-      color: rgba(255, 255, 255, 0.45) !important;
-      opacity: 1;
-    }
-
-    /* Buttons that used white/neutral backgrounds should adopt card or popover */
-    .bg-neutral-100,
-    .bg-neutral-200,
-    .bg-gray-100,
-    .btn-neutral,
-    .btn-ghost {
-      background-color: transparent !important;
-      color: hsl(var(--card-foreground)) !important;
-      border-color: hsl(var(--border)) !important;
-    }
-
-    /* Primary buttons keep primary color but ensure contrast */
-    .bg-primary,
-    .bg-primary-500,
-    .btn-primary {
-      background-color: color-mix(in srgb, hsl(var(--primary)) 80%, black 10%) !important;
-      color: hsl(var(--primary-foreground)) !important;
-      border-color: transparent !important;
-    }
-
-    /* Cards and panels */
-    .card,
-    .card-header,
-    .card-content,
-    .rounded-2xl,
-    .rounded-xl,
-    .rounded-lg,
-    .panel,
-    .panel-body {
-      background-color: hsl(var(--card)) !important;
-      color: hsl(var(--card-foreground)) !important;
-      border-color: hsl(var(--border)) !important;
-    }
-
-    /* Sidebar areas */
-    .sidebar,
-    .sidebar-footer,
-    .sidebar-header,
-    .sidebar-content,
-    .app-sidebar {
-      background-color: hsl(var(--sidebar-background)) !important;
-      color: hsl(var(--sidebar-foreground)) !important;
-      border-color: hsl(var(--sidebar-border)) !important;
-    }
-
-    /* Tables */
-    table,
-    thead,
-    tbody,
-    tr,
-    td,
-    th {
-      color: hsl(var(--card-foreground)) !important;
-    }
-    table {
-      border-color: hsl(var(--border)) !important;
-    }
-    tbody tr:nth-child(even) td {
-      background-color: color-mix(in srgb, hsl(var(--card)) 92%, black 4%) !important;
-    }
-    tbody tr:hover td {
-      background-color: color-mix(in srgb, hsl(var(--card)) 88%, black 6%) !important;
-    }
-
-    /* Toasts / sonner / toasters */
-    .sonner-toast,
-    .toast,
-    .toaster,
-    .radix-toast {
-      background-color: hsl(var(--card)) !important;
-      color: hsl(var(--card-foreground)) !important;
-      border: 1px solid hsl(var(--border)) !important;
-      box-shadow: 0 6px 18px rgba(0,0,0,0.45) !important;
-    }
-
-    /* Dialog / Modal */
-    .dialog,
-    .modal,
-    .modal-content,
-    [role="dialog"] {
-      background-color: hsl(var(--card)) !important;
-      color: hsl(var(--card-foreground)) !important;
-      border-color: hsl(var(--border)) !important;
-    }
-
-    /* Links */
-    a,
-    .link {
-      color: color-mix(in srgb, hsl(var(--primary)) 100%, white 0%) !important;
-    }
-
-    /* Small UI tweaks for better contrast in dark mode */
-    .shadow,
-    .shadow-sm,
-    .shadow-md,
-    .shadow-lg {
-      --tw-shadow-color: rgba(0,0,0,0.55) !important;
-    }
-
-    /* Ensure icons that inherit currentColor match the text color */
-    svg {
-      color: inherit;
-      fill: currentColor;
-    }
-
-    /* Keep subtle hover states readable */
-    .hover\\:bg-gray-50:hover,
-    .hover\\:bg-white:hover,
-    .hover\\:bg-neutral-50:hover {
-      background-color: color-mix(in srgb, hsl(var(--card)) 86%, black 6%) !important;
-    }
-
-    /* Specific fixes for components that rely on bg-white/ text-black */
-    .auth-ui-wrapper .supabase-ui-auth-card,
-    .auth-ui-wrapper .supabase-ui-auth-card * {
-      background-color: hsl(var(--card)) !important;
-      color: hsl(var(--card-foreground)) !important;
-    }
-  }
-
-  /* Logo container simplified: neutral & non-animated */
-  .logo-light {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    border-radius: 0;
-    background-color: transparent;
-    box-shadow: none;
-    transition: none;
-  }
-
-  /* Subtle highlight for the main proposal card so it separates from the page background */
-  .proposal-highlight {
-    background-color: color-mix(in srgb, hsl(var(--card)) 94%, white 6%);
-    box-shadow: 0 18px 40px rgba(2,6,23,0.08);
-    border-radius: 1.25rem;
-    border: 1px solid color-mix(in srgb, hsl(var(--border)) 60%, transparent 40%);
-  }
-
-  /* Dark-mode specific tweak for the proposal highlight: slightly lighter than base card so it stands out subtly */
-  .dark .proposal-highlight {
-    background-color: color-mix(in srgb, hsl(var(--card)) 92%, black 6%);
-    box-shadow: 0 18px 40px rgba(2,6,23,0.18);
-    border: 1px solid color-mix(in srgb, hsl(var(--border)) 80%, black 20%);
-  }
-
-  /* Reduce intensity on small screens slightly */
-  @media (max-width: 640px) {
-    .logo-light {
-      padding: 0;
-      border-radius: 0;
-    }
-    .proposal-highlight {
-      box-shadow: 0 8px 22px rgba(2,6,23,0.06);
-    }
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
   }
 }
 
-/* Keep a few utility helpers unchanged (light theme) but ensure transitions are smooth */
-@layer utilities {
-  .dark-transition {
-    transition: background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+/* Layout architectural adjustments for 'lines meeting' */
+@layer components {
+  .seamless-border-r {
+    @apply border-r border-border;
   }
+  .seamless-border-b {
+    @apply border-b border-border;
+  }
+  
+  /* Make sidebar and header borders feel continuous */
+  .app-layout-grid {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    height: 100vh;
+  }
+
+  /* Refined Proposal Card */
+  .proposal-highlight {
+    @apply bg-card border border-border shadow-sm transition-all duration-300;
+  }
+  
+  .dark .proposal-highlight {
+    @apply bg-card/50 border-border/50 shadow-2xl shadow-black/40;
+  }
+}
+
+/* Specific overrides for consistent borders */
+.dark input, 
+.dark select, 
+.dark textarea {
+  @apply bg-secondary/50 border-border/50 focus:border-primary/50;
+}
+
+/* Neutralize the Dyad badge area */
+.p-4.text-center {
+  @apply opacity-20 hover:opacity-100 transition-opacity;
 }

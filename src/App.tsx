@@ -21,23 +21,26 @@ const AppContent = () => (
     <Route 
       path="/*" 
       element={
-        <div className="flex min-h-screen w-full">
+        <div className="flex min-h-screen w-full bg-background overflow-hidden">
           <AppSidebar />
-          <main className="flex-1 overflow-auto bg-gray-50">
-            <div className="p-4 flex items-center border-b bg-white sticky top-0 z-40">
-              <SidebarTrigger />
-              <span className="ml-4 font-semibold">Menu</span>
-              <div className="ml-auto">
+          <div className="flex-1 flex flex-col min-w-0">
+            <header className="h-14 flex items-center px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
+              <SidebarTrigger className="-ml-1" />
+              <div className="h-4 w-[1px] bg-border mx-4" />
+              <span className="text-sm font-medium text-muted-foreground">Painel Administrativo</span>
+              <div className="ml-auto flex items-center gap-2">
                 <ThemeToggle />
               </div>
-            </div>
-            <Routes>
-              <Route path="/" element={<Index />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="/token-scan" element={<TokenScanner />} />
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </main>
+            </header>
+            <main className="flex-1 overflow-auto bg-muted/20">
+              <Routes>
+                <Route path="/" element={<Index />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="/token-scan" element={<TokenScanner />} />
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </main>
+          </div>
         </div>
       } 
     />
