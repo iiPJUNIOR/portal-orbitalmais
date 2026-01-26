@@ -67,6 +67,23 @@
   }
 }
 
+/* Forçar fundo branco/transparente em campos autopreenchidos */
+input:-webkit-autofill,
+input:-webkit-autofill:hover, 
+input:-webkit-autofill:focus, 
+input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: inherit !important;
+}
+
+.dark input:-webkit-autofill,
+.dark input:-webkit-autofill:hover, 
+.dark input:-webkit-autofill:focus, 
+.dark input:-webkit-autofill:active {
+    -webkit-box-shadow: 0 0 0 30px hsl(var(--card)) inset !important;
+    -webkit-text-fill-color: white !important;
+}
+
 /* Prevent vertical scroll on the document root while allowing internal scroll on components that explicitly use overflow-auto */
 html, body, #root {
   height: 100%;
