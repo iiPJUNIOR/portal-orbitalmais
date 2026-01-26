@@ -287,14 +287,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       case 5:
         return (
           <div className="space-y-6">
-            <div className="p-6 bg-neutral-900 text-white rounded-2xl">
+            <div className="p-6 bg-primary text-white rounded-2xl">
               <Label>VALOR TOTAL DA PROPOSTA (totalPrice)</Label>
               <div className="flex items-center gap-2 mt-2">
-                <span className="text-2xl text-gray-500">R$</span>
+                <span className="text-2xl opacity-70">R$</span>
                 <Input 
                   type="number" 
                   step="0.01"
-                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" 
+                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-white" 
                   value={formData.totalPrice || ""} 
                   onChange={e => {
                     const val = parseFloat(e.target.value || "0");
@@ -302,7 +302,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                   }} 
                 />
               </div>
-              <div className="mt-2 text-sm text-gray-400 font-medium">
+              <div className="mt-2 text-sm text-white/70 font-medium">
                 Visualização: {formatCurrencyBRL(formData.totalPrice)}
               </div>
             </div>
@@ -371,7 +371,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
               <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(5)}>
                 <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
               </Button>
-              <Button className="h-14 rounded-2xl bg-neutral-900 hover:bg-neutral-800" onClick={handleReset}>
+              <Button className="h-14 rounded-2xl" onClick={handleReset}>
                 <RefreshCw className="mr-2 h-5 w-5" /> Novo Orçamento
               </Button>
             </div>
@@ -381,22 +381,22 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     }
   };
 
-  if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin" /></div>;
+  if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
     <Card className="max-w-2xl mx-auto shadow-2xl rounded-3xl overflow-hidden border-none">
-      <CardHeader className="bg-neutral-900 text-white p-8">
+      <CardHeader className="bg-primary text-white p-8">
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="text-2xl font-black">
               {currentStep === 6 ? "Concluído" : `Passo ${currentStep}`}
             </CardTitle>
-            <CardDescription className="text-gray-400">
+            <CardDescription className="text-white/70">
               {currentStep === 6 ? "Ações disponíveis" : `Gerenciando ${formData.selectedProducts.length} itens no orçamento.`}
             </CardDescription>
           </div>
           {currentStep < 6 && (
-            <div className="text-xs bg-white/10 px-3 py-1 rounded-full text-white/70">
+            <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
               {currentStep}/5
             </div>
           )}
@@ -412,7 +412,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </Button>
             <div className="flex gap-2">
               {currentStep === 5 ? (
-                <Button className="rounded-full px-8 bg-primary hover:bg-primary/90" onClick={() => handleFinish()}>
+                <Button className="rounded-full px-8" onClick={() => handleFinish()}>
                   <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
                 </Button>
               ) : (
