@@ -116,7 +116,7 @@ export default function Login() {
           />
           <div className="relative z-10">
             <div className="inline-block p-4 rounded-xl">
-              <Logo className="h-8 w-auto text-white fill-current" />
+              <Logo forceWhite className="h-8 w-auto" />
             </div>
           </div>
           <div className="relative z-10">
@@ -140,7 +140,7 @@ export default function Login() {
                     </CardDescription>
                   </div>
                   <div className="hidden sm:block">
-                    <Logo className="h-8 w-auto text-white opacity-90 fill-current" />
+                    <Logo forceWhite className="h-8 w-auto opacity-90" />
                   </div>
                 </div>
               </CardHeader>
