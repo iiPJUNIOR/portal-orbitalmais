@@ -22,6 +22,7 @@ import {
 import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
+import ThemeToggle from "./ThemeToggle";
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -79,15 +80,23 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4 border-t bg-gray-50/50">
-        <SidebarMenu>
-          {user && (
-            <SidebarMenuItem className="mb-2 px-2">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground overflow-hidden">
-                <User className="h-3 w-3 flex-shrink-0" />
-                <span className="truncate">{user.email}</span>
-              </div>
-            </SidebarMenuItem>
+        <div className="flex items-center justify-between mb-3">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <User className="h-3 w-3 flex-shrink-0" />
+              <span className="text-xs text-muted-foreground truncate max-w-[160px]">{user.email}</span>
+            </div>
+          ) : (
+            <div className="text-xs text-muted-foreground">Não autenticado</div>
           )}
+
+          {/* Theme toggle placed here for quick access */}
+          <div className="ml-2">
+            <ThemeToggle />
+          </div>
+        </div>
+
+        <SidebarMenu>
           <SidebarMenuItem>
             <SidebarMenuButton 
               onClick={handleLogout}
