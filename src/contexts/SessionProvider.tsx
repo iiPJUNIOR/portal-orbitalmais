@@ -37,17 +37,18 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     const initializeAuth = async () => {
       try {
-        // Verifica se chegamos aqui via link de recuperação (recovery)
+        // Detecção manual via Hash (Backup para quando o onAuthStateChange demora)
         const hash = window.location.hash;
-        if (hash.includes("type=recovery")) {
-          // Supabase já autenticou o usuário via fragmento da URL, 
-          // agora levamos ele para a página de reset
-          safeNavigate("/reset-password");
+        if (hash.includes("type=recovery") || hash.includes("access_token=")) {
+          console.log("[SessionProvider] Detectado link de recuperação via Hash");
+          // Pequeno delay para garantir que o Supabase processou o token antes do redirecionamento
+          setTimeout(() => {
+            if (mounted) safeNavigate("/reset-password");
+          }, 100);
         }
 
-        // @ts-ignore
-        const resp = await supabase.auth.getSession?.();
-        const currentSession = resp?.data?.session ?? resp?.session ?? null;
+        const resp = await supabase.auth.getSession();
+        const currentSession = resp?.data?.session ?? null;
         
         if (mounted) {
           setSession(currentSession);
@@ -55,20 +56,21 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
           setInitializing(false);
         }
       } catch (err) {
-        console.warn("Auth init error", err);
+        console.warn("[SessionProvider] Erro ao inicializar auth", err);
         if (mounted) setInitializing(false);
       }
     };
 
     initializeAuth();
 
-    // @ts-ignore
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
       if (!mounted) return;
       
+      console.log("[SessionProvider] Evento de Auth:", event);
       setSession(s);
       setUser(s?.user ?? null);
       
+      // O Supabase dispara PASSWORD_RECOVERY quando detecta o token na URL
       if (event === "PASSWORD_RECOVERY") {
         safeNavigate("/reset-password");
       } else if (event === "SIGNED_OUT") {
@@ -82,28 +84,25 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     };
   }, []);
 
-  // Efeito de Redirecionamento Protegido
+  // Redirecionamento de rotas protegidas
   useEffect(() => {
     if (initializing) return;
 
     const path = location.pathname;
-    const isLoginPage = path === "/login";
-    const isAuthStatus = path === "/auth-status";
-    const isResetPassword = path === "/reset-password";
-
-    // Se estiver em recuperação, não redireciona para login
-    if (window.location.hash.includes("type=recovery") || isResetPassword) {
+    const hash = window.location.hash;
+    
+    // Ignora redirecionamento se estivermos em fluxo de recuperação
+    if (hash.includes("type=recovery") || path === "/reset-password" || path === "/auth-status") {
       return;
     }
 
-    if (!session && !isLoginPage && !isAuthStatus) {
+    if (!session && path !== "/login") {
       safeNavigate("/login");
-    } else if (session && isLoginPage) {
+    } else if (session && path === "/login") {
       safeNavigate("/");
     }
   }, [session, location.pathname, initializing]);
 
-  // Enquanto estiver inicializando, mostra uma tela de splash elegante
   if (initializing) {
     return (
       <div className="min-h-screen w-full flex flex-col items-center justify-center bg-white">
