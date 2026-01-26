@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Loader2, Eye, EyeOff } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -113,7 +114,7 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full relative bg-white overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
-        {/* Lado Esquerdo: Imagem (Apenas Desktop) */}
+        {/* Left side: promotional image (desktop only) */}
         <div className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white">
           <div 
             className="absolute inset-0 z-0 bg-cover bg-center opacity-40"
@@ -147,126 +148,129 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Lado Direito: Formulário */}
+        {/* Right side: centered Card matching ProposalWizard steps */}
         <div className="flex items-center justify-center p-8 bg-white overflow-y-auto">
-          <div className="w-full max-w-[420px] py-8">
-            <div className="lg:hidden flex justify-center mb-8">
-              <div className="p-2 rounded-xl">
-                <img 
-                  src="/logo.png" 
-                  alt="Control iD" 
-                  className="h-10 w-auto"
-                />
-              </div>
-            </div>
-
-            <div className="mb-6 text-center lg:text-left">
-              <h1 className="text-4xl font-black tracking-tighter text-gray-900 mb-2">Login</h1>
-              <p className="text-gray-500">Acesse sua conta para continuar.</p>
-            </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6 bg-white p-6 rounded-xl shadow-sm border">
-              {/* Email - minimal input with underline */}
-              <div>
-                <Label htmlFor="email" className="text-sm">E-mail</Label>
-                <div className="mt-2 relative">
-                  <div className="border-b border-neutral-200 dark:border-neutral-700">
-                    <Input
-                      id="email"
-                      type="email"
-                      placeholder="email@empresa.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
-                    />
+          <div className="w-full max-w-[480px]">
+            <Card>
+              <CardHeader className="bg-primary text-white p-8">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <CardTitle className="text-2xl font-black">
+                      {mode === "sign-in" ? "Acessar Painel" : "Criar Conta"}
+                    </CardTitle>
+                    <CardDescription className="text-white/80 mt-1">
+                      {mode === "sign-in" ? "Faça login com seu e-mail e senha" : "Crie sua conta para acessar o sistema"}
+                    </CardDescription>
+                  </div>
+                  <div className="hidden sm:block">
+                    <img src="/logo.png" alt="logo" className="h-8 w-auto opacity-90" />
                   </div>
                 </div>
-              </div>
+              </CardHeader>
 
-              {/* Password - minimal input + eye button (solid background) */}
-              <div>
-                <Label htmlFor="password" className="text-sm">Senha</Label>
-                <div className="mt-2 relative">
-                  <div className="border-b border-neutral-200 dark:border-neutral-700 pr-12">
-                    <Input
-                      id="password"
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Sua senha"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
-                    />
+              <CardContent className="p-6">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div>
+                    <Label htmlFor="email" className="text-sm">E-mail</Label>
+                    <div className="mt-2 relative">
+                      <div className="border-b border-neutral-200 dark:border-neutral-700">
+                        <Input
+                          id="email"
+                          type="email"
+                          placeholder="email@empresa.com"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          required
+                          className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  <button
-                    type="button"
-                    aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    title={showPassword ? "Ocultar senha" : "Mostrar senha"}
-                    onClick={() => setShowPassword((s) => !s)}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none shadow-sm
-                      bg-white border border-neutral-200 text-neutral-700
-                      dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
-                  >
-                    {showPassword ? (
-                      <EyeOff className="h-4 w-4" />
-                    ) : (
-                      <Eye className="h-4 w-4" />
-                    )}
-                  </button>
+                  <div>
+                    <Label htmlFor="password" className="text-sm">Senha</Label>
+                    <div className="mt-2 relative">
+                      <div className="border-b border-neutral-200 dark:border-neutral-700 pr-12">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          placeholder="Sua senha"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          required
+                          className="bg-transparent border-none px-0 py-3 focus-visible:ring-0 focus-visible:border-none placeholder:text-muted-foreground"
+                        />
+                      </div>
+
+                      <button
+                        type="button"
+                        aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                        title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                        onClick={() => setShowPassword((s) => !s)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-full focus:outline-none shadow-sm
+                          bg-white border border-neutral-200 text-neutral-700
+                          dark:bg-neutral-800 dark:border-neutral-700 dark:text-white"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <input id="remember" type="checkbox" className="h-4 w-4" />
+                      <label htmlFor="remember" className="text-sm text-muted-foreground">Lembrar</label>
+                    </div>
+
+                    <div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!email) return toast.error("Preencha o e-mail para recuperar a senha");
+                          setLoading(true);
+                          supabase.auth.resetPasswordForEmail(email).then(({ data, error }) => {
+                            if (error) toast.error("Erro ao enviar link de recuperação: " + (error.message || ""));
+                            else toast.success("Link de recuperação enviado para o seu e-mail");
+                          }).finally(() => setLoading(false));
+                        }}
+                        className="text-sm text-muted-foreground underline"
+                      >
+                        Esqueceu a senha?
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Button type="submit" className="h-11" disabled={loading}>
+                      {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2 inline" /> : null}
+                      {mode === "sign-in" ? "Acessar Painel" : "Criar Conta"}
+                    </Button>
+
+                    <div className="text-center text-sm text-muted-foreground">
+                      {mode === "sign-in" ? (
+                        <>
+                          Não tem conta?{" "}
+                          <button type="button" className="underline" onClick={() => setMode("sign-up")}>Criar conta</button>
+                        </>
+                      ) : (
+                        <>
+                          Já tem conta?{" "}
+                          <button type="button" className="underline" onClick={() => setMode("sign-in")}>Entrar</button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </form>
+
+                <div className="mt-6 pt-6 border-t text-center text-sm text-gray-400">
+                  Precisa de ajuda? <span className="text-black font-semibold cursor-pointer hover:underline">Fale com o suporte</span>
                 </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <input id="remember" type="checkbox" className="h-4 w-4" />
-                  <label htmlFor="remember" className="text-sm text-muted-foreground">Lembrar</label>
-                </div>
-
-                <div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!email) return toast.error("Preencha o e-mail para recuperar a senha");
-                      setLoading(true);
-                      supabase.auth.resetPasswordForEmail(email).then(({ data, error }) => {
-                        if (error) toast.error("Erro ao enviar link de recuperação: " + (error.message || ""));
-                        else toast.success("Link de recuperação enviado para o seu e-mail");
-                      }).finally(() => setLoading(false));
-                    }}
-                    className="text-sm text-muted-foreground underline"
-                  >
-                    Esqueceu a senha?
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-                <Button type="submit" className="h-11" disabled={loading}>
-                  {loading ? <Loader2 className="animate-spin h-4 w-4 mr-2 inline" /> : null}
-                  {mode === "sign-in" ? "Acessar Painel" : "Criar Conta"}
-                </Button>
-
-                <div className="text-center text-sm text-muted-foreground">
-                  {mode === "sign-in" ? (
-                    <>
-                      Não tem conta?{" "}
-                      <button type="button" className="underline" onClick={() => setMode("sign-up")}>Criar conta</button>
-                    </>
-                  ) : (
-                    <>
-                      Já tem conta?{" "}
-                      <button type="button" className="underline" onClick={() => setMode("sign-in")}>Entrar</button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </form>
-
-            <div className="mt-6 pt-6 border-t text-center text-sm text-gray-400">
-              Precisa de ajuda? <span className="text-black font-semibold cursor-pointer hover:underline">Fale com o suporte</span>
-            </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
