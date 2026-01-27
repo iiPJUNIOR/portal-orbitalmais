@@ -88,25 +88,17 @@ export async function updateUserPermission(userId: string, permission: 'history'
  * Grant permission(s) by email.
  * permission: 'history' | 'settings' | 'both'
  *
- * Note: This looks up user_settings by seller_email and updates the appropriate column(s).
- * If no record exists with that email, throws and asks the admin to ask the user to sign-in/save profile first.
+ * This will:
+ *  - If a user_settings row exists for the given email, update it.
+ *  - Otherwise create a row with seller_email set and the requested permissions.
+ *
+ * This allows admins to pre-grant permissions for users who haven't yet saved their profile.
  */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
-  
-  // Primeiro, verificamos se o usuário já existe na tabela de configurações
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("user_id, can_view_history, can_access_settings")
-    .ilike("seller_email", cleanEmail)
-    .maybeSingle();
+  if (!cleanEmail) throw new Error("E-mail inválido");
 
-  if (error) throw error;
-  
-  if (!data) {
-    throw new Error("Este e-mail ainda não possui um perfil no sistema. Peça para o usuário realizar o primeiro login e salvar o perfil nas Configurações.");
-  }
-
+  // Build updates
   const updates: Record<string, any> = {};
   if (permission === 'history') updates.can_view_history = true;
   else if (permission === 'settings') updates.can_access_settings = true;
@@ -115,12 +107,40 @@ export async function grantPermissionByEmail(email: string, permission: 'history
     updates.can_access_settings = true;
   }
 
-  const { error: updateError } = await supabase
+  // Look for an existing settings row by seller_email (case-insensitive)
+  const { data: existing, error: selectErr } = await supabase
     .from("user_settings")
-    .update(updates)
-    .eq("user_id", data.user_id);
+    .select("*")
+    .ilike("seller_email", cleanEmail)
+    .maybeSingle();
 
-  if (updateError) throw updateError;
+  if (selectErr) throw selectErr;
+
+  if (existing) {
+    // Update the existing row (keep user_id if present)
+    const payload = { ...updates, updated_at: new Date().toISOString() };
+    const { error: updateErr } = await supabase
+      .from("user_settings")
+      .update(payload)
+      .eq("id", existing.id);
+    if (updateErr) throw updateErr;
+    return;
+  }
+
+  // No existing row — create a placeholder settings record tied to the email.
+  // user_id remains null until the user logs in and saves their profile.
+  const insertPayload: any = {
+    seller_email: cleanEmail,
+    ...updates,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: insertErr } = await supabase
+    .from("user_settings")
+    .insert(insertPayload);
+
+  if (insertErr) throw insertErr;
 }
 
 /**
@@ -132,12 +152,56 @@ export async function grantAccessByEmail(email: string): Promise<void> {
 
 /**
  * Upsert user settings.
+ *
+ * IMPORTANT: This function now also attempts to detect a pre-existing user_settings row
+ * created by an admin keyed by seller_email and link it to the authenticated user by setting user_id.
+ * This preserves permissions granted by email before the user saved their profile.
  */
 export async function saveUserSettings(payload: Partial<UserSettings>): Promise<UserSettings> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error("No authenticated user");
 
+    const userEmail = (payload.seller_email || user.email || "").trim().toLowerCase();
+
+    // 1) If there's an existing row keyed by seller_email without a user_id, attach it to this user
+    if (userEmail) {
+      const { data: byEmail, error: byEmailErr } = await supabase
+        .from("user_settings")
+        .select("*")
+        .ilike("seller_email", userEmail)
+        .maybeSingle();
+
+      if (byEmailErr) {
+        console.warn("saveUserSettings: lookup by email failed", byEmailErr);
+      } else if (byEmail && !byEmail.user_id) {
+        // Merge existing server row with incoming payload, and set user_id to current user
+        const merged = {
+          ...byEmail,
+          ...payload,
+          user_id: user.id,
+          updated_at: new Date().toISOString(),
+        };
+        // Use update by id to avoid creating duplicate rows
+        const { data: updated, error: updateErr } = await supabase
+          .from("user_settings")
+          .update(merged)
+          .eq("id", byEmail.id)
+          .select()
+          .single();
+
+        if (updateErr) {
+          console.warn("saveUserSettings: failed to attach byEmail record to user", updateErr);
+        } else {
+          try {
+            window.dispatchEvent(new Event("user_settings_changed"));
+          } catch {}
+          return updated as UserSettings;
+        }
+      }
+    }
+
+    // 2) Standard upsert by user_id (will create or update the user's settings)
     const { data, error } = await supabase
       .from("user_settings")
       .upsert({
