@@ -88,16 +88,41 @@ export async function updateUserPermission(userId: string, permission: 'history'
  * Grant permission(s) by email.
  * permission: 'history' | 'settings' | 'both'
  *
- * This will:
- *  - If a user_settings row exists for the given email, update it.
- *  - Otherwise create a row with seller_email set and the requested permissions.
- *
- * This allows admins to pre-grant permissions for users who haven't yet saved their profile.
+ * This implementation calls an Edge Function that performs the upsert using
+ * the service role key (bypassing RLS) so admins can pre-grant permissions
+ * for users who haven't yet saved their profile.
  */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) throw new Error("E-mail inválido");
 
+  try {
+    // Call Edge Function (deployed to Supabase Functions) to perform privileged upsert.
+    const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/grant-permission";
+    const resp = await fetch(FN_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ email: cleanEmail, permission }),
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text();
+      throw new Error(`Grant function failed: ${resp.status} ${text}`);
+    }
+
+    const json = await resp.json().catch(() => ({}));
+    // If function reports success, return
+    if (json && json.success) return;
+
+    // If function didn't explicitly return success, fallback to previous behavior:
+    // attempt a safe upsert via Supabase client (this may fail due to RLS).
+  } catch (fnErr) {
+    console.warn("grantPermissionByEmail: edge function call failed, falling back to direct DB call:", fnErr);
+  }
+
+  // Fallback behavior (may be restricted by RLS): try to update existing row or insert with seller_email.
   // Build updates
   const updates: Record<string, any> = {};
   if (permission === 'history') updates.can_view_history = true;
@@ -127,8 +152,7 @@ export async function grantPermissionByEmail(email: string, permission: 'history
     return;
   }
 
-  // No existing row — create a placeholder settings record tied to the email.
-  // user_id remains null until the user logs in and saves their profile.
+  // No existing row — create a placeholder settings record keyed by email.
   const insertPayload: any = {
     seller_email: cleanEmail,
     ...updates,
