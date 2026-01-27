@@ -14,6 +14,7 @@ export type UserSettings = {
   complement_sem_ids_column?: string | null;
   has_full_access?: boolean;
   font_size?: 'small' | 'medium' | 'large' | 'extra-large';
+  slide_mappings?: Record<string, number>; // Mapeamento palavra-chave -> número do slide
   created_at?: string | null;
   updated_at?: string | null;
 };

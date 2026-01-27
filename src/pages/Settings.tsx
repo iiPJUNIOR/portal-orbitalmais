@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info, LayoutList } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
@@ -34,6 +34,9 @@ export default function Settings() {
   const [sellerEmail, setSellerEmail] = useState("");
   const [sellerPhone, setSellerPhone] = useState("");
   const [fontSize, setFontSize] = useState<string>("medium");
+  const [slideMappings, setSlideMappings] = useState<Record<string, number>>({});
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newSlideNumber, setNewSlideNumber] = useState("");
   
   const [hasFullAccess, setHasFullAccess] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
@@ -71,6 +74,7 @@ export default function Settings() {
         setSellerPhone(s.seller_phone || "");
         setSpreadsheetLink(s.spreadsheet_link || "");
         setFontSize(s.font_size || "medium");
+        setSlideMappings(s.slide_mappings || {});
         setHasFullAccess(!!s.has_full_access || isSuperAdmin);
       } else if (isSuperAdmin) {
         setHasFullAccess(true);
@@ -195,6 +199,33 @@ export default function Settings() {
     }
   };
 
+  const handleAddSlideMapping = async () => {
+    if (!newKeyword.trim() || !newSlideNumber) return;
+    
+    const next = { ...slideMappings, [newKeyword.trim().toLowerCase()]: parseInt(newSlideNumber) };
+    try {
+      setSlideMappings(next);
+      await saveUserSettings({ slide_mappings: next });
+      setNewKeyword("");
+      setNewSlideNumber("");
+      toast.success("Mapeamento de slide adicionado!");
+    } catch (err) {
+      toast.error("Erro ao salvar mapeamento");
+    }
+  };
+
+  const handleRemoveSlideMapping = async (keyword: string) => {
+    const next = { ...slideMappings };
+    delete next[keyword];
+    try {
+      setSlideMappings(next);
+      await saveUserSettings({ slide_mappings: next });
+      toast.success("Mapeamento removido");
+    } catch (err) {
+      toast.error("Erro ao remover mapeamento");
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
@@ -256,6 +287,71 @@ export default function Settings() {
                   <Button onClick={() => navigate("/token-scan")} className="w-full h-12 text-lg font-bold">
                     Mapear Variáveis do Template
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Novo: Mapeamento de Slides por Palavra-Chave */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LayoutList className="h-5 w-5" />
+                    Mapeamento Dinâmico de Slides
+                  </CardTitle>
+                  <CardDescription>
+                    Configure palavras-chave que, se encontradas no nome/descrição do produto, incluem um slide específico.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex gap-3 items-end p-4 bg-muted/30 rounded-xl border border-dashed">
+                    <div className="flex-1 space-y-1.5">
+                      <Label className="text-xs">Palavra-chave</Label>
+                      <Input 
+                        placeholder="Ex: Botoeira" 
+                        value={newKeyword} 
+                        onChange={e => setNewKeyword(e.target.value)} 
+                      />
+                    </div>
+                    <div className="w-24 space-y-1.5">
+                      <Label className="text-xs">Slide nº</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="Ex: 47" 
+                        value={newSlideNumber} 
+                        onChange={e => setNewSlideNumber(e.target.value)} 
+                      />
+                    </div>
+                    <Button onClick={handleAddSlideMapping} size="icon">
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+
+                  <div className="space-y-2">
+                    {Object.entries(slideMappings).map(([kw, slide]) => (
+                      <div key={kw} className="flex items-center justify-between p-3 bg-card border rounded-lg shadow-sm">
+                        <div className="flex items-center gap-4">
+                          <span className="text-sm font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase">
+                            "{kw}"
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            Inclui slide: <strong className="text-foreground">{slide}</strong>
+                          </span>
+                        </div>
+                        <Button 
+                          variant="ghost" 
+                          size="sm" 
+                          className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" 
+                          onClick={() => handleRemoveSlideMapping(kw)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                    {Object.keys(slideMappings).length === 0 && (
+                      <div className="text-center py-6 text-muted-foreground text-sm italic">
+                        Nenhuma palavra-chave cadastrada.
+                      </div>
+                    )}
+                  </div>
                 </CardContent>
               </Card>
 
