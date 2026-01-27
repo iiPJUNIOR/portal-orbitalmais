@@ -104,13 +104,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       const headers = base.headers;
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
-      const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
       
       return base.rows.map((row, idx) => {
         const p: any = {};
         headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
         
-        // Mapeamento dinâmico baseado nas configurações da base
         const name = nameCol && p[nameCol] ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
         const description = descCol && p[descCol] ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
         
@@ -132,7 +130,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     });
   }, [availableBases]);
 
-  // Map of selected product id -> quantity (used to prioritize sorting)
   const selectedMap = React.useMemo(() => {
     const m = new Map<string, number>();
     (formData.selectedProducts || []).forEach((sp: any) => {
@@ -152,19 +149,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       );
     });
 
-    // Sort so selected products come first. Among selected, order by selected quantity descending.
     arr.sort((a, b) => {
       const aq = selectedMap.get(a.id) ?? 0;
       const bq = selectedMap.get(b.id) ?? 0;
-
-      // If one is selected and the other not, the selected one goes first
       if (aq > 0 && bq === 0) return -1;
       if (aq === 0 && bq > 0) return 1;
-
-      // If both selected, sort by quantity descending
       if (aq > 0 && bq > 0) return bq - aq;
-
-      // Otherwise keep original relative order (return 0)
       return 0;
     });
 
@@ -174,25 +164,52 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const fetchCnpjData = async (rawCnpj: string) => {
     if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
     lastFetchedCnpj.current = rawCnpj;
-    const toastId = toast.loading("Buscando CNPJ...");
+    
+    const toastId = toast.loading("Buscando dados da empresa...");
     try {
+      // Tentamos o BrasilAPI (mais estável)
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
-      if (!res.ok) throw new Error();
+      
+      if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error("CNPJ não encontrado na base pública.");
+        }
+        throw new Error("Serviço de busca de CNPJ indisponível no momento.");
+      }
+      
       const data = await res.json();
+      
       setFormData(prev => ({
         ...prev,
         companyName: data.razao_social || data.nome_fantasia || prev.companyName,
-        address: [data.logradouro, data.numero, data.bairro, data.municipio].filter(Boolean).join(", ")
+        address: [
+          data.logradouro, 
+          data.numero, 
+          data.complemento, 
+          data.bairro, 
+          data.municipio, 
+          data.uf
+        ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
       }));
-      toast.success("Dados preenchidos!", { id: toastId });
-    } catch {
-      toast.error("Erro ao carregar CNPJ.", { id: toastId });
+      
+      toast.success("Dados preenchidos automaticamente!", { id: toastId });
+    } catch (err: any) {
+      console.error("Erro fetchCnpjData:", err);
+      // Mensagem mais amigável e específica
+      const errMsg = err.message || "Erro de conexão. Verifique o CNPJ ou preencha manualmente.";
+      toast.error(errMsg, { id: toastId });
+      // Resetamos a referência para permitir que o usuário tente novamente se corrigir
+      lastFetchedCnpj.current = ""; 
     }
   };
 
   useEffect(() => {
     const digits = formData.cnpj.replace(/\D/g, "");
-    if (digits.length === 14) fetchCnpjData(digits);
+    if (digits.length === 14) {
+      // Debounce simples para evitar múltiplas chamadas se o usuário apagar e digitar rápido
+      const timer = setTimeout(() => fetchCnpjData(digits), 500);
+      return () => clearTimeout(timer);
+    }
   }, [formData.cnpj]);
 
   const handleProductToggle = (product: any) => {
@@ -201,7 +218,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       if (exists) {
         return { ...prev, selectedProducts: prev.selectedProducts.filter(p => p.baseId !== product.id) };
       }
-      // Add with editable name and description fields
       return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1, name: product.name, description: product.description }] };
     });
   };
@@ -258,11 +274,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="space-y-2">
               <Label>CNPJ</Label>
-              <Input 
-                placeholder="00.000.000/0000-00" 
-                value={formData.cnpj} 
-                onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
-              />
+              <div className="relative">
+                <Input 
+                  placeholder="00.000.000/0000-00" 
+                  value={formData.cnpj} 
+                  onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
+                />
+                <div className="absolute right-3 top-3">
+                  {formData.cnpj.replace(/\D/g, "").length === 14 && (
+                    <RefreshCw className="h-4 w-4 text-primary animate-spin" />
+                  )}
+                </div>
+              </div>
+              <p className="text-[10px] text-muted-foreground">Preenchimento automático ao digitar os 14 dígitos.</p>
             </div>
             <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
@@ -304,7 +328,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                       </div>
                       <div className="text-[10px] text-muted-foreground mb-1">{p.sku} | {p.description}</div>
                       
-                      {/* Colunas Extras Mapeadas */}
                       {p.extras && p.extras.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-1">
                           {p.extras.map((ex: any) => (
@@ -361,16 +384,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                             rows={2}
                           />
                         </div>
-
-                        {p.extras && p.extras.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-1">
-                            {p.extras.map((ex: any) => (
-                              <span key={ex.label} className="text-[10px] border px-1.5 py-0.5 rounded bg-muted/30">
-                                <span className="font-medium opacity-80">{ex.label}:</span> {ex.value}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
 
                       <div className="w-40 flex flex-col items-end gap-3">
