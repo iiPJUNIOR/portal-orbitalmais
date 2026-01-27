@@ -25,6 +25,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
   const lastNavigateRef = useRef<{ target: string; at: number } | null>(null);
   const NAV_THROTTLE_MS = 800;
 
+  // Ensure we only auto-sync once per session to avoid repeated notifications
+  const syncedOnceRef = useRef(false);
+
   const safeNavigate = (target: string) => {
     const now = Date.now();
     const last = lastNavigateRef.current;
@@ -83,24 +86,29 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       } else if (event === "SIGNED_OUT") {
         safeNavigate("/login");
       } else if (event === "SIGNED_IN") {
-        // Try to sync local drafts automatically when the user signs in
-        try {
-          const tId = toast.loading("Sincronizando rascunhos locais...");
-          const result = await syncLocalDrafts();
-          if (result.synced.length > 0) {
-            toast.success(`Sincronizados ${result.synced.length} rascunho(s).`, { id: tId });
-          } else {
-            // If none synced but also no failures, just dismiss
-            if (result.failed.length === 0) {
-              toast.dismiss(tId);
-            } else {
-              toast.error(`Falha ao sincronizar ${result.failed.length} rascunho(s).`, { id: tId });
-            }
-          }
-        } catch (err) {
-          console.warn("Auto-sync drafts failed", err);
-          toast.error("Erro ao sincronizar rascunhos locais");
+        // Auto-sync local drafts once per session when the user signs in.
+        // Run silently and notify only if there are synced items or failures.
+        if (syncedOnceRef.current) {
+          return;
         }
+        syncedOnceRef.current = true;
+
+        (async () => {
+          try {
+            const result = await syncLocalDrafts();
+            if (result.synced.length > 0) {
+              toast.success(`Sincronizados ${result.synced.length} rascunho(s).`);
+            }
+            if (result.failed.length > 0) {
+              toast.error(`Falha ao sincronizar ${result.failed.length} rascunho(s).`);
+            }
+            // If neither synced nor failed, remain silent.
+          } catch (err) {
+            console.warn("Auto-sync drafts failed", err);
+            // Show a concise error only if something went wrong in the sync process itself.
+            toast.error("Erro ao sincronizar rascunhos locais");
+          }
+        })();
       }
     });
 
