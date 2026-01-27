@@ -164,10 +164,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
     lastFetchedCnpj.current = rawCnpj;
     
-    const toastId = toast.loading("Buscando dados da empresa...");
+    const toastId = toast.loading("Buscando dados da empresa (Services API)...");
     
     try {
-      // 1ª Tentativa: BrasilAPI
+      // 1ª Tentativa: BrasilAPI (Consulta oficial via API pública)
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
       
       if (res.ok) {
@@ -188,8 +188,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         return;
       }
 
-      // 2ª Tentativa (Fallback): Minha Receita
-      console.log("BrasilAPI falhou, tentando Minha Receita...");
+      // 2ª Tentativa (Fallback): Minha Receita (Alternativa robusta)
       const resFallback = await fetch(`https://minhareceita.org/${rawCnpj}`);
       
       if (resFallback.ok) {
@@ -210,10 +209,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
         return;
       }
 
-      throw new Error("Não foi possível obter os dados automaticamente. Por favor, preencha manualmente.");
+      throw new Error("Serviço de busca de CNPJ instável. Por favor, preencha manualmente.");
     } catch (err: any) {
-      console.error("Erro fetchCnpjData:", err);
-      toast.error(err.message, { id: toastId });
+      console.warn("fetchCnpjData failed:", err);
+      toast.error("O serviço de consulta automática está indisponível agora. Por favor, preencha a Razão Social e Endereço manualmente.", { id: toastId, duration: 5000 });
       lastFetchedCnpj.current = ""; 
     }
   };
@@ -221,7 +220,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   useEffect(() => {
     const digits = formData.cnpj.replace(/\D/g, "");
     if (digits.length === 14) {
-      const timer = setTimeout(() => fetchCnpjData(digits), 500);
+      const timer = setTimeout(() => fetchCnpjData(digits), 600);
       return () => clearTimeout(timer);
     }
   }, [formData.cnpj]);
@@ -300,7 +299,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                   )}
                 </div>
               </div>
-              <p className="text-[10px] text-muted-foreground">Preenchimento automático ao digitar os 14 dígitos.</p>
+              <p className="text-[10px] text-muted-foreground">O sistema tenta preencher automaticamente ao digitar 14 dígitos. (Depende de APIs externas).</p>
             </div>
             <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
