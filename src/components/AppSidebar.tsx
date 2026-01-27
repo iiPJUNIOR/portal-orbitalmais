@@ -31,7 +31,7 @@ export function AppSidebar() {
 
   const menuItems = [
     {
-      title: "Gerador Acesso",
+      title: "Gerador de Propostas Control iD",
       url: "/",
       icon: LayoutTemplate,
     },
@@ -50,7 +50,14 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r">
       <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
-        <Logo className="h-7 w-auto object-contain" />
+        {/* Make the logo clickable and navigate to the main generator page */}
+        <button
+          onClick={() => navigate("/")}
+          aria-label="Ir para Gerador de Propostas"
+          className="flex items-center justify-center p-0 m-0 bg-transparent border-0"
+        >
+          <Logo className="h-7 w-auto object-contain" />
+        </button>
       </SidebarHeader>
       
       <SidebarContent>
