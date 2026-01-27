@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -61,7 +62,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     const digits = value.replace(/\D/g, "");
     let formatted = digits;
     if (digits.length > 2) formatted = `${digits.substring(0, 2)}.${digits.substring(2)}`;
-    if (digits.length > 5) formatted = `${formatted.substring(0, 6)}.${digits.substring(5)}`;
+    if (digits.length > 5) formatted = `${formatted.substring(0, 6)}.${formatted.substring(5)}`;
     if (digits.length > 8) formatted = `${formatted.substring(0, 10)}/${digits.substring(8)}`;
     if (digits.length > 12) formatted = `${formatted.substring(0, 15)}-${digits.substring(12, 14)}`;
     return formatted.substring(0, 18);
@@ -200,7 +201,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       if (exists) {
         return { ...prev, selectedProducts: prev.selectedProducts.filter(p => p.baseId !== product.id) };
       }
-      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1 }] };
+      // Add with editable name and description fields
+      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1, name: product.name, description: product.description }] };
     });
   };
 
@@ -220,13 +222,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       items: formData.selectedProducts.map(p => ({
         product: { 
           id: p.id,
-          description: p.name, 
-          model: p.name, 
+          description: p.description || p.name,
+          model: p.name,
           category: p.category,
           part_number: p.sku
         },
         quantity: p.quantity,
-        unitPrice: 0,
+        unitPrice: p.unitPrice || 0,
       })),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
@@ -323,12 +325,77 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             <div className="space-y-3 pt-6 border-t">
               <Label className="font-bold text-lg">Itens Selecionados ({formData.selectedProducts.length})</Label>
               <div className="grid grid-cols-1 gap-3">
-                {formData.selectedProducts.map(p => (
-                  <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="flex-1"><span className="font-bold text-sm">{p.name}</span></div>
-                    <div className="flex items-center gap-3 ml-4">
-                      <Input type="number" className="w-16 h-8 text-xs bg-card text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
-                      <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
+                {formData.selectedProducts.map((p: any) => (
+                  <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 space-y-2">
+                        <div>
+                          <Label className="text-sm">Nome do Item</Label>
+                          <Input
+                            value={p.name}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFormData(prev => ({
+                                ...prev,
+                                selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                  sp.baseId === p.baseId ? { ...sp, name: v } : sp
+                                )
+                              }));
+                            }}
+                          />
+                        </div>
+
+                        <div>
+                          <Label className="text-sm">Descrição (aparece na proposta)</Label>
+                          <Textarea
+                            value={p.description}
+                            onChange={(e) => {
+                              const v = e.target.value;
+                              setFormData(prev => ({
+                                ...prev,
+                                selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                  sp.baseId === p.baseId ? { ...sp, description: v } : sp
+                                )
+                              }));
+                            }}
+                            rows={2}
+                          />
+                        </div>
+
+                        {p.extras && p.extras.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-1">
+                            {p.extras.map((ex: any) => (
+                              <span key={ex.label} className="text-[10px] border px-1.5 py-0.5 rounded bg-muted/30">
+                                <span className="font-medium opacity-80">{ex.label}:</span> {ex.value}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="w-40 flex flex-col items-end gap-3">
+                        <Input
+                          type="number"
+                          className="w-24 text-center"
+                          min={1}
+                          value={p.quantity}
+                          onChange={(e) => {
+                            const q = Math.max(1, parseInt(e.target.value) || 1);
+                            setFormData(prev => ({
+                              ...prev,
+                              selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                sp.baseId === p.baseId ? { ...sp, quantity: q } : sp
+                              )
+                            }));
+                          }}
+                        />
+
+                        <div className="flex gap-2">
+                          <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))}
