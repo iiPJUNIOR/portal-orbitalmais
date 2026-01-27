@@ -57,7 +57,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
 
   const [formData, setFormData] = useState(initialFormState);
 
-  // Helper to format CNPJ
   const formatCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "");
     let formatted = digits;
@@ -166,39 +165,55 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     lastFetchedCnpj.current = rawCnpj;
     
     const toastId = toast.loading("Buscando dados da empresa...");
+    
     try {
-      // Tentamos o BrasilAPI (mais estável)
+      // 1ª Tentativa: BrasilAPI
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
       
-      if (!res.ok) {
-        if (res.status === 404) {
-          throw new Error("CNPJ não encontrado na base pública.");
-        }
-        throw new Error("Serviço de busca de CNPJ indisponível no momento.");
+      if (res.ok) {
+        const data = await res.json();
+        setFormData(prev => ({
+          ...prev,
+          companyName: data.razao_social || data.nome_fantasia || prev.companyName,
+          address: [
+            data.logradouro, 
+            data.numero, 
+            data.complemento, 
+            data.bairro, 
+            data.municipio, 
+            data.uf
+          ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
+        }));
+        toast.success("Dados preenchidos via BrasilAPI!", { id: toastId });
+        return;
       }
+
+      // 2ª Tentativa (Fallback): Minha Receita
+      console.log("BrasilAPI falhou, tentando Minha Receita...");
+      const resFallback = await fetch(`https://minhareceita.org/${rawCnpj}`);
       
-      const data = await res.json();
-      
-      setFormData(prev => ({
-        ...prev,
-        companyName: data.razao_social || data.nome_fantasia || prev.companyName,
-        address: [
-          data.logradouro, 
-          data.numero, 
-          data.complemento, 
-          data.bairro, 
-          data.municipio, 
-          data.uf
-        ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
-      }));
-      
-      toast.success("Dados preenchidos automaticamente!", { id: toastId });
+      if (resFallback.ok) {
+        const data = await resFallback.json();
+        setFormData(prev => ({
+          ...prev,
+          companyName: data.razao_social || data.nome_fantasia || prev.companyName,
+          address: [
+            data.logradouro, 
+            data.numero, 
+            data.complemento, 
+            data.bairro, 
+            data.municipio, 
+            data.uf
+          ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
+        }));
+        toast.success("Dados preenchidos via Minha Receita!", { id: toastId });
+        return;
+      }
+
+      throw new Error("Não foi possível obter os dados automaticamente. Por favor, preencha manualmente.");
     } catch (err: any) {
       console.error("Erro fetchCnpjData:", err);
-      // Mensagem mais amigável e específica
-      const errMsg = err.message || "Erro de conexão. Verifique o CNPJ ou preencha manualmente.";
-      toast.error(errMsg, { id: toastId });
-      // Resetamos a referência para permitir que o usuário tente novamente se corrigir
+      toast.error(err.message, { id: toastId });
       lastFetchedCnpj.current = ""; 
     }
   };
@@ -206,7 +221,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   useEffect(() => {
     const digits = formData.cnpj.replace(/\D/g, "");
     if (digits.length === 14) {
-      // Debounce simples para evitar múltiplas chamadas se o usuário apagar e digitar rápido
       const timer = setTimeout(() => fetchCnpjData(digits), 500);
       return () => clearTimeout(timer);
     }
