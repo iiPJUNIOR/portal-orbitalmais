@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
 import React, { useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -21,6 +21,7 @@ const queryClient = new QueryClient();
 
 const AppContent = () => {
   const { user } = useSession();
+  const navigate = useNavigate();
 
   // Aplica o tamanho de fonte global com base nas configurações
   useEffect(() => {
@@ -62,7 +63,15 @@ const AppContent = () => {
               <header className="h-14 flex items-center px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
                 <SidebarTrigger className="-ml-1" />
                 <div className="h-4 w-[1px] bg-border mx-4" />
-                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80">Painel Administrativo</span>
+                
+                {/* Título clicável que leva para o Index */}
+                <button 
+                  onClick={() => navigate("/")}
+                  className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 hover:text-primary transition-colors bg-transparent border-none p-0"
+                >
+                  Gerador de Propostas Control iD
+                </button>
+
                 <div className="ml-auto flex items-center gap-4">
                   <ThemeToggle />
                 </div>
