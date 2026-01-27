@@ -13,10 +13,12 @@ import { saveQuote, getQuoteItems } from "@/services/supabaseService";
 import { getUserSettings } from "@/services/settingsService";
 import { FileText, PlusCircle, History, Settings as SettingsIcon, ArrowLeft } from "lucide-react";
 import { Quote, QuoteItem } from "@/types/quote";
+import { useSession } from "@/contexts/SessionProvider";
 
 export default function Index() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useSession();
   const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -28,6 +30,8 @@ export default function Index() {
     email: "",
     phone: "",
   });
+
+  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -48,7 +52,7 @@ export default function Index() {
     loadSettings();
   }, []);
 
-  // If opened via /history or ?view=history, show history by default
+  // If opened via /history or ?view=history, show history by default (but controlled by permission check below)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const view = params.get("view");
@@ -82,6 +86,44 @@ export default function Index() {
     window.addEventListener("app:navigate", handler as EventListener);
     return () => window.removeEventListener("app:navigate", handler as EventListener);
   }, []);
+
+  // Protect direct navigation to /history for users without access
+  useEffect(() => {
+    let mounted = true;
+
+    async function ensureHistoryAllowed() {
+      try {
+        if (location.pathname !== "/history") return;
+
+        // Superadmin bypass
+        if (user?.email === PAULO_EMAIL) return;
+
+        // Fetch settings to check has_full_access
+        const s = await getUserSettings();
+        if (!mounted) return;
+
+        if (!s?.has_full_access) {
+          toast.error("Acesso ao histórico restrito. Peça ao administrador para liberar.", { duration: 3000 });
+          navigate("/", { replace: true });
+          setStep("welcome");
+        }
+      } catch (err) {
+        console.warn("history access check failed", err);
+        // On error, be conservative: redirect home
+        if (mounted) {
+          toast.error("Acesso ao histórico restrito.", { duration: 2000 });
+          navigate("/", { replace: true });
+          setStep("welcome");
+        }
+      }
+    }
+
+    ensureHistoryAllowed();
+
+    return () => {
+      mounted = false;
+    };
+  }, [location.pathname, user, navigate]);
 
   const handleWizardComplete = async (payload: any) => {
     const loadToastId = toast.loading(`Gerando proposta em PPTX...`);

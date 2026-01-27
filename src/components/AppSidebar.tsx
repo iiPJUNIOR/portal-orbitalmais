@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { 
   LayoutTemplate, 
   Settings, 
@@ -25,32 +25,80 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
 import Logo from "@/components/Logo";
+import { getUserSettings } from "@/services/settingsService";
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
 
+  const [hasHistoryAccess, setHasHistoryAccess] = useState<boolean>(false);
+
+  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function checkAccess() {
+      try {
+        if (!user) {
+          if (mounted) setHasHistoryAccess(false);
+          return;
+        }
+
+        // Super admin always has access
+        if (user.email === PAULO_EMAIL) {
+          if (mounted) setHasHistoryAccess(true);
+          return;
+        }
+
+        // Otherwise consult user settings (has_full_access)
+        const s = await getUserSettings();
+        if (mounted) setHasHistoryAccess(!!s?.has_full_access);
+      } catch (err) {
+        console.warn("AppSidebar: failed to load user settings", err);
+        if (mounted) setHasHistoryAccess(false);
+      }
+    }
+
+    checkAccess();
+
+    const onSettingsChanged = () => {
+      checkAccess();
+    };
+    window.addEventListener("user_settings_changed", onSettingsChanged);
+
+    return () => {
+      mounted = false;
+      window.removeEventListener("user_settings_changed", onSettingsChanged);
+    };
+  }, [user]);
+
   const menuItems = [
     {
       title: "Gerador de Propostas",
       url: "/",
       icon: LayoutTemplate,
+      show: true,
     },
     {
       title: "Histórico",
       url: "/history",
       icon: HistoryIcon,
+      // show only if user has been granted access or is Paulo
+      show: hasHistoryAccess,
     },
     {
       title: "Rascunhos",
       url: "/drafts",
       icon: FileText,
+      show: true,
     },
     {
       title: "Configurações",
       url: "/settings",
       icon: Settings,
+      show: true,
     },
   ];
 
@@ -66,11 +114,9 @@ export function AppSidebar() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Centralized click handler to navigate and broadcast a global event so pages (Index) can react
+  // Centralized click handler to navigate and broadcast a global event so pages can react
   const handleMenuClick = (url: string) => {
-    // Use react-router navigate
     navigate(url);
-    // Emit event so pages can react (e.g., Index will switch to the appropriate tab)
     try {
       window.dispatchEvent(new CustomEvent("app:navigate", { detail: { path: url } }));
     } catch (err) {
@@ -102,7 +148,7 @@ export function AppSidebar() {
           <SidebarGroupLabel className="px-4 text-[10px] uppercase tracking-wider font-bold text-muted-foreground/60">Sistema</SidebarGroupLabel>
           <SidebarGroupContent className="px-2">
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {menuItems.filter(mi => mi.show).map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     onClick={() => handleMenuClick(item.url)}
