@@ -60,7 +60,7 @@ export default function Index() {
       
       const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase
+      // Salvar no Supabase (ou fallback local dentro do service)
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -154,6 +154,36 @@ export default function Index() {
     }
   };
 
+  // Novo: regenerar diretamente a partir de um item do histórico
+  const handleRegenerateFromHistory = async (quote: Quote) => {
+    if (!quote || !quote.settings) {
+      toast.error("Dados da proposta ausentes. Não é possível regenerar.");
+      return;
+    }
+    const loadToastId = toast.loading("Gerando proposta a partir do histórico...");
+    try {
+      const blob = await generateProposalPPTX(quote.settings);
+      const dateObj = new Date(quote.proposalDate || Date.now());
+      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+      const year = dateObj.getFullYear();
+      const fileName = `${quote.companyName || "proposta"} - Regenerada_${month}-${year}.pptx`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("PPTX gerado com sucesso a partir do histórico!", { id: loadToastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar proposta a partir do histórico.", { id: loadToastId });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 container mx-auto py-10 px-4">
@@ -227,7 +257,7 @@ export default function Index() {
               <h2 className="text-3xl font-bold">Histórico de Propostas</h2>
               <Button variant="outline" onClick={() => setStep("welcome")}>Voltar</Button>
             </div>
-            <QuoteHistory onQuoteSelect={handleSelectQuote} />
+            <QuoteHistory onQuoteSelect={handleSelectQuote} onRegenerateFromHistory={handleRegenerateFromHistory} />
           </div>
         )}
 

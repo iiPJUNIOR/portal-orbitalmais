@@ -2,9 +2,18 @@ import { supabase } from "@/integrations/supabase/client";
 import { v4 as uuidv4 } from "uuid";
 import type { Quote as QuoteType, QuoteItem as QuoteItemType } from "@/types/quote";
 
+const LOCAL_STORAGE_KEY = "local_quotes_v1";
+
+type LocalStored = {
+  id: string;
+  quote: any;
+  items: any[];
+  created_at: string;
+};
+
 /**
- * Salva o orçamento no banco de dados.
- * Omitimos o upload de arquivo conforme solicitado, salvando apenas os dados e configurações.
+ * Save a quote. Try Supabase first, if it fails (e.g. unauthenticated / RLS),
+ * fall back to saving into localStorage so the user still has a history locally.
  */
 export const saveQuote = async (
   quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt"> & { settings?: any },
@@ -61,9 +70,39 @@ export const saveQuote = async (
     }
 
     return quoteId;
-  } catch (err) {
-    console.error("Erro ao salvar orçamento no Supabase:", err);
-    throw err;
+  } catch (err: any) {
+    console.warn("saveQuote supabase failed, falling back to localStorage", err?.message || err);
+
+    // Fallback local: save into localStorage so user still has history
+    const localId = uuidv4();
+    const payload = {
+      ...quote,
+      // normalize some keys to be similar to DB fields
+      proposalNumber: quote.proposalNumber,
+      proposalDate: quote.proposalDate,
+      priceModel: quote.priceModel,
+      totalPrice: quote.totalPrice,
+      settings: quote.settings || {},
+    };
+
+    const localEntry: LocalStored = {
+      id: localId,
+      quote: payload,
+      items: items,
+      created_at: new Date().toISOString(),
+    };
+
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const arr = raw ? JSON.parse(raw) as LocalStored[] : [];
+      arr.unshift(localEntry);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(arr.slice(0, 200))); // limit to 200 entries
+      console.info("Quote saved locally under id", localId);
+      return localId;
+    } catch (storageErr) {
+      console.error("Failed to save local quote fallback", storageErr);
+      throw err; // rethrow original error if fallback also fails
+    }
   }
 };
 
@@ -77,9 +116,8 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
       .order("created_at", { ascending: false });
 
     if (error) throw error;
-    
-    // Mapeia snake_case para camelCase para o frontend
-    return (data || []).map(q => ({
+
+    const supabaseQuotes = (data || []).map((q) => ({
       id: q.id,
       cnpj: q.cnpj,
       companyName: q.company_name,
@@ -95,11 +133,80 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
       observations: q.observations,
       createdAt: q.created_at,
       updatedAt: q.updated_at,
-      settings: q.settings
+      pptxUrl: q.pptx_url,
+      settings: q.settings,
     })) as QuoteType[];
+
+    // Merge with localStorage fallback entries that match the CNPJ substring
+    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
+    const localArr: LocalStored[] = localRaw ? JSON.parse(localRaw) : [];
+    const matchedLocal = (localArr || [])
+      .filter((l) => {
+        const qcnpj = String(l.quote.cnpj || "").replace(/\D/g, "");
+        return qcnpj.includes(clean) || clean.includes(qcnpj) || (!clean && true);
+      })
+      .map((l) => ({
+        id: l.id,
+        cnpj: l.quote.cnpj || "",
+        companyName: l.quote.companyName || l.quote.company_name || "",
+        contactName: l.quote.contactName || l.quote.contact_name || "",
+        email: l.quote.email || "",
+        phone: l.quote.phone || "",
+        address: l.quote.address || "",
+        proposalDate: l.quote.proposalDate || l.created_at,
+        proposalNumber: l.quote.proposalNumber || "",
+        priceModel: l.quote.priceModel || "12m",
+        totalPrice: l.quote.totalPrice || 0,
+        status: l.quote.status || "rascunho",
+        observations: l.quote.observations || "",
+        createdAt: l.created_at,
+        updatedAt: l.created_at,
+        pptxUrl: undefined,
+        settings: l.quote.settings || l.quote,
+      })) as QuoteType[];
+
+    // Combine: supabase first, then local entries (dedupe by id)
+    const combinedMap = new Map<string, QuoteType>();
+    for (const q of [...supabaseQuotes, ...matchedLocal]) {
+      combinedMap.set(q.id, q);
+    }
+    return Array.from(combinedMap.values()).sort((a, b) => {
+      const ta = new Date(a.createdAt || 0).getTime();
+      const tb = new Date(b.createdAt || 0).getTime();
+      return tb - ta;
+    });
   } catch (err) {
-    console.error("Erro ao buscar orçamentos por CNPJ:", err);
-    throw err;
+    console.error("Erro ao buscar orçamentos por CNPJ (supabase), falling back to localStorage:", err);
+    // Fallback: return local entries
+    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
+    const localArr: LocalStored[] = localRaw ? JSON.parse(localRaw) : [];
+    const clean = cnpj.replace(/\D/g, "");
+    const matchedLocal = (localArr || [])
+      .filter((l) => {
+        const qcnpj = String(l.quote.cnpj || "").replace(/\D/g, "");
+        return qcnpj.includes(clean) || clean.includes(qcnpj) || (!clean && true);
+      })
+      .map((l) => ({
+        id: l.id,
+        cnpj: l.quote.cnpj || "",
+        companyName: l.quote.companyName || l.quote.company_name || "",
+        contactName: l.quote.contactName || l.quote.contact_name || "",
+        email: l.quote.email || "",
+        phone: l.quote.phone || "",
+        address: l.quote.address || "",
+        proposalDate: l.quote.proposalDate || l.created_at,
+        proposalNumber: l.quote.proposalNumber || "",
+        priceModel: l.quote.priceModel || "12m",
+        totalPrice: l.quote.totalPrice || 0,
+        status: l.quote.status || "rascunho",
+        observations: l.quote.observations || "",
+        createdAt: l.created_at,
+        updatedAt: l.created_at,
+        pptxUrl: undefined,
+        settings: l.quote.settings || l.quote,
+      })) as QuoteType[];
+
+    return matchedLocal;
   }
 };
 
@@ -112,19 +219,61 @@ export const getQuoteItems = async (quoteId: string): Promise<QuoteItemType[]> =
 
     if (error) throw error;
 
-    return (data || []).map(it => ({
-      id: it.id,
-      quoteId: it.quote_id,
-      sku: it.sku,
-      productDescription: it.product_description,
-      quantity: it.quantity,
-      unitPrice: it.unit_price,
-      priceModel: it.price_model,
-      subtotal: it.subtotal
-    })) as QuoteItemType[];
+    if ((data || []).length > 0) {
+      return (data || []).map((it) => ({
+        id: it.id,
+        quoteId: it.quote_id,
+        sku: it.sku,
+        productDescription: it.product_description,
+        quantity: it.quantity,
+        unitPrice: it.unit_price,
+        priceModel: it.price_model,
+        subtotal: it.subtotal,
+      })) as QuoteItemType[];
+    }
+
+    // Fallback: try to find in localStorage
+    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
+    if (localRaw) {
+      const localArr: LocalStored[] = JSON.parse(localRaw);
+      const found = localArr.find((l) => l.id === quoteId);
+      if (found) {
+        return (found.items || []).map((it, idx) => ({
+          id: `${quoteId}-local-${idx}`,
+          quoteId,
+          sku: it.sku || it.productDescription || "",
+          productDescription: it.productDescription || (it.product && it.product.description) || "",
+          quantity: it.quantity || 1,
+          unitPrice: it.unitPrice || 0,
+          priceModel: it.priceModel || "12m",
+          subtotal: (it.unitPrice || 0) * (it.quantity || 1),
+        }));
+      }
+    }
+
+    return [];
   } catch (err) {
-    console.error("Erro ao buscar itens do orçamento:", err);
-    throw err;
+    console.error("Erro ao buscar itens do orçamento (supabase), falling back to localStorage:", err);
+    // Fallback to local storage
+    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
+    if (localRaw) {
+      const localArr: LocalStored[] = JSON.parse(localRaw);
+      const found = localArr.find((l) => l.id === quoteId);
+      if (found) {
+        return (found.items || []).map((it, idx) => ({
+          id: `${quoteId}-local-${idx}`,
+          quoteId,
+          sku: it.sku || it.productDescription || "",
+          productDescription: it.productDescription || (it.product && it.product.description) || "",
+          quantity: it.quantity || 1,
+          unitPrice: it.unitPrice || 0,
+          priceModel: it.priceModel || "12m",
+          subtotal: (it.unitPrice || 0) * (it.quantity || 1),
+        }));
+      }
+    }
+
+    return [];
   }
 };
 
@@ -134,6 +283,20 @@ export const updateQuoteStatus = async (quoteId: string, status: QuoteType["stat
     if (error) throw error;
   } catch (err) {
     console.error("Erro ao atualizar status do orçamento:", err);
+    // If it's a local entry, update localStorage
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (!raw) throw err;
+      const arr: LocalStored[] = JSON.parse(raw);
+      const i = arr.findIndex((l) => l.id === quoteId);
+      if (i > -1) {
+        arr[i].quote.status = status;
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(arr));
+        return;
+      }
+    } catch (e) {
+      console.warn("updateQuoteStatus local fallback failed", e);
+    }
     throw err;
   }
 };

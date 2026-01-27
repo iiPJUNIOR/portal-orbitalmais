@@ -20,9 +20,10 @@ import { formatCurrencyBRL } from "@/lib/formatters";
 
 interface QuoteHistoryProps {
   onQuoteSelect: (quote: Quote) => void;
+  onRegenerateFromHistory?: (quote: Quote) => void;
 }
 
-export function QuoteHistory({ onQuoteSelect }: QuoteHistoryProps) {
+export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHistoryProps) {
   const [cnpj, setCnpj] = useState("");
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
@@ -35,7 +36,7 @@ export function QuoteHistory({ onQuoteSelect }: QuoteHistoryProps) {
     setError(null);
     
     try {
-      // In a real implementation, this would fetch from Supabase
+      // In a real implementation, this would fetch from Supabase (and local fallback)
       const results = await getQuotesByCnpj(cnpj);
       setQuotes(results);
     } catch (err) {
@@ -109,13 +110,24 @@ export function QuoteHistory({ onQuoteSelect }: QuoteHistoryProps) {
                   <TableCell>{formatCurrencyBRL(quote.totalPrice)}</TableCell>
                   <TableCell>{getStatusBadge(quote.status)}</TableCell>
                   <TableCell className="text-right">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => onQuoteSelect(quote)}
-                    >
-                      Visualizar
-                    </Button>
+                    <div className="flex items-center justify-end gap-2">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => onQuoteSelect(quote)}
+                      >
+                        Visualizar
+                      </Button>
+
+                      {onRegenerateFromHistory ? (
+                        <Button 
+                          size="sm"
+                          onClick={() => onRegenerateFromHistory(quote)}
+                        >
+                          Gerar
+                        </Button>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
