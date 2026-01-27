@@ -12,15 +12,45 @@ type LocalStored = {
 };
 
 /**
- * Save a quote. Try Supabase first, if it fails (e.g. unauthenticated / RLS),
- * fall back to saving into localStorage so the user still has a history locally.
+ * Save a quote. Performs an optimistic local save first (so the history is immediately available),
+ * then tries to save to Supabase. If Supabase save succeeds, the local optimistic entry is removed.
+ * If Supabase save fails (e.g. unauthenticated / RLS), the local entry remains and its id is returned.
+ *
+ * Returns the saved quote ID (Supabase id when saved remotely, otherwise local fallback id).
  */
 export const saveQuote = async (
   quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt"> & { settings?: any },
   items: any[]
 ): Promise<string> => {
+  // Create optimistic local entry first so that UI/history can show it immediately
+  const localId = uuidv4();
+  const localEntry: LocalStored = {
+    id: localId,
+    quote: {
+      ...quote,
+      proposalNumber: quote.proposalNumber,
+      proposalDate: quote.proposalDate,
+      priceModel: quote.priceModel,
+      totalPrice: quote.totalPrice,
+      settings: quote.settings || {},
+    },
+    items,
+    created_at: new Date().toISOString(),
+  };
+
   try {
-    // 1) Preparar payload do orçamento
+    // Persist optimistic local entry (keep a reasonable limit)
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const arr = raw ? (JSON.parse(raw) as LocalStored[]) : [];
+      // put newest on top
+      arr.unshift(localEntry);
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(arr.slice(0, 200)));
+    } catch (storageErr) {
+      console.warn("Failed to write optimistic local quote", storageErr);
+    }
+
+    // 1) Prepare payload for Supabase
     const insertPayload: any = {
       cnpj: quote.cnpj,
       company_name: quote.companyName,
@@ -34,10 +64,10 @@ export const saveQuote = async (
       total_price: quote.totalPrice,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",
-      settings: quote.settings || {}, // Salva o estado completo do wizard para regeneração
+      settings: quote.settings || {}, // save the whole wizard state
     };
 
-    // Tenta obter o ID do usuário logado
+    // Try to attach current authenticated user ID (optional)
     const { data: userData } = await supabase.auth.getUser();
     if (userData?.user?.id) {
       insertPayload.user_id = userData.user.id;
@@ -49,15 +79,17 @@ export const saveQuote = async (
       .select()
       .single();
 
-    if (quoteInsertError) throw quoteInsertError;
+    if (quoteInsertError) {
+      throw quoteInsertError;
+    }
 
     const quoteId = quoteInsertData.id as string;
 
-    // 2) Inserir itens do orçamento
+    // 2) Insert quote items
     const itemsToInsert = items.map((it) => ({
       quote_id: quoteId,
-      sku: it.sku || it.productDescription,
-      product_description: it.productDescription,
+      sku: it.sku || it.productDescription || (it.product && it.product.part_number) || "",
+      product_description: it.productDescription || (it.product && it.product.description) || "",
       quantity: it.quantity,
       unit_price: it.unitPrice || 0,
       price_model: it.price_model || it.priceModel || quote.priceModel,
@@ -66,43 +98,28 @@ export const saveQuote = async (
 
     const { error: itemsError } = await supabase.from("quote_items").insert(itemsToInsert);
     if (itemsError) {
-      console.warn("Aviso: Orçamento salvo, mas houve erro ao inserir itens", itemsError);
+      // Log warning but don't fail the whole flow — quote is already created.
+      console.warn("Warning: quote saved but items insert returned error", itemsError);
+    }
+
+    // If we reach here, Supabase saved successfully — remove optimistic local entry
+    try {
+      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (raw) {
+        const arr: LocalStored[] = JSON.parse(raw);
+        const filtered = arr.filter((e) => e.id !== localId);
+        localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered.slice(0, 200)));
+      }
+    } catch (cleanupErr) {
+      console.warn("Failed to remove optimistic local quote after remote save", cleanupErr);
     }
 
     return quoteId;
   } catch (err: any) {
-    console.warn("saveQuote supabase failed, falling back to localStorage", err?.message || err);
+    console.warn("saveQuote supabase failed, keeping optimistic local entry", err?.message || err);
 
-    // Fallback local: save into localStorage so user still has history
-    const localId = uuidv4();
-    const payload = {
-      ...quote,
-      // normalize some keys to be similar to DB fields
-      proposalNumber: quote.proposalNumber,
-      proposalDate: quote.proposalDate,
-      priceModel: quote.priceModel,
-      totalPrice: quote.totalPrice,
-      settings: quote.settings || {},
-    };
-
-    const localEntry: LocalStored = {
-      id: localId,
-      quote: payload,
-      items: items,
-      created_at: new Date().toISOString(),
-    };
-
-    try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      const arr = raw ? JSON.parse(raw) as LocalStored[] : [];
-      arr.unshift(localEntry);
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(arr.slice(0, 200))); // limit to 200 entries
-      console.info("Quote saved locally under id", localId);
-      return localId;
-    } catch (storageErr) {
-      console.error("Failed to save local quote fallback", storageErr);
-      throw err; // rethrow original error if fallback also fails
-    }
+    // If error happened, we already saved optimistic entry; return its id so UI can reference it.
+    return localId;
   }
 };
 
