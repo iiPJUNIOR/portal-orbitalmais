@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
@@ -57,11 +56,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
 
   const [formData, setFormData] = useState(initialFormState);
 
+  // Helper to format CNPJ
   const formatCnpj = (value: string) => {
     const digits = value.replace(/\D/g, "");
     let formatted = digits;
     if (digits.length > 2) formatted = `${digits.substring(0, 2)}.${digits.substring(2)}`;
-    if (digits.length > 5) formatted = `${formatted.substring(0, 6)}.${formatted.substring(5)}`;
+    if (digits.length > 5) formatted = `${formatted.substring(0, 6)}.${digits.substring(5)}`;
     if (digits.length > 8) formatted = `${formatted.substring(0, 10)}/${digits.substring(8)}`;
     if (digits.length > 12) formatted = `${formatted.substring(0, 15)}-${digits.substring(12, 14)}`;
     return formatted.substring(0, 18);
@@ -103,11 +103,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       const headers = base.headers;
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
+      const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
       
       return base.rows.map((row, idx) => {
         const p: any = {};
         headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
         
+        // Mapeamento dinâmico baseado nas configurações da base
         const name = nameCol && p[nameCol] ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
         const description = descCol && p[descCol] ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
         
@@ -129,6 +131,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
     });
   }, [availableBases]);
 
+  // Map of selected product id -> quantity (used to prioritize sorting)
   const selectedMap = React.useMemo(() => {
     const m = new Map<string, number>();
     (formData.selectedProducts || []).forEach((sp: any) => {
@@ -148,12 +151,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       );
     });
 
+    // Sort so selected products come first. Among selected, order by selected quantity descending.
     arr.sort((a, b) => {
       const aq = selectedMap.get(a.id) ?? 0;
       const bq = selectedMap.get(b.id) ?? 0;
+
+      // If one is selected and the other not, the selected one goes first
       if (aq > 0 && bq === 0) return -1;
       if (aq === 0 && bq > 0) return 1;
+
+      // If both selected, sort by quantity descending
       if (aq > 0 && bq > 0) return bq - aq;
+
+      // Otherwise keep original relative order (return 0)
       return 0;
     });
 
@@ -163,66 +173,25 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
   const fetchCnpjData = async (rawCnpj: string) => {
     if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
     lastFetchedCnpj.current = rawCnpj;
-    
-    const toastId = toast.loading("Buscando dados da empresa (Services API)...");
-    
+    const toastId = toast.loading("Buscando CNPJ...");
     try {
-      // 1ª Tentativa: BrasilAPI (Consulta oficial via API pública)
       const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
-      
-      if (res.ok) {
-        const data = await res.json();
-        setFormData(prev => ({
-          ...prev,
-          companyName: data.razao_social || data.nome_fantasia || prev.companyName,
-          address: [
-            data.logradouro, 
-            data.numero, 
-            data.complemento, 
-            data.bairro, 
-            data.municipio, 
-            data.uf
-          ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
-        }));
-        toast.success("Dados preenchidos via BrasilAPI!", { id: toastId });
-        return;
-      }
-
-      // 2ª Tentativa (Fallback): Minha Receita (Alternativa robusta)
-      const resFallback = await fetch(`https://minhareceita.org/${rawCnpj}`);
-      
-      if (resFallback.ok) {
-        const data = await resFallback.json();
-        setFormData(prev => ({
-          ...prev,
-          companyName: data.razao_social || data.nome_fantasia || prev.companyName,
-          address: [
-            data.logradouro, 
-            data.numero, 
-            data.complemento, 
-            data.bairro, 
-            data.municipio, 
-            data.uf
-          ].filter(v => v && v !== "null" && v !== "undefined").join(", ")
-        }));
-        toast.success("Dados preenchidos via Minha Receita!", { id: toastId });
-        return;
-      }
-
-      throw new Error("Serviço de busca de CNPJ instável. Por favor, preencha manualmente.");
-    } catch (err: any) {
-      console.warn("fetchCnpjData failed:", err);
-      toast.error("O serviço de consulta automática está indisponível agora. Por favor, preencha a Razão Social e Endereço manualmente.", { id: toastId, duration: 5000 });
-      lastFetchedCnpj.current = ""; 
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setFormData(prev => ({
+        ...prev,
+        companyName: data.razao_social || data.nome_fantasia || prev.companyName,
+        address: [data.logradouro, data.numero, data.bairro, data.municipio].filter(Boolean).join(", ")
+      }));
+      toast.success("Dados preenchidos!", { id: toastId });
+    } catch {
+      toast.error("Erro ao carregar CNPJ.", { id: toastId });
     }
   };
 
   useEffect(() => {
     const digits = formData.cnpj.replace(/\D/g, "");
-    if (digits.length === 14) {
-      const timer = setTimeout(() => fetchCnpjData(digits), 600);
-      return () => clearTimeout(timer);
-    }
+    if (digits.length === 14) fetchCnpjData(digits);
   }, [formData.cnpj]);
 
   const handleProductToggle = (product: any) => {
@@ -231,7 +200,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       if (exists) {
         return { ...prev, selectedProducts: prev.selectedProducts.filter(p => p.baseId !== product.id) };
       }
-      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1, name: product.name, description: product.description }] };
+      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1 }] };
     });
   };
 
@@ -251,13 +220,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
       items: formData.selectedProducts.map(p => ({
         product: { 
           id: p.id,
-          description: p.description || p.name,
-          model: p.name,
+          description: p.name, 
+          model: p.name, 
           category: p.category,
           part_number: p.sku
         },
         quantity: p.quantity,
-        unitPrice: p.unitPrice || 0,
+        unitPrice: 0,
       })),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
@@ -287,19 +256,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             </div>
             <div className="space-y-2">
               <Label>CNPJ</Label>
-              <div className="relative">
-                <Input 
-                  placeholder="00.000.000/0000-00" 
-                  value={formData.cnpj} 
-                  onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
-                />
-                <div className="absolute right-3 top-3">
-                  {formData.cnpj.replace(/\D/g, "").length === 14 && (
-                    <RefreshCw className="h-4 w-4 text-primary animate-spin" />
-                  )}
-                </div>
-              </div>
-              <p className="text-[10px] text-muted-foreground">O sistema tenta preencher automaticamente ao digitar 14 dígitos. (Depende de APIs externas).</p>
+              <Input 
+                placeholder="00.000.000/0000-00" 
+                value={formData.cnpj} 
+                onChange={e => setFormData(prev => ({ ...prev, cnpj: formatCnpj(e.target.value) }))} 
+              />
             </div>
             <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={e => setFormData(prev => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={e => setFormData(prev => ({ ...prev, contactName: e.target.value }))} /></div>
@@ -341,6 +302,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
                       </div>
                       <div className="text-[10px] text-muted-foreground mb-1">{p.sku} | {p.description}</div>
                       
+                      {/* Colunas Extras Mapeadas */}
                       {p.extras && p.extras.length > 0 && (
                         <div className="flex flex-wrap gap-2 mt-1">
                           {p.extras.map((ex: any) => (
@@ -361,67 +323,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel }: Wiza
             <div className="space-y-3 pt-6 border-t">
               <Label className="font-bold text-lg">Itens Selecionados ({formData.selectedProducts.length})</Label>
               <div className="grid grid-cols-1 gap-3">
-                {formData.selectedProducts.map((p: any) => (
-                  <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="flex items-start gap-4">
-                      <div className="flex-1 space-y-2">
-                        <div>
-                          <Label className="text-sm">Nome do Item</Label>
-                          <Input
-                            value={p.name}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setFormData(prev => ({
-                                ...prev,
-                                selectedProducts: prev.selectedProducts.map((sp: any) =>
-                                  sp.baseId === p.baseId ? { ...sp, name: v } : sp
-                                )
-                              }));
-                            }}
-                          />
-                        </div>
-
-                        <div>
-                          <Label className="text-sm">Descrição (aparece na proposta)</Label>
-                          <Textarea
-                            value={p.description}
-                            onChange={(e) => {
-                              const v = e.target.value;
-                              setFormData(prev => ({
-                                ...prev,
-                                selectedProducts: prev.selectedProducts.map((sp: any) =>
-                                  sp.baseId === p.baseId ? { ...sp, description: v } : sp
-                                )
-                              }));
-                            }}
-                            rows={2}
-                          />
-                        </div>
-                      </div>
-
-                      <div className="w-40 flex flex-col items-end gap-3">
-                        <Input
-                          type="number"
-                          className="w-24 text-center"
-                          min={1}
-                          value={p.quantity}
-                          onChange={(e) => {
-                            const q = Math.max(1, parseInt(e.target.value) || 1);
-                            setFormData(prev => ({
-                              ...prev,
-                              selectedProducts: prev.selectedProducts.map((sp: any) =>
-                                sp.baseId === p.baseId ? { ...sp, quantity: q } : sp
-                              )
-                            }));
-                          }}
-                        />
-
-                        <div className="flex gap-2">
-                          <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
+                {formData.selectedProducts.map(p => (
+                  <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                    <div className="flex-1"><span className="font-bold text-sm">{p.name}</span></div>
+                    <div className="flex items-center gap-3 ml-4">
+                      <Input type="number" className="w-16 h-8 text-xs bg-card text-center font-bold" value={p.quantity} onChange={e => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.map(sp => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
+                      <Button variant="ghost" size="sm" onClick={() => setFormData(prev => ({ ...prev, selectedProducts: prev.selectedProducts.filter(sp => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 ))}

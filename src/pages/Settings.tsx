@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info, FileStack } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
@@ -35,10 +35,6 @@ export default function Settings() {
   const [sellerPhone, setSellerPhone] = useState("");
   const [fontSize, setFontSize] = useState<string>("medium");
   
-  const [slideMappings, setSlideMappings] = useState<Record<string, number>>({});
-  const [newMappingKey, setNewMappingKey] = useState("");
-  const [newMappingSlide, setNewMappingSlide] = useState("");
-
   const [hasFullAccess, setHasFullAccess] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [newEmailToGrant, setNewEmailToGrant] = useState("");
@@ -75,7 +71,6 @@ export default function Settings() {
         setSellerPhone(s.seller_phone || "");
         setSpreadsheetLink(s.spreadsheet_link || "");
         setFontSize(s.font_size || "medium");
-        setSlideMappings(s.slide_mappings || {});
         setHasFullAccess(!!s.has_full_access || isSuperAdmin);
       } else if (isSuperAdmin) {
         setHasFullAccess(true);
@@ -200,32 +195,6 @@ export default function Settings() {
     }
   };
 
-  const handleAddSlideMapping = async () => {
-    if (!newMappingKey || !newMappingSlide) return;
-    const next = { ...slideMappings, [newMappingKey.toLowerCase().trim()]: parseInt(newMappingSlide) };
-    try {
-      setSlideMappings(next);
-      await saveUserSettings({ slide_mappings: next });
-      setNewMappingKey("");
-      setNewMappingSlide("");
-      toast.success("Mapeamento de slide adicionado!");
-    } catch (err) {
-      toast.error("Erro ao salvar mapeamento");
-    }
-  };
-
-  const handleRemoveSlideMapping = async (key: string) => {
-    const next = { ...slideMappings };
-    delete next[key];
-    try {
-      setSlideMappings(next);
-      await saveUserSettings({ slide_mappings: next });
-      toast.success("Mapeamento removido");
-    } catch (err) {
-      toast.error("Erro ao remover mapeamento");
-    }
-  };
-
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
@@ -287,63 +256,6 @@ export default function Settings() {
                   <Button onClick={() => navigate("/token-scan")} className="w-full h-12 text-lg font-bold">
                     Mapear Variáveis do Template
                   </Button>
-                </CardContent>
-              </Card>
-
-              {/* Mapeamento de Slides por Modelo */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileStack className="h-5 w-5" />
-                    Mapeamento de Slides por Modelo
-                  </CardTitle>
-                  <CardDescription>Defina qual número de slide deve ser incluído ao encontrar um termo no orçamento.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 bg-muted/30 p-4 rounded-2xl border border-dashed">
-                    <div className="sm:col-span-3 space-y-1.5">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Termo ou Modelo (Ex: iDBlock Next)</Label>
-                      <Input 
-                        placeholder="Nome do produto ou palavra-chave" 
-                        value={newMappingKey} 
-                        onChange={e => setNewMappingKey(e.target.value)} 
-                        className="bg-background"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Nº Slide</Label>
-                      <Input 
-                        type="number" 
-                        placeholder="30" 
-                        value={newMappingSlide} 
-                        onChange={e => setNewMappingSlide(e.target.value)} 
-                        className="bg-background"
-                      />
-                    </div>
-                    <div className="flex items-end">
-                      <Button onClick={handleAddSlideMapping} className="w-full h-10">
-                        <Plus className="h-4 w-4 mr-1" /> Add
-                      </Button>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-2">
-                    {Object.entries(slideMappings).length > 0 ? (
-                      Object.entries(slideMappings).map(([key, slide]) => (
-                        <div key={key} className="flex items-center justify-between p-3 border rounded-xl bg-card shadow-sm hover:shadow-md transition-shadow">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-primary/10 text-primary px-3 py-1 rounded-lg font-bold text-xs">Slide {slide}</div>
-                            <span className="text-sm font-medium">{key}</span>
-                          </div>
-                          <Button variant="ghost" size="sm" className="text-destructive hover:bg-destructive/10" onClick={() => handleRemoveSlideMapping(key)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="text-xs text-center text-muted-foreground py-6">Nenhum mapeamento customizado. O sistema usará os slides padrão.</p>
-                    )}
-                  </div>
                 </CardContent>
               </Card>
 
