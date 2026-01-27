@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
@@ -16,6 +16,7 @@ import { Quote, QuoteItem } from "@/types/quote";
 
 export default function Index() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -27,6 +28,13 @@ export default function Index() {
     email: "",
     phone: "",
   });
+
+  // Resetar para a tela inicial quando o usuário clica no link "Home" da sidebar
+  useEffect(() => {
+    if (location.pathname === "/" && !location.search) {
+      setStep("welcome");
+    }
+  }, [location]);
 
   useEffect(() => {
     const loadSettings = async () => {
@@ -60,7 +68,7 @@ export default function Index() {
       
       const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase (ou fallback local dentro do service)
+      // Salvar no Supabase
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -75,7 +83,7 @@ export default function Index() {
           totalPrice: payload.totalPrice,
           status: "rascunho",
           observations: payload.observations || "",
-          settings: payload, // Estado completo para regeneração futura
+          settings: payload,
         },
         payload.items.map((it: any) => ({
           sku: it.product.part_number || it.product.description,
@@ -130,7 +138,6 @@ export default function Index() {
 
     const loadToastId = toast.loading("Regenerando arquivo PPTX...");
     try {
-      // Usamos as configurações salvas no momento da criação original
       const blob = await generateProposalPPTX(selectedQuote.settings);
       
       const dateObj = new Date(selectedQuote.proposalDate);
@@ -154,7 +161,6 @@ export default function Index() {
     }
   };
 
-  // Novo: regenerar diretamente a partir de um item do histórico
   const handleRegenerateFromHistory = async (quote: Quote) => {
     if (!quote || !quote.settings) {
       toast.error("Dados da proposta ausentes. Não é possível regenerar.");
