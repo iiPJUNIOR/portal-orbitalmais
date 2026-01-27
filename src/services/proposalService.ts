@@ -3,6 +3,7 @@ import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { parseISO } from "date-fns";
+import { getUserSettings } from "./settingsService";
 
 interface QuoteItem {
   id: string;
@@ -41,7 +42,7 @@ interface ProposalData {
   approvalLink?: string;
 }
 
-const MODEL_TO_SLIDE: Record<string, number> = {
+const DEFAULT_MODEL_TO_SLIDE: Record<string, number> = {
   "idface pro": 19, 
   "idface max": 20, 
   "idaccess nano": 21, 
@@ -54,8 +55,8 @@ const MODEL_TO_SLIDE: Record<string, number> = {
   "iduhf": 28, 
   "iduhf lite": 29, 
   "idblock next facial": 30,
-  "idblock next": 30, // Fallback para iDBlock Next
-  "id block next": 30, // Fallback com espaço
+  "idblock next": 30,
+  "id block next": 30,
   "idblock next biometria digital": 31, 
   "idblock facial inox": 32,
   "idblock facial preta": 33, 
@@ -103,6 +104,12 @@ export const generateProposalNumber = (pipedriveUrl?: string, version?: string |
 
 export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
   try {
+    const settings = await getUserSettings();
+    const userMappings = settings?.slide_mappings || {};
+    
+    // Mesclar mapeamentos (usuário tem prioridade)
+    const activeMappings = { ...DEFAULT_MODEL_TO_SLIDE, ...userMappings };
+
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
       : (data.totalPrice || 0);
@@ -163,12 +170,12 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       
       let foundSlide: number | undefined;
       
-      // Busca direta no dicionário
-      if (MODEL_TO_SLIDE[modelLower]) {
-        foundSlide = MODEL_TO_SLIDE[modelLower];
+      // Busca direta no dicionário mesclado
+      if (activeMappings[modelLower]) {
+        foundSlide = activeMappings[modelLower];
       } else {
         // Busca flexível removendo espaços
-        for (const [key, slide] of Object.entries(MODEL_TO_SLIDE)) {
+        for (const [key, slide] of Object.entries(activeMappings)) {
           const keyNoSpace = key.replace(/\s+/g, "");
           if (modelNoSpace.includes(keyNoSpace) || keyNoSpace.includes(modelNoSpace)) {
             foundSlide = slide;
