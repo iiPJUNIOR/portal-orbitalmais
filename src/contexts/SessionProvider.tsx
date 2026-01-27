@@ -4,8 +4,6 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2, ShieldCheck } from "lucide-react";
-import { toast } from "sonner";
-import { syncLocalQuotes } from "@/services/localSyncService";
 
 type SessionContextValue = {
   session: any | null;
@@ -51,6 +49,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         // Verificação específica para confirmação de cadastro
         else if (hash.includes("type=signup")) {
           console.log("[SessionProvider] Detectado link de CONFIRMAÇÃO de cadastro");
+          // Deixamos a rota /auth-status lidar com isso ou redirecionamos para lá se não estivermos nela
           if (location.pathname !== "/auth-status") {
             setTimeout(() => {
               if (mounted) safeNavigate("/auth-status");
@@ -65,23 +64,6 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
           setInitializing(false);
-        }
-
-        // If we have an existing session on init, attempt to sync local quotes immediately
-        if (currentSession && currentSession.user) {
-          (async () => {
-            try {
-              const r = await syncLocalQuotes();
-              if (r.synced > 0) {
-                toast.success(`Sincronizados ${r.synced} rascunho(s) locais para o servidor.`);
-              }
-              if (r.errors > 0 && r.synced === 0) {
-                toast.error("Falha ao sincronizar rascunhos locais.");
-              }
-            } catch (err) {
-              console.warn("[SessionProvider] syncLocalQuotes failed on init", err);
-            }
-          })();
         }
       } catch (err) {
         console.warn("[SessionProvider] Erro ao inicializar auth", err);
@@ -102,21 +84,6 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
         safeNavigate("/reset-password");
       } else if (event === "SIGNED_OUT") {
         safeNavigate("/login");
-      } else if (event === "SIGNED_IN") {
-        // After sign in, synchronize local optimistic entries (drafts / optimistic saves) to Supabase
-        (async () => {
-          try {
-            const r = await syncLocalQuotes();
-            if (r.synced > 0) {
-              toast.success(`Sincronizados ${r.synced} rascunho(s) locais para o servidor.`);
-            }
-            if (r.errors > 0 && r.synced === 0) {
-              toast.error("Falha ao sincronizar rascunhos locais.");
-            }
-          } catch (err) {
-            console.warn("[SessionProvider] syncLocalQuotes failed on SIGNED_IN", err);
-          }
-        })();
       }
     });
 
