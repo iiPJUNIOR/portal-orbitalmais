@@ -111,8 +111,8 @@ export function AppSidebar() {
       title: "Configurações",
       url: "/settings",
       icon: Settings,
-      // show only if user has been granted settings access or is Paulo
-      show: canAccessSettings,
+      // Always show the settings entry in the sidebar (page will enforce granular restrictions)
+      show: true,
     },
   ];
 
@@ -121,14 +121,12 @@ export function AppSidebar() {
     navigate("/login");
   };
 
-  // helper to open absolute url in new tab
   const openInNewTab = (path: string) => {
     const origin = window.location.origin;
     const url = origin + path;
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
-  // Centralized click handler to navigate and broadcast a global event so pages can react
   const handleMenuClick = (url: string) => {
     navigate(url);
     try {
@@ -144,7 +142,6 @@ export function AppSidebar() {
         <button
           onClick={() => handleMenuClick("/")}
           onAuxClick={(e: any) => {
-            // middle-click (button === 1) -> open in new tab
             if (e?.button === 1) {
               e.preventDefault();
               openInNewTab("/");

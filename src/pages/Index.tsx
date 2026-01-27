@@ -11,15 +11,16 @@ import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote, getQuoteItems } from "@/services/supabaseService";
 import { getUserSettings } from "@/services/settingsService";
-import { FileText, PlusCircle, History, Settings as SettingsIcon, ArrowLeft } from "lucide-react";
+import { FileText, PlusCircle, History as HistoryIcon, Settings as SettingsIcon, ArrowLeft } from "lucide-react";
 import { Quote, QuoteItem } from "@/types/quote";
 import { useSession } from "@/contexts/SessionProvider";
+import DraftsPage from "@/pages/Drafts";
 
 export default function Index() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
-  const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details">("welcome");
+  const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details" | "drafts">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -32,6 +33,8 @@ export default function Index() {
   });
 
   const [needsSellerProfile, setNeedsSellerProfile] = useState(false);
+  const [canViewHistory, setCanViewHistory] = useState(false);
+  const [canAccessSettings, setCanAccessSettings] = useState(false);
 
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
@@ -47,29 +50,48 @@ export default function Index() {
             phone: s.seller_phone || "",
           });
 
-          // If seller name or email missing, prompt user to complete profile
           const missing = !(s.seller_name && String(s.seller_name).trim().length > 0 && s.seller_email && String(s.seller_email).trim().length > 0);
           setNeedsSellerProfile(Boolean(missing && user));
+
+          setCanViewHistory(!!s?.can_view_history || user?.email === PAULO_EMAIL);
+          setCanAccessSettings(!!s?.can_access_settings || user?.email === PAULO_EMAIL);
         } else {
-          // No settings found -> need to complete
           setNeedsSellerProfile(Boolean(user));
+          setCanViewHistory(user?.email === PAULO_EMAIL);
+          setCanAccessSettings(user?.email === PAULO_EMAIL);
         }
       } catch (err) {
         console.warn("Falha ao carregar dados do vendedor", err);
         setNeedsSellerProfile(Boolean(user));
+        setCanViewHistory(user?.email === PAULO_EMAIL);
+        setCanAccessSettings(user?.email === PAULO_EMAIL);
       }
     };
     loadSettings();
   }, [user]);
 
-  // If opened via /history or ?view=history, show history by default (but controlled by permission check below)
+  // If opened via /history or ?view=history, show history by default (but access will be validated)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const view = params.get("view");
     if (location.pathname === "/history" || view === "history") {
-      setStep("history");
+      // only show if allowed; otherwise redirect to welcome
+      (async () => {
+        try {
+          const s = await getUserSettings();
+          const allowed = !!s?.can_view_history || user?.email === PAULO_EMAIL;
+          if (allowed) setStep("history");
+          else {
+            toast.error("Acesso ao histórico restrito.");
+            setStep("welcome");
+            navigate("/", { replace: true });
+          }
+        } catch {
+          setStep("welcome");
+          navigate("/", { replace: true });
+        }
+      })();
     }
-    // don't include setStep in deps to avoid resetting user navigation
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search]);
 
@@ -82,11 +104,26 @@ export default function Index() {
         if (path === "/") {
           setStep("welcome");
         } else if (path === "/history") {
-          setStep("history");
+          // only allow if permitted
+          (async () => {
+            try {
+              const s = await getUserSettings();
+              const allowed = !!s?.can_view_history || user?.email === PAULO_EMAIL;
+              if (allowed) setStep("history");
+              else {
+                toast.error("Acesso ao histórico restrito.");
+                setStep("welcome");
+                navigate("/", { replace: true });
+              }
+            } catch {
+              setStep("welcome");
+            }
+          })();
         } else if (path === "/wizard") {
           setStep("wizard");
+        } else if (path === "/drafts") {
+          setStep("drafts");
         } else {
-          // default fallback: show welcome when navigating within app root
           setStep("welcome");
         }
       } catch (err) {
@@ -95,45 +132,7 @@ export default function Index() {
     };
     window.addEventListener("app:navigate", handler as EventListener);
     return () => window.removeEventListener("app:navigate", handler as EventListener);
-  }, []);
-
-  // Protect direct navigation to /history for users without access
-  useEffect(() => {
-    let mounted = true;
-
-    async function ensureHistoryAllowed() {
-      try {
-        if (location.pathname !== "/history") return;
-
-        // Superadmin bypass
-        if (user?.email === PAULO_EMAIL) return;
-
-        // Fetch settings to check can_view_history
-        const s = await getUserSettings();
-        if (!mounted) return;
-
-        if (!s?.can_view_history) {
-          toast.error("Acesso ao histórico restrito. Peça ao administrador para liberar.", { duration: 3000 });
-          navigate("/", { replace: true });
-          setStep("welcome");
-        }
-      } catch (err) {
-        console.warn("history access check failed", err);
-        // On error, be conservative: redirect home
-        if (mounted) {
-          toast.error("Acesso ao histórico restrito.", { duration: 2000 });
-          navigate("/", { replace: true });
-          setStep("welcome");
-        }
-      }
-    }
-
-    ensureHistoryAllowed();
-
-    return () => {
-      mounted = false;
-    };
-  }, [location.pathname, user, navigate]);
+  }, [user, navigate]);
 
   const handleWizardComplete = async (payload: any) => {
     const loadToastId = toast.loading(`Gerando proposta em PPTX...`);
@@ -148,7 +147,6 @@ export default function Index() {
       
       const blob = await generateProposalPPTX(proposalData);
 
-      // Salvar no Supabase (ou fallback local dentro do service)
       await saveQuote(
         {
           cnpj: payload.cnpj,
@@ -163,7 +161,7 @@ export default function Index() {
           totalPrice: payload.totalPrice,
           status: "rascunho",
           observations: payload.observations || "",
-          settings: payload, // Estado completo para regeneração futura
+          settings: payload,
         },
         payload.items.map((it: any) => ({
           sku: it.product.part_number || it.product.description,
@@ -174,7 +172,6 @@ export default function Index() {
         }))
       );
 
-      // Download do arquivo
       const dateObj = new Date(payload.date + "T12:00:00");
       const month = String(dateObj.getMonth() + 1).padStart(2, '0');
       const year = dateObj.getFullYear();
@@ -218,7 +215,6 @@ export default function Index() {
 
     const loadToastId = toast.loading("Regenerando arquivo PPTX...");
     try {
-      // Usamos as configurações salvas no momento da criação original
       const blob = await generateProposalPPTX(selectedQuote.settings);
       
       const dateObj = new Date(selectedQuote.proposalDate);
@@ -242,7 +238,6 @@ export default function Index() {
     }
   };
 
-  // Novo: regenerar diretamente a partir de um item do histórico
   const handleRegenerateFromHistory = async (quote: Quote) => {
     if (!quote || !quote.settings) {
       toast.error("Dados da proposta ausentes. Não é possível regenerar.");
@@ -300,16 +295,17 @@ export default function Index() {
                 </div>
               </button>
 
+              {/* Drafts tile - visible to all users */}
               <button 
-                onClick={() => setStep("history")}
+                onClick={() => setStep("drafts")}
                 className="group p-8 bg-card border-2 border-neutral-100 dark:border-neutral-800 hover:border-neutral-900 dark:hover:border-white rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-2xl w-fit group-hover:bg-neutral-900 dark:group-hover:bg-white dark:group-hover:text-neutral-900 group-hover:text-white transition-colors">
-                  <History className="h-8 w-8" />
+                  <FileText className="h-8 w-8" />
                 </div>
                 <div>
-                  <h3 className="text-xl font-bold">Histórico</h3>
-                  <p className="text-sm text-muted-foreground">Veja e baixe novamente propostas geradas anteriormente.</p>
+                  <h3 className="text-xl font-bold">Rascunhos</h3>
+                  <p className="text-sm text-muted-foreground">Gerencie rascunhos locais e sincronize para salvar no servidor.</p>
                 </div>
               </button>
 
@@ -346,7 +342,17 @@ export default function Index() {
           </div>
         )}
 
-        {step === "history" && (
+        {step === "drafts" && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="flex items-center justify-between">
+              <h2 className="text-3xl font-bold">Rascunhos</h2>
+              <Button variant="outline" onClick={() => setStep("welcome")}>Voltar</Button>
+            </div>
+            <DraftsPage />
+          </div>
+        )}
+
+        {step === "history" && canViewHistory && (
           <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex items-center justify-between">
               <h2 className="text-3xl font-bold">Histórico de Propostas</h2>
@@ -361,7 +367,7 @@ export default function Index() {
             <QuoteDetails 
               quote={selectedQuote} 
               items={quoteItems} 
-              onBack={() => setStep("history")} 
+              onBack={() => setStep(canViewHistory ? "history" : "welcome")} 
               onRegenerate={handleRegenerateQuote}
             />
           </div>
