@@ -59,8 +59,8 @@ const AppContent = () => {
       <Route path="/login" element={<Login />} />
       <Route path="/auth-status" element={<AuthStatus />} />
       <Route path="/reset-password" element={<ResetPassword />} />
-      <Route 
-        path="/*" 
+      <Route
+        path="/*"
         element={
           <div className="flex h-screen w-full bg-background overflow-hidden">
             <AppSidebar />
@@ -68,8 +68,8 @@ const AppContent = () => {
               <header className="h-14 flex items-center px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
                 <SidebarTrigger className="-ml-1" />
                 <div className="h-4 w-[1px] bg-border mx-4" />
-                
-                <button 
+
+                <button
                   onClick={() => navigate("/")}
                   onAuxClick={(e: any) => {
                     if (e?.button === 1) {
@@ -86,11 +86,12 @@ const AppContent = () => {
                   <ThemeToggle />
                 </div>
               </header>
-              
+
               <main className="flex-1 overflow-auto bg-muted/20 dark:bg-background">
                 <div className="min-h-full">
                   <Routes>
                     <Route path="/" element={<Index />} />
+                    <Route path="/history" element={<Index />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/token-scan" element={<TokenScanner />} />
                     <Route path="/drafts" element={<DraftsPage />} />
@@ -101,7 +102,7 @@ const AppContent = () => {
               </main>
             </div>
           </div>
-        } 
+        }
       />
     </Routes>
   );
