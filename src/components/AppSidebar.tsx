@@ -66,11 +66,23 @@ export function AppSidebar() {
     window.open(url, "_blank", "noopener,noreferrer");
   };
 
+  // Centralized click handler to navigate and broadcast a global event so pages (Index) can react
+  const handleMenuClick = (url: string) => {
+    // Use react-router navigate
+    navigate(url);
+    // Emit event so pages can react (e.g., Index will switch to the appropriate tab)
+    try {
+      window.dispatchEvent(new CustomEvent("app:navigate", { detail: { path: url } }));
+    } catch (err) {
+      // ignore
+    }
+  };
+
   return (
     <Sidebar className="border-r">
       <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
         <button
-          onClick={() => navigate("/")}
+          onClick={() => handleMenuClick("/")}
           onAuxClick={(e: any) => {
             // middle-click (button === 1) -> open in new tab
             if (e?.button === 1) {
@@ -93,7 +105,7 @@ export function AppSidebar() {
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
-                    onClick={() => navigate(item.url)}
+                    onClick={() => handleMenuClick(item.url)}
                     onAuxClick={(e: any) => {
                       if (e?.button === 1) {
                         e.preventDefault();

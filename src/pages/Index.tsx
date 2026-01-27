@@ -59,6 +59,30 @@ export default function Index() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname, location.search]);
 
+  // React to global navigation events emitted by the sidebar to ensure correct tab/view
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const path = (e as CustomEvent).detail?.path;
+        if (!path) return;
+        if (path === "/") {
+          setStep("welcome");
+        } else if (path === "/history") {
+          setStep("history");
+        } else if (path === "/wizard") {
+          setStep("wizard");
+        } else {
+          // default fallback: show welcome when navigating within app root
+          setStep("welcome");
+        }
+      } catch (err) {
+        // ignore
+      }
+    };
+    window.addEventListener("app:navigate", handler as EventListener);
+    return () => window.removeEventListener("app:navigate", handler as EventListener);
+  }, []);
+
   const handleWizardComplete = async (payload: any) => {
     const loadToastId = toast.loading(`Gerando proposta em PPTX...`);
     try {
