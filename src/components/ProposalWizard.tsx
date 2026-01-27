@@ -6,11 +6,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileDown, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft, Save } from "lucide-react";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft, Save } from "lucide-react";
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
-import { formatCurrencyBRL, parseSpreadsheetNumber } from "@/lib/formatters";
+import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
 
 interface WizardProps {
@@ -233,11 +233,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice
     });
 
-    // If this wizard was opened from a draft, remove the draft now (user completed it)
+    // If this wizard was opened from a draft, update the draft with latest data
     if (draftId) {
       try {
         updateDraft(draftId, { data: formData, step: currentStep });
-        // deleting handled by wrapper page after onComplete if needed
       } catch {}
     }
 
@@ -263,11 +262,27 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
       const id = await saveDraft({ data: formData, step: currentStep });
       toast.success("Rascunho salvo", { id: tId });
-      // after saving, keep draftId by updating local state? (we won't mutate props)
     } catch (err) {
       console.error("save draft failed", err);
       toast.error("Erro ao salvar rascunho");
     }
+  };
+
+  // Append a suffix (e.g., 'ASK') to the selected product's name, avoiding duplicates
+  const appendToName = (baseId: string, suffix: string) => {
+    if (!suffix) return;
+    setFormData((prev: any) => {
+      const next = (prev.selectedProducts || []).map((sp: any) => {
+        if (sp.baseId !== baseId) return sp;
+        const currentName = String(sp.name || "").trim();
+        const parts = currentName.split(" - ").map((s: string) => s.trim()).filter(Boolean);
+        // If suffix already included, do nothing
+        if (parts.includes(suffix)) return sp;
+        const newName = currentName ? `${currentName} - ${suffix}` : suffix;
+        return { ...sp, name: newName };
+      });
+      return { ...prev, selectedProducts: next };
+    });
   };
 
   const renderStep = () => {
@@ -356,11 +371,52 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               <Label className="font-bold text-lg">Itens Selecionados ({(formData.selectedProducts || []).length})</Label>
               <div className="grid grid-cols-1 gap-3">
                 {(formData.selectedProducts || []).map((p: any) => (
-                  <div key={p.baseId} className="flex items-center justify-between p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="flex-1"><span className="font-bold text-sm">{p.name}</span></div>
-                    <div className="flex items-center gap-3 ml-4">
-                      <Input type="number" className="w-16 h-8 text-xs bg-card text-center font-bold" value={p.quantity} onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))} />
-                      <Button variant="ghost" size="sm" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
+                  <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                    <div className="md:flex md:items-start md:justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <Input
+                              value={p.name}
+                              onChange={(e) => setFormData((prev: any) => ({
+                                ...prev,
+                                selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, name: e.target.value } : sp)
+                              }))}
+                              className="text-sm font-bold"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="text-[11px] text-muted-foreground mt-2 break-words">
+                          {p.description || <span className="italic text-xs text-muted-foreground">Sem descrição</span>}
+                        </div>
+
+                        {p.extras && p.extras.length > 0 && (
+                          <div className="flex flex-wrap gap-2 mt-3">
+                            {p.extras.map((ex: any, idx: number) => (
+                              <button
+                                key={idx}
+                                type="button"
+                                onClick={() => appendToName(p.baseId, ex.value)}
+                                className="text-xs px-2 py-1 rounded-md border bg-white/90 hover:bg-primary/5 transition-colors text-muted-foreground"
+                                title={`Adicionar "${ex.value}" ao nome`}
+                              >
+                                <span className="font-semibold mr-1">{ex.label}:</span> {ex.value}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3 mt-4 md:mt-0 md:ml-4">
+                        <Input
+                          type="number"
+                          className="w-20 h-8 text-xs bg-card text-center font-bold"
+                          value={p.quantity}
+                          onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
+                      </div>
                     </div>
                   </div>
                 ))}
