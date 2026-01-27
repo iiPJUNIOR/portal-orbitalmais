@@ -31,6 +31,8 @@ export default function Index() {
     phone: "",
   });
 
+  const [needsSellerProfile, setNeedsSellerProfile] = useState(false);
+
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
   useEffect(() => {
@@ -44,13 +46,21 @@ export default function Index() {
             email: s.seller_email || "",
             phone: s.seller_phone || "",
           });
+
+          // If seller name or email missing, prompt user to complete profile
+          const missing = !(s.seller_name && String(s.seller_name).trim().length > 0 && s.seller_email && String(s.seller_email).trim().length > 0);
+          setNeedsSellerProfile(Boolean(missing && user));
+        } else {
+          // No settings found -> need to complete
+          setNeedsSellerProfile(Boolean(user));
         }
       } catch (err) {
         console.warn("Falha ao carregar dados do vendedor", err);
+        setNeedsSellerProfile(Boolean(user));
       }
     };
     loadSettings();
-  }, []);
+  }, [user]);
 
   // If opened via /history or ?view=history, show history by default (but controlled by permission check below)
   useEffect(() => {
@@ -305,7 +315,8 @@ export default function Index() {
 
               <button 
                 onClick={() => navigate("/settings")}
-                className="group p-8 bg-card border-2 border-neutral-100 dark:border-neutral-800 hover:border-neutral-900 dark:hover:border-white rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
+                className={`relative group p-8 bg-card border-2 border-neutral-100 dark:border-neutral-800 hover:border-neutral-900 dark:hover:border-white rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm ${needsSellerProfile ? "animate-pulse ring-2 ring-primary/40" : ""}`}
+                aria-describedby={needsSellerProfile ? "settings-hint" : undefined}
               >
                 <div className="p-3 bg-neutral-100 dark:bg-neutral-800 rounded-2xl w-fit group-hover:bg-neutral-900 dark:group-hover:bg-white dark:group-hover:text-neutral-900 group-hover:text-white transition-colors">
                   <SettingsIcon className="h-8 w-8" />
@@ -314,6 +325,12 @@ export default function Index() {
                   <h3 className="text-xl font-bold">Configurações</h3>
                   <p className="text-sm text-muted-foreground">Ajuste seus dados de vendedor e bases de produtos.</p>
                 </div>
+
+                {needsSellerProfile && (
+                  <div id="settings-hint" className="absolute top-3 right-3 bg-yellow-400 text-neutral-900 text-xs font-bold px-2 py-1 rounded shadow">
+                    Completar perfil
+                  </div>
+                )}
               </button>
             </div>
           </div>

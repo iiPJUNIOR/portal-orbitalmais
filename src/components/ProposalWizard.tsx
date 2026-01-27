@@ -12,6 +12,7 @@ import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
+import { saveUserSettings } from "@/services/settingsService";
 
 interface WizardProps {
   initialSellerData: {
@@ -283,6 +284,32 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       });
       return { ...prev, selectedProducts: next };
     });
+  };
+
+  // New handler: when clicking Next, if on step 2 and seller info present, auto-save it to user settings
+  const handleNext = async () => {
+    if (currentStep === 2) {
+      // If seller fields filled, persist to user settings (first-time save)
+      const sellerPayload: any = {
+        seller_name: formData.sellerName || undefined,
+        seller_role: formData.sellerRole || undefined,
+        seller_email: formData.sellerEmail || undefined,
+        seller_phone: formData.sellerPhone || undefined,
+      };
+
+      const anyFilled = Object.values(sellerPayload).some((v) => v !== undefined && v !== null && String(v).trim() !== "");
+      if (anyFilled) {
+        try {
+          await saveUserSettings(sellerPayload);
+          toast.success("Perfil do vendedor salvo automaticamente");
+        } catch (err) {
+          console.warn("Falha ao salvar perfil automaticamente", err);
+          toast.error("Não foi possível salvar o perfil automaticamente");
+        }
+      }
+    }
+
+    setCurrentStep((prev) => prev + 1);
   };
 
   const renderStep = () => {
@@ -566,7 +593,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                   <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
                 </Button>
               ) : (
-                <Button className="rounded-full px-8" onClick={() => setCurrentStep((prev) => prev + 1)}>
+                <Button className="rounded-full px-8" onClick={handleNext}>
                   Próximo <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               )}
