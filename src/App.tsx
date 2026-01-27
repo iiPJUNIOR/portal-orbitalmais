@@ -16,6 +16,8 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
 import { getUserSettings } from "@/services/settingsService";
+import DraftsPage from "@/pages/Drafts";
+import WizardPage from "@/pages/WizardPage";
 
 const queryClient = new QueryClient();
 
@@ -23,17 +25,14 @@ const AppContent = () => {
   const { user } = useSession();
   const navigate = useNavigate();
 
-  // Aplica o tamanho de fonte global com base nas configurações
   useEffect(() => {
     const applyFontSize = async () => {
       try {
         const s = await getUserSettings();
         const size = s?.font_size || "medium";
         const html = document.documentElement;
-        
-        // Remove classes de fonte existentes
+
         html.classList.remove("font-small", "font-medium", "font-large", "font-extra-large");
-        // Adiciona a nova
         html.classList.add(`font-${size}`);
       } catch (err) {
         console.warn("Falha ao aplicar tamanho de fonte", err);
@@ -44,7 +43,6 @@ const AppContent = () => {
       applyFontSize();
     }
 
-    // Ouve mudanças de configurações
     window.addEventListener("user_settings_changed", applyFontSize);
     return () => window.removeEventListener("user_settings_changed", applyFontSize);
   }, [user]);
@@ -64,7 +62,6 @@ const AppContent = () => {
                 <SidebarTrigger className="-ml-1" />
                 <div className="h-4 w-[1px] bg-border mx-4" />
                 
-                {/* Título clicável que leva para o Index */}
                 <button 
                   onClick={() => navigate("/")}
                   className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 hover:text-primary transition-colors bg-transparent border-none p-0"
@@ -83,6 +80,8 @@ const AppContent = () => {
                     <Route path="/" element={<Index />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/token-scan" element={<TokenScanner />} />
+                    <Route path="/drafts" element={<DraftsPage />} />
+                    <Route path="/wizard" element={<WizardPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </div>

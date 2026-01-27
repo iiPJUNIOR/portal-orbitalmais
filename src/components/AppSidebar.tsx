@@ -5,7 +5,8 @@ import {
   LayoutTemplate, 
   Settings, 
   LogOut,
-  User
+  User,
+  FileText
 } from "lucide-react";
 import {
   Sidebar,
@@ -36,6 +37,11 @@ export function AppSidebar() {
       icon: LayoutTemplate,
     },
     {
+      title: "Rascunhos",
+      url: "/drafts",
+      icon: FileText,
+    },
+    {
       title: "Configurações",
       url: "/settings",
       icon: Settings,
@@ -50,7 +56,6 @@ export function AppSidebar() {
   return (
     <Sidebar className="border-r">
       <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
-        {/* Make the logo clickable and navigate to the main generator page */}
         <button
           onClick={() => navigate("/")}
           aria-label="Ir para Gerador de Propostas"

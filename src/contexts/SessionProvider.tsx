@@ -4,6 +4,8 @@ import React, { createContext, useContext, useEffect, useRef, useState } from "r
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Loader2, ShieldCheck } from "lucide-react";
+import { syncLocalDrafts } from "@/services/draftService";
+import { toast } from "sonner";
 
 type SessionContextValue = {
   session: any | null;
@@ -38,18 +40,14 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     const initializeAuth = async () => {
       try {
         const hash = window.location.hash;
-        
-        // Verificação específica para recuperação de senha
+
         if (hash.includes("type=recovery")) {
           console.log("[SessionProvider] Detectado link de RECUPERAÇÃO via Hash");
           setTimeout(() => {
             if (mounted) safeNavigate("/reset-password");
           }, 100);
-        } 
-        // Verificação específica para confirmação de cadastro
-        else if (hash.includes("type=signup")) {
+        } else if (hash.includes("type=signup")) {
           console.log("[SessionProvider] Detectado link de CONFIRMAÇÃO de cadastro");
-          // Deixamos a rota /auth-status lidar com isso ou redirecionamos para lá se não estivermos nela
           if (location.pathname !== "/auth-status") {
             setTimeout(() => {
               if (mounted) safeNavigate("/auth-status");
@@ -59,7 +57,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
         const resp = await supabase.auth.getSession();
         const currentSession = resp?.data?.session ?? null;
-        
+
         if (mounted) {
           setSession(currentSession);
           setUser(currentSession?.user ?? null);
@@ -73,17 +71,36 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     initializeAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, s) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, s) => {
       if (!mounted) return;
-      
+
       console.log("[SessionProvider] Evento de Auth:", event);
       setSession(s);
       setUser(s?.user ?? null);
-      
+
       if (event === "PASSWORD_RECOVERY") {
         safeNavigate("/reset-password");
       } else if (event === "SIGNED_OUT") {
         safeNavigate("/login");
+      } else if (event === "SIGNED_IN") {
+        // Try to sync local drafts automatically when the user signs in
+        try {
+          const tId = toast.loading("Sincronizando rascunhos locais...");
+          const result = await syncLocalDrafts();
+          if (result.synced.length > 0) {
+            toast.success(`Sincronizados ${result.synced.length} rascunho(s).`, { id: tId });
+          } else {
+            // If none synced but also no failures, just dismiss
+            if (result.failed.length === 0) {
+              toast.dismiss(tId);
+            } else {
+              toast.error(`Falha ao sincronizar ${result.failed.length} rascunho(s).`, { id: tId });
+            }
+          }
+        } catch (err) {
+          console.warn("Auto-sync drafts failed", err);
+          toast.error("Erro ao sincronizar rascunhos locais");
+        }
       }
     });
 
@@ -93,18 +110,16 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     };
   }, []);
 
-  // Redirecionamento de rotas protegidas
   useEffect(() => {
     if (initializing) return;
 
     const path = location.pathname;
     const hash = window.location.hash;
-    
-    // Ignora redirecionamento automático em rotas de fluxo de auth
+
     if (
-      hash.includes("type=recovery") || 
+      hash.includes("type=recovery") ||
       hash.includes("type=signup") ||
-      path === "/reset-password" || 
+      path === "/reset-password" ||
       path === "/auth-status"
     ) {
       return;
