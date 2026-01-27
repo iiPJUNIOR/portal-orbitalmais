@@ -10,6 +10,9 @@ export type DraftRecord = {
   step?: number;
   created_at: string;
   updated_at?: string;
+  // New fields to track server sync state
+  remote_id?: string;
+  synced?: boolean;
 };
 
 function readAll(): DraftRecord[] {
@@ -30,6 +33,25 @@ function writeAll(arr: DraftRecord[]) {
   }
 }
 
+function updateLocalDraftRecord(localId: string, patch: Partial<DraftRecord>) {
+  try {
+    const arr = readAll();
+    const idx = arr.findIndex((r) => r.id === localId);
+    if (idx === -1) return false;
+    arr[idx] = { ...arr[idx], ...patch, updated_at: new Date().toISOString() };
+    writeAll(arr);
+    return true;
+  } catch (err) {
+    console.warn("draftService: updateLocalDraftRecord failed", err);
+    return false;
+  }
+}
+
+/**
+ * Save a draft locally and immediately attempt to sync with server.
+ * The local draft is ALWAYS kept for visibility. If server save succeeds
+ * we mark the draft as synced and record the remote_id.
+ */
 export async function saveDraft(payload: { data: any; step?: number }): Promise<string> {
   const id = uuidv4();
   const now = new Date().toISOString();
@@ -39,18 +61,17 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
     step: payload.step ?? 1,
     created_at: now,
     updated_at: now,
+    remote_id: undefined,
+    synced: false,
   };
 
   const arr = readAll();
   arr.unshift(rec);
   writeAll(arr);
 
-  // Immediately attempt to sync this draft to the server.
-  // If sync succeeds (we receive a remote id different from the local id),
-  // remove the local draft and inform the user. Otherwise keep local fallback.
+  // Attempt immediate background sync. Keep local copy visible regardless.
   (async () => {
     try {
-      // Build payload for saveQuote (same mapping used elsewhere in the app)
       const d = rec.data || {};
       const quotePayload: any = {
         cnpj: d.cnpj,
@@ -76,25 +97,25 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
         priceModel: it.priceModel || quotePayload.priceModel,
       }));
 
-      // Attempt remote save
       const savedId = await saveQuote(quotePayload, items);
 
-      // If saveQuote returned a different id (remote), consider it synced
+      // If savedId differs from local id, server saved successfully -> mark synced.
       if (savedId && savedId !== id) {
-        // remove the local draft entry
-        try {
-          const current = readAll().filter((r) => r.id !== id);
-          writeAll(current);
-        } catch (cleanupErr) {
-          console.warn("draftService: failed to remove local draft after sync", cleanupErr);
+        const patched = updateLocalDraftRecord(id, { remote_id: savedId, synced: true });
+        if (patched) {
+          toast.success("Rascunho sincronizado com o servidor e permanece disponível em Rascunhos.");
+        } else {
+          toast.success("Rascunho sincronizado com o servidor."); // fallback message
         }
-        toast.success("Rascunho sincronizado automaticamente com o servidor.");
       } else {
-        // Not synced (likely unauthenticated or server error); leave local copy
+        // savedId === id means it was kept local by saveQuote (no remote save). Keep it and inform user.
+        updateLocalDraftRecord(id, { synced: false, remote_id: undefined });
         toast.info("Rascunho salvo localmente; será sincronizado automaticamente ao conectar.");
       }
     } catch (err) {
       console.warn("draftService: auto-sync failed", err);
+      // leave local copy intact and mark unsynced
+      updateLocalDraftRecord(id, { synced: false, remote_id: undefined });
       toast.error("Não foi possível sincronizar o rascunho agora; ele foi salvo localmente.");
     }
   })();
@@ -102,6 +123,10 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
   return id;
 }
 
+/**
+ * Update a local draft and attempt to sync the update immediately.
+ * The local draft remains visible; when the server acknowledges, we mark it synced and store remote_id.
+ */
 export function updateDraft(id: string, next: { data?: any; step?: number }) {
   const arr = readAll();
   const idx = arr.findIndex((r) => r.id === id);
@@ -109,10 +134,12 @@ export function updateDraft(id: string, next: { data?: any; step?: number }) {
   if (next.data !== undefined) arr[idx].data = next.data;
   if (next.step !== undefined) arr[idx].step = next.step;
   arr[idx].updated_at = new Date().toISOString();
+  // Mark unsynced until server confirms
+  arr[idx].synced = false;
+  arr[idx].remote_id = arr[idx].remote_id ?? undefined;
   writeAll(arr);
 
-  // After updating a draft locally, attempt to sync update immediately as well.
-  // This keeps local+server in sync without extra user actions.
+  // Attempt sync immediately
   (async () => {
     try {
       const d = arr[idx];
@@ -144,20 +171,17 @@ export function updateDraft(id: string, next: { data?: any; step?: number }) {
 
       const savedId = await saveQuote(quotePayload, items);
 
-      // If saved remotely, remove the local draft
-      if (savedId && savedId !== id) {
-        try {
-          const current = readAll().filter((r) => r.id !== id);
-          writeAll(current);
-          toast.success("Atualização do rascunho sincronizada com o servidor.");
-        } catch (cleanupErr) {
-          console.warn("draftService: failed to remove local draft after update-sync", cleanupErr);
-        }
+      if (savedId) {
+        // Mark local as synced and store remote id (even if savedId === id it's safe)
+        updateLocalDraftRecord(id, { remote_id: savedId, synced: true });
+        toast.success("Rascunho sincronizado com o servidor.");
       } else {
-        // keep local fallback
+        updateLocalDraftRecord(id, { synced: false });
+        // silent fallback; UI still shows draft
       }
     } catch (err) {
       console.warn("draftService: auto-sync update failed", err);
+      updateLocalDraftRecord(id, { synced: false });
     }
   })();
 
@@ -175,7 +199,7 @@ export function getDrafts(): DraftRecord[] {
 
 /**
  * Attempt to sync all local drafts to Supabase by calling saveQuote().
- * On success the local draft is removed.
+ * On success mark the draft as synced (and store remote id).
  * Returns a report with synced and failed ids.
  */
 export async function syncLocalDrafts(): Promise<{ synced: string[]; failed: Array<{ id: string; error: any }> }> {
@@ -211,7 +235,7 @@ export async function syncLocalDrafts(): Promise<{ synced: string[]; failed: Arr
 
       const savedId = await saveQuote(quotePayload, items);
       if (savedId) {
-        deleteDraft(d.id);
+        updateLocalDraftRecord(d.id, { remote_id: savedId, synced: true });
         synced.push(savedId);
       } else {
         failed.push({ id: d.id, error: "No id returned" });
@@ -258,7 +282,7 @@ export async function syncSingleDraft(id: string): Promise<{ success: boolean; s
 
     const savedId = await saveQuote(quotePayload, items);
     if (savedId) {
-      deleteDraft(d.id);
+      updateLocalDraftRecord(d.id, { remote_id: savedId, synced: true });
       return { success: true, savedId };
     }
     return { success: false, error: "no id returned" };
