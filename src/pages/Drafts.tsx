@@ -4,9 +4,8 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getDrafts, deleteDraft, syncSingleDraft, DraftRecord } from "@/services/draftService";
-import { saveDraft } from "@/services/draftService";
 import { useNavigate } from "react-router-dom";
-import { Trash2, ArrowRight, Download, RefreshCw, FileText } from "lucide-react";
+import { Trash2, ArrowRight, RefreshCw, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
 
 export default function DraftsPage() {
@@ -89,28 +88,47 @@ export default function DraftsPage() {
         ) : (
           <div className="grid gap-4">
             {drafts.map((d) => (
-              <Card key={d.id}>
-                <CardHeader className="flex items-center justify-between">
-                  <div>
-                    <CardTitle className="text-base">{d.data.companyName || "Rascunho sem título"}</CardTitle>
-                    <div className="text-sm text-muted-foreground">{new Date(d.created_at).toLocaleString()}</div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => handleContinue(d)}><ArrowRight className="mr-2 h-4 w-4" />Continuar</Button>
-                    <Button size="sm" variant="outline" onClick={() => handleExport(d)}><FileText className="mr-2 h-4 w-4" />Export</Button>
-                    <Button size="sm" variant="ghost" onClick={() => handleSync(d)}><RefreshCw className="mr-2 h-4 w-4" />Sincronizar</Button>
-                    <Button size="sm" variant="destructive" onClick={() => handleDelete(d)}><Trash2 className="h-4 w-4" /></Button>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-sm text-muted-foreground break-words">
-                    {d.data.contactName ? <div><strong>Contato:</strong> {d.data.contactName}</div> : null}
-                    {d.data.cnpj ? <div><strong>CNPJ:</strong> {d.data.cnpj}</div> : null}
-                    <div className="mt-2">
-                      <strong>Passo salvo:</strong> {d.step ?? 1}
+              <Card key={d.id} className="overflow-hidden">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center p-4">
+                  <div className="md:col-span-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="text-lg font-semibold">{d.data.companyName || "Rascunho sem título"}</h3>
+                        <div className="text-sm text-muted-foreground">{d.data.contactName ? `${d.data.contactName} • ${d.data.cnpj || ""}` : (d.data.cnpj || "")}</div>
+                      </div>
+                      <div className="hidden md:flex items-center gap-2 text-sm text-muted-foreground">
+                        <span>Criado em</span>
+                        <span className="font-medium">{new Date(d.created_at).toLocaleString()}</span>
+                      </div>
+                    </div>
+
+                    <div className="mt-3 text-sm text-muted-foreground">
+                      <div><strong>Itens:</strong> {(d.data.selectedProducts || []).length}</div>
+                      {d.data.totalPrice ? <div><strong>Valor total:</strong> R$ {Number(d.data.totalPrice).toFixed(2)}</div> : null}
+                      <div className="mt-2 text-xs text-muted-foreground">Passo salvo: <span className="font-medium">{d.step ?? 1}</span></div>
                     </div>
                   </div>
-                </CardContent>
+
+                  <div className="md:col-span-2 flex flex-col items-stretch gap-2">
+                    <div className="flex gap-2">
+                      <Button size="sm" className="flex-1" onClick={() => handleContinue(d)}>
+                        <ArrowRight className="mr-2 h-4 w-4" /> Continuar
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => handleExport(d)}>
+                        <FileText className="mr-2 h-4 w-4" /> Export
+                      </Button>
+                    </div>
+
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="ghost" className="flex-1" onClick={() => handleSync(d)}><RefreshCw className="mr-2 h-4 w-4" /> Sincronizar</Button>
+                      <Button size="sm" variant="destructive" onClick={() => handleDelete(d)}><Trash2 className="h-4 w-4" /></Button>
+                    </div>
+
+                    <div className="md:hidden mt-2 text-xs text-muted-foreground">
+                      Criado: {new Date(d.created_at).toLocaleString()}
+                    </div>
+                  </div>
+                </div>
               </Card>
             ))}
           </div>
