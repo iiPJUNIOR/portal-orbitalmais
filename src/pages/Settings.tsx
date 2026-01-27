@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info, LayoutList } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Loader2, Info, LayoutList } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
-import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission, grantPermissionByEmail } from "@/services/settingsService";
+import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,9 +40,6 @@ export default function Settings() {
   
   const [canAccessSettings, setCanAccessSettings] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [newEmailToGrant, setNewEmailToGrant] = useState("");
-  const [grantingAccess, setGrantingAccess] = useState(false);
-  const [grantPermissionType, setGrantPermissionType] = useState<'history' | 'settings' | 'both'>('history');
 
   const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
 
@@ -170,23 +167,6 @@ export default function Settings() {
       loadAllUsers();
     } catch (err) {
       toast.error("Erro ao atualizar permissão");
-    }
-  };
-
-  const handleGrantPermissionByEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmailToGrant) return;
-    
-    setGrantingAccess(true);
-    try {
-      await grantPermissionByEmail(newEmailToGrant, grantPermissionType);
-      toast.success(`Permissão(s) concedida(s) para ${newEmailToGrant}`);
-      setNewEmailToGrant("");
-      loadAllUsers();
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao conceder permissão");
-    } finally {
-      setGrantingAccess(false);
     }
   };
 
@@ -476,7 +456,7 @@ export default function Settings() {
             </Card>
           )}
 
-          {/* Gestão de Acessos (Apenas para Paulo) */}
+          {/* Gestão de Acessos (Apenas para Paulo) - simplified to toggles only */}
           {isSuperAdmin && (
             <Card className="border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10">
               <CardHeader>
@@ -484,34 +464,19 @@ export default function Settings() {
                   <Users className="h-5 w-5 text-green-600" />
                   Gestão de Acessos
                 </CardTitle>
-                <CardDescription>Libere o acesso às áreas do sistema (Histórico e Configurações) para outros usuários.</CardDescription>
+                <CardDescription>Use os toggles para liberar acesso ao Histórico ou às Configurações para cada usuário.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <form onSubmit={handleGrantPermissionByEmail} className="space-y-3">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Permissão por E-mail</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      type="email" 
-                      placeholder="vendedor@controlid.com.br" 
-                      value={newEmailToGrant}
-                      onChange={e => setNewEmailToGrant(e.target.value)}
-                      required
-                    />
-                    <select className="border rounded px-2" value={grantPermissionType} onChange={e => setGrantPermissionType(e.target.value as any)}>
-                      <option value="history">Apenas Histórico</option>
-                      <option value="settings">Apenas Configurações</option>
-                      <option value="both">Histórico + Configurações</option>
-                    </select>
-                    <Button type="submit" disabled={grantingAccess}>
-                      {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                      Conceder
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">O usuário deve ter um perfil salvo (Configurações) para que possamos localizar e atualizar sua entrada.</p>
-                </form>
+                <div className="text-sm text-muted-foreground">
+                  Observação: o usuário precisa ter um perfil salvo (Configurações) para aparecer nesta lista.
+                </div>
 
                 <div className="space-y-2 border-t pt-4">
                   <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários</Label>
+                  {allUsers.length === 0 && (
+                    <div className="text-sm text-muted-foreground py-6 text-center">Nenhum usuário encontrado. Peça para os vendedores acessarem o app e salvarem o perfil.</div>
+                  )}
+
                   {allUsers.map(u => (
                     <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
                       <div>
