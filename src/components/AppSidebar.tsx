@@ -6,7 +6,8 @@ import {
   Settings, 
   LogOut,
   User,
-  FileText
+  FileText,
+  History as HistoryIcon
 } from "lucide-react";
 import {
   Sidebar,
@@ -37,6 +38,11 @@ export function AppSidebar() {
       icon: LayoutTemplate,
     },
     {
+      title: "Histórico",
+      url: "/history",
+      icon: HistoryIcon,
+    },
+    {
       title: "Rascunhos",
       url: "/drafts",
       icon: FileText,
@@ -53,11 +59,25 @@ export function AppSidebar() {
     navigate("/login");
   };
 
+  // helper to open absolute url in new tab
+  const openInNewTab = (path: string) => {
+    const origin = window.location.origin;
+    const url = origin + path;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <Sidebar className="border-r">
       <SidebarHeader className="h-14 flex items-center justify-center border-b px-4">
         <button
           onClick={() => navigate("/")}
+          onAuxClick={(e: any) => {
+            // middle-click (button === 1) -> open in new tab
+            if (e?.button === 1) {
+              e.preventDefault();
+              openInNewTab("/");
+            }
+          }}
           aria-label="Ir para Gerador de Propostas"
           className="flex items-center justify-center p-0 m-0 bg-transparent border-0"
         >
@@ -74,6 +94,12 @@ export function AppSidebar() {
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     onClick={() => navigate(item.url)}
+                    onAuxClick={(e: any) => {
+                      if (e?.button === 1) {
+                        e.preventDefault();
+                        openInNewTab(item.url);
+                      }
+                    }}
                     isActive={location.pathname === item.url}
                     tooltip={item.title}
                     className="rounded-lg px-3 py-2 transition-all duration-200 hover:bg-muted"

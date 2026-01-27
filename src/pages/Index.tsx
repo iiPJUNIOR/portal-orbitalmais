@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
@@ -16,6 +16,7 @@ import { Quote, QuoteItem } from "@/types/quote";
 
 export default function Index() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -46,6 +47,17 @@ export default function Index() {
     };
     loadSettings();
   }, []);
+
+  // If opened via /history or ?view=history, show history by default
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const view = params.get("view");
+    if (location.pathname === "/history" || view === "history") {
+      setStep("history");
+    }
+    // don't include setStep in deps to avoid resetting user navigation
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname, location.search]);
 
   const handleWizardComplete = async (payload: any) => {
     const loadToastId = toast.loading(`Gerando proposta em PPTX...`);
