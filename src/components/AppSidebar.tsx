@@ -31,7 +31,7 @@ export function AppSidebar() {
 
   const menuItems = [
     {
-      title: "Gerador de Propostas Control iD",
+      title: "Gerador de Propostas",
       url: "/",
       icon: LayoutTemplate,
     },
