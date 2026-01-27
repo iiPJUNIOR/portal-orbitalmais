@@ -88,17 +88,20 @@ export async function updateUserPermission(userId: string, permission: 'history'
  * Grant permission(s) by email.
  * permission: 'history' | 'settings' | 'both'
  *
- * This implementation calls an Edge Function that performs the upsert using
- * the service role key (bypassing RLS) so admins can pre-grant permissions
- * for users who haven't yet saved their profile.
+ * This implementation relies on the Edge Function `grant-permission` which must be deployed
+ * and requires SUPABASE_SERVICE_ROLE_KEY to be set in the Edge Function environment (service role key).
+ *
+ * IMPORTANT: If the Edge Function call fails, this function will now throw an explicit error
+ * explaining that the service role secret or deployment may be missing. We do NOT attempt a
+ * direct DB insert fallback because that is blocked by RLS and produced confusing errors.
  */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
   if (!cleanEmail) throw new Error("E-mail inválido");
 
+  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/grant-permission";
+
   try {
-    // Call Edge Function (deployed to Supabase Functions) to perform privileged upsert.
-    const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/grant-permission";
     const resp = await fetch(FN_URL, {
       method: "POST",
       headers: {
@@ -108,63 +111,28 @@ export async function grantPermissionByEmail(email: string, permission: 'history
     });
 
     if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`Grant function failed: ${resp.status} ${text}`);
+      const text = await resp.text().catch(() => "");
+      // Provide a clear actionable error so the caller/admin knows what to fix.
+      throw new Error(
+        `Edge Function 'grant-permission' failed (status ${resp.status}). ` +
+        `Resposta: ${text}. ` +
+        `Verifique se a Edge Function está implantada e se a secret SUPABASE_SERVICE_ROLE_KEY foi configurada nas Secrets das Edge Functions do seu projeto Supabase.`
+      );
     }
 
     const json = await resp.json().catch(() => ({}));
-    // If function reports success, return
     if (json && json.success) return;
 
-    // If function didn't explicitly return success, fallback to previous behavior:
-    // attempt a safe upsert via Supabase client (this may fail due to RLS).
-  } catch (fnErr) {
-    console.warn("grantPermissionByEmail: edge function call failed, falling back to direct DB call:", fnErr);
+    // If the function responded OK but didn't report success, surface the response.
+    throw new Error(
+      `Edge Function 'grant-permission' retornou uma resposta inesperada: ${JSON.stringify(json)}. ` +
+      `Confirme o deploy da função e as variáveis de ambiente (SUPABASE_SERVICE_ROLE_KEY).`
+    );
+  } catch (err) {
+    // Re-throw with a clear message for the UI to show; don't fallback to direct DB writes (RLS will reject).
+    console.error("grantPermissionByEmail: edge function call failed", err);
+    throw err;
   }
-
-  // Fallback behavior (may be restricted by RLS): try to update existing row or insert with seller_email.
-  // Build updates
-  const updates: Record<string, any> = {};
-  if (permission === 'history') updates.can_view_history = true;
-  else if (permission === 'settings') updates.can_access_settings = true;
-  else {
-    updates.can_view_history = true;
-    updates.can_access_settings = true;
-  }
-
-  // Look for an existing settings row by seller_email (case-insensitive)
-  const { data: existing, error: selectErr } = await supabase
-    .from("user_settings")
-    .select("*")
-    .ilike("seller_email", cleanEmail)
-    .maybeSingle();
-
-  if (selectErr) throw selectErr;
-
-  if (existing) {
-    // Update the existing row (keep user_id if present)
-    const payload = { ...updates, updated_at: new Date().toISOString() };
-    const { error: updateErr } = await supabase
-      .from("user_settings")
-      .update(payload)
-      .eq("id", existing.id);
-    if (updateErr) throw updateErr;
-    return;
-  }
-
-  // No existing row — create a placeholder settings record keyed by email.
-  const insertPayload: any = {
-    seller_email: cleanEmail,
-    ...updates,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-
-  const { error: insertErr } = await supabase
-    .from("user_settings")
-    .insert(insertPayload);
-
-  if (insertErr) throw insertErr;
 }
 
 /**
@@ -177,7 +145,7 @@ export async function grantAccessByEmail(email: string): Promise<void> {
 /**
  * Upsert user settings.
  *
- * IMPORTANT: This function now also attempts to detect a pre-existing user_settings row
+ * IMPORTANT: This function attempts to detect a pre-existing user_settings row
  * created by an admin keyed by seller_email and link it to the authenticated user by setting user_id.
  * This preserves permissions granted by email before the user saved their profile.
  */
