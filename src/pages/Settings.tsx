@@ -144,7 +144,7 @@ export default function Settings() {
 
   const updateBaseMapping = async (base: StoredBase, field: string, value: any) => {
     try {
-      await saveBase({ ...base, [field]: value || null });
+      await saveBase({ ...base, [field]: value });
       toast.success("Mapeamento atualizado");
       loadBases();
     } catch (err) {
@@ -255,7 +255,7 @@ export default function Settings() {
             <CardContent className="space-y-4">
               <div className="space-y-2">
                 <Label>Tamanho do Texto Global</Label>
-                <Select value={fontSize} onValueChange={(v) => handleSaveFontSize(v)}>
+                <Select value={fontSize} onValueChange={handleSaveFontSize}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Escolha um tamanho" />
                   </SelectTrigger>
@@ -371,14 +371,9 @@ export default function Settings() {
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label>Aba</Label>
-                        <Select value={selectedSheet ?? ""} onValueChange={(v) => setSelectedSheet(v || null)}>
-                          <SelectTrigger className="w-full">
-                            <SelectValue placeholder="Selecione a aba" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {sheetTitles.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <select className="w-full border rounded p-2 bg-background" value={selectedSheet || ""} onChange={e => setSelectedSheet(e.target.value)}>
+                          {sheetTitles.map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
                       </div>
                       <div className="space-y-2">
                         <Label>Nome da Base</Label>
@@ -417,27 +412,25 @@ export default function Settings() {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
-                          <Select value={base.name_column ?? ""} onValueChange={(v) => updateBaseMapping(base, "name_column", v || null)}>
-                            <SelectTrigger className="w-full text-xs">
-                              <SelectValue placeholder="-- Automático --" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">-- Automático --</SelectItem>
-                              {base.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <select 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
+                            value={base.name_column || ""} 
+                            onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
+                          >
+                            <option value="">-- Automático --</option>
+                            {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
-                          <Select value={base.description_column ?? ""} onValueChange={(v) => updateBaseMapping(base, "description_column", v || null)}>
-                            <SelectTrigger className="w-full text-xs">
-                              <SelectValue placeholder="-- Automático --" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="">-- Automático --</SelectItem>
-                              {base.headers.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
-                            </SelectContent>
-                          </Select>
+                          <select 
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
+                            value={base.description_column || ""} 
+                            onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
+                          >
+                            <option value="">-- Automático --</option>
+                            {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
+                          </select>
                         </div>
                       </div>
 
@@ -504,16 +497,11 @@ export default function Settings() {
                       onChange={e => setNewEmailToGrant(e.target.value)}
                       required
                     />
-                    <Select value={grantPermissionType} onValueChange={(v) => setGrantPermissionType(v as any)}>
-                      <SelectTrigger className="w-48">
-                        <SelectValue placeholder="Tipo de permissão" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="history">Apenas Histórico</SelectItem>
-                        <SelectItem value="settings">Apenas Configurações</SelectItem>
-                        <SelectItem value="both">Histórico + Configurações</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select className="border rounded px-2" value={grantPermissionType} onChange={e => setGrantPermissionType(e.target.value as any)}>
+                      <option value="history">Apenas Histórico</option>
+                      <option value="settings">Apenas Configurações</option>
+                      <option value="both">Histórico + Configurações</option>
+                    </select>
                     <Button type="submit" disabled={grantingAccess}>
                       {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
                       Conceder
