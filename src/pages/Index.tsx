@@ -98,11 +98,11 @@ export default function Index() {
         // Superadmin bypass
         if (user?.email === PAULO_EMAIL) return;
 
-        // Fetch settings to check has_full_access
+        // Fetch settings to check can_view_history
         const s = await getUserSettings();
         if (!mounted) return;
 
-        if (!s?.has_full_access) {
+        if (!s?.can_view_history) {
           toast.error("Acesso ao histórico restrito. Peça ao administrador para liberar.", { duration: 3000 });
           navigate("/", { replace: true });
           setStep("welcome");

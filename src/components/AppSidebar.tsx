@@ -32,7 +32,8 @@ export function AppSidebar() {
   const location = useLocation();
   const { user } = useSession();
 
-  const [hasHistoryAccess, setHasHistoryAccess] = useState<boolean>(false);
+  const [canViewHistory, setCanViewHistory] = useState<boolean>(false);
+  const [canAccessSettings, setCanAccessSettings] = useState<boolean>(false);
 
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
@@ -42,22 +43,34 @@ export function AppSidebar() {
     async function checkAccess() {
       try {
         if (!user) {
-          if (mounted) setHasHistoryAccess(false);
+          if (mounted) {
+            setCanViewHistory(false);
+            setCanAccessSettings(false);
+          }
           return;
         }
 
         // Super admin always has access
         if (user.email === PAULO_EMAIL) {
-          if (mounted) setHasHistoryAccess(true);
+          if (mounted) {
+            setCanViewHistory(true);
+            setCanAccessSettings(true);
+          }
           return;
         }
 
-        // Otherwise consult user settings (has_full_access)
+        // Otherwise consult user settings (granular flags)
         const s = await getUserSettings();
-        if (mounted) setHasHistoryAccess(!!s?.has_full_access);
+        if (mounted) {
+          setCanViewHistory(!!s?.can_view_history);
+          setCanAccessSettings(!!s?.can_access_settings);
+        }
       } catch (err) {
         console.warn("AppSidebar: failed to load user settings", err);
-        if (mounted) setHasHistoryAccess(false);
+        if (mounted) {
+          setCanViewHistory(false);
+          setCanAccessSettings(false);
+        }
       }
     }
 
@@ -85,8 +98,8 @@ export function AppSidebar() {
       title: "Histórico",
       url: "/history",
       icon: HistoryIcon,
-      // show only if user has been granted access or is Paulo
-      show: hasHistoryAccess,
+      // show only if user has been granted history access or is Paulo
+      show: canViewHistory,
     },
     {
       title: "Rascunhos",
@@ -98,7 +111,8 @@ export function AppSidebar() {
       title: "Configurações",
       url: "/settings",
       icon: Settings,
-      show: true,
+      // show only if user has been granted settings access or is Paulo
+      show: canAccessSettings,
     },
   ];
 

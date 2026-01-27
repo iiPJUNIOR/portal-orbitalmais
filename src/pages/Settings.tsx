@@ -10,7 +10,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info, LayoutList } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
-import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserAccess, grantAccessByEmail } from "@/services/settingsService";
+import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission, grantPermissionByEmail } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,10 +38,11 @@ export default function Settings() {
   const [newKeyword, setNewKeyword] = useState("");
   const [newSlideNumber, setNewSlideNumber] = useState("");
   
-  const [hasFullAccess, setHasFullAccess] = useState(false);
+  const [canAccessSettings, setCanAccessSettings] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
   const [newEmailToGrant, setNewEmailToGrant] = useState("");
   const [grantingAccess, setGrantingAccess] = useState(false);
+  const [grantPermissionType, setGrantPermissionType] = useState<'history' | 'settings' | 'both'>('history');
 
   const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
 
@@ -75,12 +76,12 @@ export default function Settings() {
         setSpreadsheetLink(s.spreadsheet_link || "");
         setFontSize(s.font_size || "medium");
         setSlideMappings(s.slide_mappings || {});
-        setHasFullAccess(!!s.has_full_access || isSuperAdmin);
+        setCanAccessSettings(!!s?.can_access_settings || isSuperAdmin);
       } else if (isSuperAdmin) {
-        setHasFullAccess(true);
+        setCanAccessSettings(true);
       }
       
-      if (isSuperAdmin || s?.has_full_access) {
+      if (isSuperAdmin || s?.can_access_settings) {
         loadBases();
       }
       
@@ -162,28 +163,28 @@ export default function Settings() {
     await updateBaseMapping(base, "extra_columns", next);
   };
 
-  const toggleUserAccess = async (userId: string, currentAccess: boolean) => {
+  const toggleUserPermission = async (userId: string, permission: 'history' | 'settings', currentValue: boolean) => {
     try {
-      await updateUserAccess(userId, !currentAccess);
-      toast.success("Acesso atualizado");
+      await updateUserPermission(userId, permission, !currentValue);
+      toast.success("Permissão atualizada");
       loadAllUsers();
     } catch (err) {
-      toast.error("Erro ao atualizar acesso");
+      toast.error("Erro ao atualizar permissão");
     }
   };
 
-  const handleGrantAccessByEmail = async (e: React.FormEvent) => {
+  const handleGrantPermissionByEmail = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newEmailToGrant) return;
     
     setGrantingAccess(true);
     try {
-      await grantAccessByEmail(newEmailToGrant);
-      toast.success(`Acesso total concedido para ${newEmailToGrant}`);
+      await grantPermissionByEmail(newEmailToGrant, grantPermissionType);
+      toast.success(`Permissão(s) concedida(s) para ${newEmailToGrant}`);
       setNewEmailToGrant("");
       loadAllUsers();
     } catch (err: any) {
-      toast.error(err.message || "Erro ao conceder acesso");
+      toast.error(err.message || "Erro ao conceder permissão");
     } finally {
       setGrantingAccess(false);
     }
@@ -231,7 +232,7 @@ export default function Settings() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Configurações</h1>
-          {!hasFullAccess && (
+          {!canAccessSettings && (
             <p className="text-sm text-muted-foreground mt-1 flex items-center gap-1">
               <Lock className="h-3 w-3" /> Algumas seções estão restritas ao administrador.
             </p>
@@ -271,7 +272,7 @@ export default function Settings() {
           </Card>
 
           {/* Seções Restritas */}
-          {hasFullAccess ? (
+          {canAccessSettings ? (
             <>
               <Card className="border-primary/20 shadow-lg">
                 <CardHeader className="bg-primary/10 dark:bg-primary/5">
@@ -290,7 +291,6 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
-              {/* Novo: Mapeamento de Slides por Palavra-Chave */}
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
@@ -484,11 +484,11 @@ export default function Settings() {
                   <Users className="h-5 w-5 text-green-600" />
                   Gestão de Acessos
                 </CardTitle>
-                <CardDescription>Libere o acesso às configurações avançadas para outros usuários.</CardDescription>
+                <CardDescription>Libere o acesso às áreas do sistema (Histórico e Configurações) para outros usuários.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <form onSubmit={handleGrantAccessByEmail} className="space-y-3">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Acesso Total por E-mail</Label>
+                <form onSubmit={handleGrantPermissionByEmail} className="space-y-3">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Permissão por E-mail</Label>
                   <div className="flex gap-2">
                     <Input 
                       type="email" 
@@ -497,11 +497,17 @@ export default function Settings() {
                       onChange={e => setNewEmailToGrant(e.target.value)}
                       required
                     />
+                    <select className="border rounded px-2" value={grantPermissionType} onChange={e => setGrantPermissionType(e.target.value as any)}>
+                      <option value="history">Apenas Histórico</option>
+                      <option value="settings">Apenas Configurações</option>
+                      <option value="both">Histórico + Configurações</option>
+                    </select>
                     <Button type="submit" disabled={grantingAccess}>
                       {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
                       Conceder
                     </Button>
                   </div>
+                  <p className="text-xs text-muted-foreground">O usuário deve ter um perfil salvo (Configurações) para que possamos localizar e atualizar sua entrada.</p>
                 </form>
 
                 <div className="space-y-2 border-t pt-4">
@@ -513,12 +519,22 @@ export default function Settings() {
                         <p className="text-xs text-muted-foreground">{u.seller_email}</p>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-xs font-medium text-neutral-500">Acesso Total</span>
-                        <Switch 
-                          checked={u.has_full_access} 
-                          disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
-                          onCheckedChange={() => toggleUserAccess(u.user_id, u.has_full_access)} 
-                        />
+                        <div className="flex flex-col items-end text-xs">
+                          <span className="font-medium">Histórico</span>
+                          <Switch 
+                            checked={u.can_view_history} 
+                            disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                            onCheckedChange={() => toggleUserPermission(u.user_id, 'history', !!u.can_view_history)} 
+                          />
+                        </div>
+                        <div className="flex flex-col items-end text-xs">
+                          <span className="font-medium">Configurações</span>
+                          <Switch 
+                            checked={u.can_access_settings} 
+                            disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                            onCheckedChange={() => toggleUserPermission(u.user_id, 'settings', !!u.can_access_settings)} 
+                          />
+                        </div>
                       </div>
                     </div>
                   ))}
