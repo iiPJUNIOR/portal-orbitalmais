@@ -47,6 +47,13 @@ const AppContent = () => {
     return () => window.removeEventListener("user_settings_changed", applyFontSize);
   }, [user]);
 
+  // helper to open absolute url in new tab
+  const openInNewTab = (path: string) => {
+    const origin = window.location.origin;
+    const url = origin + path;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -64,6 +71,12 @@ const AppContent = () => {
                 
                 <button 
                   onClick={() => navigate("/")}
+                  onAuxClick={(e: any) => {
+                    if (e?.button === 1) {
+                      e.preventDefault();
+                      openInNewTab("/");
+                    }
+                  }}
                   className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 hover:text-primary transition-colors bg-transparent border-none p-0"
                 >
                   Gerador de Propostas Control iD
