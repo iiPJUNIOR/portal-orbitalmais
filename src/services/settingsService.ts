@@ -88,12 +88,15 @@ export async function updateUserPermission(userId: string, permission: 'history'
  * Grant permission(s) by email.
  * permission: 'history' | 'settings' | 'both'
  *
- * This implementation relies on the Edge Function `grant-permission` which must be deployed
- * and requires SUPABASE_SERVICE_ROLE_KEY to be set in the Edge Function environment (service role key).
+ * This implementation calls an Edge Function that performs the upsert using
+ * the service role key (bypassing RLS). IMPORTANT: the Edge Function expects the
+ * service_role value in a secret named SERVICE_ROLE_KEY (no SUPABASE_ prefix).
  *
- * IMPORTANT: If the Edge Function call fails, this function will now throw an explicit error
- * explaining that the service role secret or deployment may be missing. We do NOT attempt a
- * direct DB insert fallback because that is blocked by RLS and produced confusing errors.
+ * Steps to configure:
+ * 1) In Supabase Console → Edge Functions → Manage Secrets add a secret named:
+ *      SERVICE_ROLE_KEY
+ *    and paste the Service Role Key value found at: Supabase Console → Project Settings → API → Service Role.
+ * 2) Re-deploy the grant-permission Edge Function so it picks up the secret.
  */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
@@ -116,20 +119,20 @@ export async function grantPermissionByEmail(email: string, permission: 'history
       throw new Error(
         `Edge Function 'grant-permission' failed (status ${resp.status}). ` +
         `Resposta: ${text}. ` +
-        `Verifique se a Edge Function está implantada e se a secret SUPABASE_SERVICE_ROLE_KEY foi configurada nas Secrets das Edge Functions do seu projeto Supabase.`
+        `Verifique se a Edge Function foi redeployada e se você adicionou a secret SERVICE_ROLE_KEY (valor: Service Role Key do projeto) nas Secrets das Edge Functions. ` +
+        `OBS: o nome da secret NÃO deve começar com 'SUPABASE_'.`
       );
     }
 
     const json = await resp.json().catch(() => ({}));
     if (json && json.success) return;
 
-    // If the function responded OK but didn't report success, surface the response.
+    // If function returned but without explicit success, surface the response.
     throw new Error(
       `Edge Function 'grant-permission' retornou uma resposta inesperada: ${JSON.stringify(json)}. ` +
-      `Confirme o deploy da função e as variáveis de ambiente (SUPABASE_SERVICE_ROLE_KEY).`
+      `Confirme o deploy da função e a secret SERVICE_ROLE_KEY nas Edge Functions.`
     );
   } catch (err) {
-    // Re-throw with a clear message for the UI to show; don't fallback to direct DB writes (RLS will reject).
     console.error("grantPermissionByEmail: edge function call failed", err);
     throw err;
   }

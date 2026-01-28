@@ -2,7 +2,9 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const PROJECT_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co";
-const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
+// NOTE: Supabase Edge Functions disallow secret names that start with SUPABASE_
+// Use SERVICE_ROLE_KEY (or similar) as the secret name in the Edge Functions Secrets UI.
+const SERVICE_ROLE_KEY = Deno.env.get("SERVICE_ROLE_KEY") || "";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -10,7 +12,7 @@ const corsHeaders = {
 };
 
 if (!SERVICE_ROLE_KEY) {
-  console.error("[grant-permission] SUPABASE_SERVICE_ROLE_KEY is not set");
+  console.error("[grant-permission] SERVICE_ROLE_KEY is not set in Edge Function secrets");
 }
 
 const supabase = createClient(PROJECT_URL, SERVICE_ROLE_KEY);
@@ -21,7 +23,6 @@ serve(async (req) => {
   }
 
   try {
-    const url = new URL(req.url);
     if (req.method !== "POST") {
       return new Response(JSON.stringify({ error: "Method not allowed" }), {
         status: 405,
@@ -61,7 +62,7 @@ serve(async (req) => {
 
     if (selectErr) {
       console.error("[grant-permission] select error", { error: selectErr });
-      return new Response(JSON.stringify({ error: "Database lookup failed" }), {
+      return new Response(JSON.stringify({ error: "Database lookup failed", detail: String(selectErr) }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -77,7 +78,7 @@ serve(async (req) => {
 
       if (updateErr) {
         console.error("[grant-permission] update error", { error: updateErr });
-        return new Response(JSON.stringify({ error: "Failed to update settings" }), {
+        return new Response(JSON.stringify({ error: "Failed to update settings", detail: String(updateErr) }), {
           status: 500,
           headers: { "Content-Type": "application/json", ...corsHeaders },
         });
@@ -105,7 +106,7 @@ serve(async (req) => {
 
     if (insertErr) {
       console.error("[grant-permission] insert error", { error: insertErr });
-      return new Response(JSON.stringify({ error: "Failed to create settings" }), {
+      return new Response(JSON.stringify({ error: "Failed to create settings", detail: String(insertErr) }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
@@ -118,7 +119,7 @@ serve(async (req) => {
     });
   } catch (err) {
     console.error("[grant-permission] unexpected error", { error: String(err) });
-    return new Response(JSON.stringify({ error: "Unexpected error" }), {
+    return new Response(JSON.stringify({ error: "Unexpected error", detail: String(err) }), {
       status: 500,
       headers: { "Content-Type": "application/json", ...corsHeaders },
     });
