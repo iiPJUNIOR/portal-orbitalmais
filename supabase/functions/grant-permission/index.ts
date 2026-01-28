@@ -91,32 +91,75 @@ serve(async (req) => {
       });
     }
 
-    // No existing row — create a placeholder keyed by email (user_id left null)
-    const insertPayload: any = {
-      seller_email: emailRaw,
-      ...updates,
-      created_at: new Date().toISOString(),
-    };
+    // No existing settings row — attempt to resolve an auth user by email and attach.
+    // Because user_settings.user_id is NOT NULL, we must supply a valid user_id that exists in auth.users.
+    // We'll try to query the auth.users table (service-role key allows this).
+    try {
+      const { data: authUsers, error: authErr } = await supabase
+        .from("auth.users")
+        .select("id")
+        .ilike("email", emailRaw);
 
-    const { data: inserted, error: insertErr } = await supabase
-      .from("user_settings")
-      .insert(insertPayload)
-      .select()
-      .single();
+      if (authErr) {
+        // If we cannot query auth.users for some reason, return helpful error.
+        console.error("[grant-permission] auth.users lookup error", { error: authErr });
+        return new Response(JSON.stringify({
+          error: "Failed to lookup auth user by email",
+          detail: String(authErr),
+        }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
 
-    if (insertErr) {
-      console.error("[grant-permission] insert error", { error: insertErr });
-      return new Response(JSON.stringify({ error: "Failed to create settings", detail: String(insertErr) }), {
+      const foundUser = Array.isArray(authUsers) && authUsers.length > 0 ? (authUsers[0] as any) : null;
+
+      if (!foundUser || !foundUser.id) {
+        // No registered auth user for this email — cannot create a user_settings row because user_id is required.
+        console.warn("[grant-permission] no auth user found for email", { email: emailRaw });
+        return new Response(JSON.stringify({
+          error: "No matching authenticated user found for the provided email",
+          detail: "The user must have an authenticated account (auth.users) before permissions can be granted; ask them to sign up or create their account in Supabase first.",
+        }), {
+          status: 400,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
+      // Build payload including resolved user_id
+      const insertPayload: any = {
+        user_id: foundUser.id,
+        seller_email: emailRaw,
+        ...updates,
+        created_at: new Date().toISOString(),
+      };
+
+      const { data: inserted, error: insertErr } = await supabase
+        .from("user_settings")
+        .insert(insertPayload)
+        .select()
+        .single();
+
+      if (insertErr) {
+        console.error("[grant-permission] insert error", { error: insertErr });
+        return new Response(JSON.stringify({ error: "Failed to create settings", detail: String(insertErr) }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", ...corsHeaders },
+        });
+      }
+
+      console.log("[grant-permission] inserted settings row attached to user", { id: inserted.id, user_id: foundUser.id });
+      return new Response(JSON.stringify({ success: true, action: "inserted", id: inserted.id }), {
+        status: 200,
+        headers: { "Content-Type": "application/json", ...corsHeaders },
+      });
+    } catch (innerErr) {
+      console.error("[grant-permission] unexpected error while resolving user or inserting", { error: String(innerErr) });
+      return new Response(JSON.stringify({ error: "Unexpected error", detail: String(innerErr) }), {
         status: 500,
         headers: { "Content-Type": "application/json", ...corsHeaders },
       });
     }
-
-    console.log("[grant-permission] inserted placeholder settings row", { id: inserted.id });
-    return new Response(JSON.stringify({ success: true, action: "inserted", id: inserted.id }), {
-      status: 200,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
   } catch (err) {
     console.error("[grant-permission] unexpected error", { error: String(err) });
     return new Response(JSON.stringify({ error: "Unexpected error", detail: String(err) }), {
