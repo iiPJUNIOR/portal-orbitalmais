@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Info, LayoutList } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Info, LayoutList, Loader2 } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission } from "@/services/settingsService";
@@ -22,6 +22,8 @@ export default function Settings() {
   const [connected, setConnected] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  
   const [spreadsheetLink, setSpreadsheetLink] = useState("");
   const [sheetTitles, setSheetTitles] = useState<string[]>([]);
   const [selectedSheet, setSelectedSheet] = useState<string | null>(null);
@@ -207,6 +209,24 @@ export default function Settings() {
     }
   };
 
+  const handleSaveProfile = async () => {
+    setSavingProfile(true);
+    try {
+      await saveUserSettings({
+        seller_name: sellerName,
+        seller_role: sellerRole,
+        seller_email: sellerEmail,
+        seller_phone: sellerPhone
+      });
+      toast.success("Perfil atualizado com sucesso!");
+    } catch (err: any) {
+      console.error("Erro ao salvar perfil:", err);
+      toast.error("Erro ao salvar perfil: " + (err.message || "Erro desconhecido"));
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
@@ -362,7 +382,10 @@ export default function Settings() {
                     </div>
                   )}
 
-                  <Button onClick={handleSaveImportedBase} className="w-full" disabled={!selectedSheet || !newBaseName}>Salvar Base no Servidor</Button>
+                  <Button onClick={handleSaveImportedBase} className="w-full" disabled={!selectedSheet || !newBaseName || loading}>
+                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    Salvar Base no Servidor
+                  </Button>
                 </CardContent>
               </Card>
 
@@ -533,14 +556,11 @@ export default function Settings() {
               <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="(11) 99999-9999" />
             </div>
             <Button
-              onClick={() => saveUserSettings({
-                seller_name: sellerName,
-                seller_role: sellerRole,
-                seller_email: sellerEmail,
-                seller_phone: sellerPhone
-              }).then(() => toast.success("Perfil atualizado!"))}
+              onClick={handleSaveProfile}
               className="w-full h-11 font-bold"
+              disabled={savingProfile}
             >
+              {savingProfile ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
               Salvar Perfil
             </Button>
           </CardContent>
