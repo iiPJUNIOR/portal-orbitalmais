@@ -13,7 +13,6 @@ import { Switch } from "@/components/ui/switch";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
 import { saveUserSettings } from "@/services/settingsService";
-import { v4 as uuidv4 } from "uuid";
 
 interface WizardProps {
   initialSellerData: {
@@ -114,6 +113,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       const headers = base.headers;
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
+      const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
 
       return base.rows.map((row, idx) => {
         const p: any = {};
@@ -206,28 +206,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     });
   };
 
-  const handleAddManualItem = () => {
-    const manualId = `manual-${uuidv4()}`;
-    setFormData((prev: any) => ({
-      ...prev,
-      selectedProducts: [
-        ...prev.selectedProducts,
-        {
-          id: manualId,
-          baseId: manualId,
-          name: "",
-          description: "",
-          sku: "Manual",
-          category: "Manual",
-          quantity: 1,
-          baseName: "Manual",
-          isManual: true
-        }
-      ]
-    }));
-    toast.success("Item em branco adicionado!");
-  };
-
   const handleReset = () => {
     setFormData(initialFormState);
     setCurrentStep(1);
@@ -244,7 +222,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       items: (formData.selectedProducts || []).map((p: any) => ({
         product: {
           id: p.id,
-          description: p.description || p.name,
+          description: p.name,
           model: p.name,
           category: p.category,
           part_number: p.sku
@@ -256,6 +234,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice
     });
 
+    // If this wizard was opened from a draft, update the draft with latest data
     if (draftId) {
       try {
         updateDraft(draftId, { data: formData, step: currentStep });
@@ -267,10 +246,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   };
 
+  // New: save draft action (visible after step 4)
   const handleSaveDraft = async () => {
     try {
       const tId = toast.loading("Salvando rascunho...");
       if (draftId) {
+        // update existing draft
         const ok = updateDraft(draftId, { data: formData, step: currentStep });
         if (ok) {
           toast.success("Rascunho atualizado", { id: tId });
@@ -288,6 +269,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   };
 
+  // Append a suffix (e.g., 'ASK') to the selected product's name, avoiding duplicates
   const appendToName = (baseId: string, suffix: string) => {
     if (!suffix) return;
     setFormData((prev: any) => {
@@ -295,6 +277,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         if (sp.baseId !== baseId) return sp;
         const currentName = String(sp.name || "").trim();
         const parts = currentName.split(" - ").map((s: string) => s.trim()).filter(Boolean);
+        // If suffix already included, do nothing
         if (parts.includes(suffix)) return sp;
         const newName = currentName ? `${currentName} - ${suffix}` : suffix;
         return { ...sp, name: newName };
@@ -303,8 +286,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     });
   };
 
+  // New handler: when clicking Next, if on step 2 and seller info present, auto-save it to user settings
   const handleNext = async () => {
     if (currentStep === 2) {
+      // If seller fields filled, persist to user settings (first-time save)
       const sellerPayload: any = {
         seller_name: formData.sellerName || undefined,
         seller_role: formData.sellerRole || undefined,
@@ -319,6 +304,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           toast.success("Perfil do vendedor salvo automaticamente");
         } catch (err) {
           console.warn("Falha ao salvar perfil automaticamente", err);
+          toast.error("Não foi possível salvar o perfil automaticamente");
         }
       }
     }
@@ -351,18 +337,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 onChange={(e) => setFormData((prev: any) => ({ ...prev, cnpj: (e.target.value) }))}
               />
             </div>
-            <div className="space-y-2"><Label>Razão Social</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} /></div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Vendedor</Label><Input value={formData.sellerName} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Cargo</Label><Input value={formData.sellerRole} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerRole: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>E-mail</Label><Input value={formData.sellerEmail} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerEmail: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Telefone</Label><Input value={formData.sellerPhone} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerPhone: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Vendedor (sellerName)</Label><Input value={formData.sellerName} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Cargo (sellerRole)</Label><Input value={formData.sellerRole} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerRole: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>E-mail (sellerEmail)</Label><Input value={formData.sellerEmail} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerEmail: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Telefone (sellerPhone)</Label><Input value={formData.sellerPhone} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerPhone: e.target.value }))} /></div>
           </div>
         );
       case 3:
@@ -408,58 +394,39 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 );
               })}
             </div>
-            
             <div className="space-y-3 pt-6 border-t">
-              <div className="flex items-center justify-between">
-                <Label className="font-bold text-lg">Itens Selecionados ({(formData.selectedProducts || []).length})</Label>
-                <Button 
-                  size="sm" 
-                  onClick={handleAddManualItem}
-                  className="rounded-full h-8 px-3 flex items-center gap-1"
-                >
-                  <Plus className="h-4 w-4" /> Item Manual
-                </Button>
-              </div>
-
+              <Label className="font-bold text-lg">Itens Selecionados ({(formData.selectedProducts || []).length})</Label>
               <div className="grid grid-cols-1 gap-3">
                 {(formData.selectedProducts || []).map((p: any) => (
-                  <div key={p.baseId} className="p-4 bg-primary/5 border border-primary/10 rounded-xl space-y-3">
-                    <div className="md:flex md:items-start md:justify-between gap-4">
-                      <div className="flex-1 space-y-3">
-                        <div className="space-y-1">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Nome do Produto</Label>
-                          <Input
-                            placeholder="Nome do dispositivo"
-                            value={p.name}
-                            onChange={(e) => setFormData((prev: any) => ({
-                              ...prev,
-                              selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, name: e.target.value } : sp)
-                            }))}
-                            className="text-sm font-bold bg-white"
-                          />
+                  <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                    <div className="md:flex md:items-start md:justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1">
+                            <Input
+                              value={p.name}
+                              onChange={(e) => setFormData((prev: any) => ({
+                                ...prev,
+                                selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, name: e.target.value } : sp)
+                              }))}
+                              className="text-sm font-bold"
+                            />
+                          </div>
                         </div>
 
-                        <div className="space-y-1">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Descrição Técnica</Label>
-                          <Input
-                            placeholder="Descrição que aparecerá no detalhamento"
-                            value={p.description}
-                            onChange={(e) => setFormData((prev: any) => ({
-                              ...prev,
-                              selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, description: e.target.value } : sp)
-                            }))}
-                            className="text-xs bg-white"
-                          />
+                        <div className="text-[11px] text-muted-foreground mt-2 break-words">
+                          {p.description || <span className="italic text-xs text-muted-foreground">Sem descrição</span>}
                         </div>
 
                         {p.extras && p.extras.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-2">
+                          <div className="flex flex-wrap gap-2 mt-3">
                             {p.extras.map((ex: any, idx: number) => (
                               <button
                                 key={idx}
                                 type="button"
                                 onClick={() => appendToName(p.baseId, ex.value)}
-                                className="text-[9px] px-2 py-0.5 rounded-md border bg-white/90 hover:bg-primary/5 transition-colors text-muted-foreground"
+                                className="text-xs px-2 py-1 rounded-md border bg-white/90 hover:bg-primary/5 transition-colors text-muted-foreground"
+                                title={`Adicionar "${ex.value}" ao nome`}
                               >
                                 <span className="font-semibold mr-1">{ex.label}:</span> {ex.value}
                               </button>
@@ -468,33 +435,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                         )}
                       </div>
 
-                      <div className="flex items-center gap-3 mt-4 md:mt-0 pt-4 md:pt-0">
-                        <div className="flex flex-col items-center gap-1">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground">Qtd</Label>
-                          <Input
-                            type="number"
-                            className="w-16 h-8 text-xs bg-white text-center font-bold"
-                            value={p.quantity}
-                            onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
-                          />
-                        </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="mt-5 text-destructive hover:bg-destructive/10"
-                          onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                      <div className="flex items-center gap-3 mt-4 md:mt-0 md:ml-4">
+                        <Input
+                          type="number"
+                          className="w-20 h-8 text-xs bg-card text-center font-bold"
+                          value={p.quantity}
+                          onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
+                        />
+                        <Button variant="ghost" size="sm" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     </div>
                   </div>
                 ))}
-                {(formData.selectedProducts || []).length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground text-sm border-2 border-dashed rounded-xl">
-                    Nenhum item selecionado. Use a busca ou adicione um item manual.
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -503,7 +455,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         return (
           <div className="space-y-6">
             <div className="p-6 bg-primary text-white rounded-2xl">
-              <Label>VALOR TOTAL DA PROPOSTA</Label>
+              <Label>VALOR TOTAL DA PROPOSTA (totalPrice)</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl opacity-70">R$</span>
                 <Input
@@ -535,7 +487,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               </div>
 
               {formData.includeApprovalPage && (
-                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3">
+                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3 animate-in fade-in slide-in-from-top-2">
                   <div className="flex items-center gap-2 text-primary">
                     <LinkIcon className="h-4 w-4" />
                     <Label className="font-bold">Link do Gerador de Aprovação</Label>
@@ -546,9 +498,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                     onChange={(e) => setFormData((prev: any) => ({ ...prev, approvalLink: e.target.value }))}
                     className="bg-card"
                   />
+                  <p className="text-[10px] text-muted-foreground">O link inserido será incorporado no botão de aprovação da proposta.</p>
                 </div>
               )}
             </div>
+
+            <p className="text-sm text-muted-foreground text-center">Clique no botão abaixo para gerar e baixar sua proposta.</p>
           </div>
         );
       case 6:
@@ -562,25 +517,26 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               <p className="text-muted-foreground max-w-sm">Seu orçamento foi salvo e o download iniciado.</p>
             </div>
 
-            <div className="w-full p-4 bg-muted/30 rounded-2xl border border-dashed text-left space-y-2">
+            <div className="w-full p-4 bg-muted/30 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
               <div className="flex items-center gap-2 text-primary font-bold text-sm">
                 <Info className="h-4 w-4" />
-                Como gerar o PDF
+                Dica: Como gerar o PDF
               </div>
-              <p className="text-xs text-muted-foreground">
-                Abra o arquivo no PowerPoint e vá em: **Arquivo > Exportar > Criar PDF**.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
+                <span className="font-bold">Arquivo {'>'} Exportar {'>'} Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 w-full">
-              <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary" onClick={() => handleFinish()}>
+              <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary hover:bg-primary/5" onClick={() => handleFinish()}>
                 <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX Novamente
               </Button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 w-full">
               <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(5)}>
-                <ArrowLeft className="mr-2 h-5 w-5" /> Voltar
+                <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
               </Button>
               <Button className="h-14 rounded-2xl" onClick={handleReset}>
                 <RefreshCw className="mr-2 h-5 w-5" /> Novo Orçamento
@@ -623,6 +579,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 {currentStep === 1 ? "Cancelar" : "Voltar"}
               </Button>
 
+              {/* Save draft button visible after step 4 */}
               {currentStep >= 4 ? (
                 <Button variant="outline" onClick={handleSaveDraft}>
                   <Save className="mr-2 h-4 w-4" /> Salvar rascunho
