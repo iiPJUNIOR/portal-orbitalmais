@@ -52,10 +52,14 @@ export async function getAllUsersSettings(): Promise<any[]> {
   const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/list-users";
 
   try {
+    // Get current session to pass token
+    const { data: { session } } = await supabase.auth.getSession();
+    
     const resp = await fetch(FN_URL, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token || ""}`,
       },
     });
 
@@ -110,16 +114,6 @@ export async function updateUserPermission(userId: string, permission: 'history'
 /**
  * Grant permission(s) by email.
  * permission: 'history' | 'settings' | 'both'
- *
- * This implementation calls an Edge Function that performs the upsert using
- * the service role key (bypassing RLS). IMPORTANT: the Edge Function expects the
- * service_role value in a secret named SERVICE_ROLE_KEY (no SUPABASE_ prefix).
- *
- * Steps to configure:
- * 1) In Supabase Console → Edge Functions → Manage Secrets add a secret named:
- *      SERVICE_ROLE_KEY
- *    and paste the Service Role Key value found at: Supabase Console → Project Settings → API → Service Role.
- * 2) Re-deploy the grant-permission Edge Function so it picks up the secret.
  */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
   const cleanEmail = email.trim().toLowerCase();
@@ -128,33 +122,26 @@ export async function grantPermissionByEmail(email: string, permission: 'history
   const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/grant-permission";
 
   try {
+    const { data: { session } } = await supabase.auth.getSession();
+
     const resp = await fetch(FN_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${session?.access_token || ""}`,
       },
       body: JSON.stringify({ email: cleanEmail, permission }),
     });
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => "");
-      // Provide a clear actionable error so the caller/admin knows what to fix.
-      throw new Error(
-        `Edge Function 'grant-permission' failed (status ${resp.status}). ` +
-        `Resposta: ${text}. ` +
-        `Verifique se a Edge Function foi redeployada e se você adicionou a secret SERVICE_ROLE_KEY (valor: Service Role Key do projeto) nas Secrets das Edge Functions. ` +
-        `OBS: o nome da secret NÃO deve começar com 'SUPABASE_'.`
-      );
+      throw new Error(`Edge Function 'grant-permission' failed (status ${resp.status}). ${text}`);
     }
 
     const json = await resp.json().catch(() => ({}));
     if (json && json.success) return;
 
-    // If function returned but without explicit success, surface the response.
-    throw new Error(
-      `Edge Function 'grant-permission' retornou uma resposta inesperada: ${JSON.stringify(json)}. ` +
-      `Confirme o deploy da função e a secret SERVICE_ROLE_KEY nas Edge Functions.`
-    );
+    throw new Error(`Edge Function 'grant-permission' retornou uma resposta inesperada: ${JSON.stringify(json)}`);
   } catch (err) {
     console.error("grantPermissionByEmail: edge function call failed", err);
     throw err;
@@ -170,10 +157,6 @@ export async function grantAccessByEmail(email: string): Promise<void> {
 
 /**
  * Upsert user settings.
- *
- * IMPORTANT: This function attempts to detect a pre-existing user_settings row
- * created by an admin keyed by seller_email and link it to the authenticated user by setting user_id.
- * This preserves permissions granted by email before the user saved their profile.
  */
 export async function saveUserSettings(payload: Partial<UserSettings>): Promise<UserSettings> {
   try {
@@ -182,7 +165,6 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
 
     const userEmail = (payload.seller_email || user.email || "").trim().toLowerCase();
 
-    // 1) If there's an existing row keyed by seller_email without a user_id, attach it to this user
     if (userEmail) {
       const { data: byEmail, error: byEmailErr } = await supabase
         .from("user_settings")
@@ -193,14 +175,12 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
       if (byEmailErr) {
         console.warn("saveUserSettings: lookup by email failed", byEmailErr);
       } else if (byEmail && !byEmail.user_id) {
-        // Merge existing server row with incoming payload, and set user_id to current user
         const merged = {
           ...byEmail,
           ...payload,
           user_id: user.id,
           updated_at: new Date().toISOString(),
         };
-        // Use update by id to avoid creating duplicate rows
         const { data: updated, error: updateErr } = await supabase
           .from("user_settings")
           .update(merged)
@@ -219,7 +199,6 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
       }
     }
 
-    // 2) Standard upsert by user_id (will create or update the user's settings)
     const { data, error } = await supabase
       .from("user_settings")
       .upsert({
