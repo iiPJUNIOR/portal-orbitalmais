@@ -45,15 +45,46 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
 /**
  * Get all users settings for admin management.
+ *
+ * NOTE: We call an Edge Function that uses the service-role key to read auth.users
+ * and user_settings, merge them and return a unified list. This allows the admin UI
+ * to display all registered emails even when there is no corresponding user_settings row.
  */
 export async function getAllUsersSettings(): Promise<any[]> {
+  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/list-users";
+
+  try {
+    const resp = await fetch(FN_URL, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!resp.ok) {
+      const txt = await resp.text().catch(() => "");
+      throw new Error(`list-users function failed (${resp.status}): ${txt}`);
+    }
+
+    const json = await resp.json().catch(() => ({}));
+    if (json && Array.isArray(json.users)) {
+      return json.users;
+    }
+
+    // If the function returned unexpected shape, fallback to querying user_settings only
+    console.warn("getAllUsersSettings: unexpected function response, falling back to user_settings");
+  } catch (err) {
+    console.warn("getAllUsersSettings: edge function call failed, falling back to user_settings", err);
+  }
+
+  // Fallback: return entries from user_settings only (older behavior)
   const { data, error } = await supabase
     .from("user_settings")
     .select("user_id, seller_name, seller_email, has_full_access, can_view_history, can_access_settings")
     .order("seller_name", { ascending: true });
-  
+
   if (error) throw error;
-  return data;
+  return data || [];
 }
 
 /**
@@ -64,7 +95,7 @@ export async function updateUserAccess(userId: string, hasAccess: boolean): Prom
     .from("user_settings")
     .update({ has_full_access: hasAccess })
     .eq("user_id", userId);
-  
+
   if (error) throw error;
 }
 
@@ -77,10 +108,36 @@ export async function updateUserPermission(userId: string, permission: 'history'
   const col = permission === 'history' ? 'can_view_history' : 'can_access_settings';
   const payload: Record<string, any> = {};
   payload[col] = value;
-  const { error } = await supabase
+
+  // Try to update by user_id first
+  const { data: existing, error: selectErr } = await supabase
     .from("user_settings")
-    .update(payload)
-    .eq("user_id", userId);
+    .select("*")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (selectErr) {
+    // If select failed, throw (we expect DB access here)
+    throw selectErr;
+  }
+
+  if (existing) {
+    const { error: updateErr } = await supabase
+      .from("user_settings")
+      .update(payload)
+      .eq("user_id", userId);
+
+    if (updateErr) throw updateErr;
+    return;
+  }
+
+  // If there's no existing settings row for this user, create one and attach the flag
+  const { data, error } = await supabase
+    .from("user_settings")
+    .insert({ user_id: userId, [col]: value })
+    .select()
+    .single();
+
   if (error) throw error;
 }
 
