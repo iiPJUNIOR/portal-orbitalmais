@@ -168,6 +168,61 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 }
 
 /**
+ * Ensure there is a settings row attached to the current authenticated user.
+ * Behavior:
+ * - If a row with seller_email matching the current user's email exists:
+ *   - If it has no user_id, attach it to current user and return the updated row.
+ *   - If it already has a user_id, return it (no destructive change).
+ * - If none found, returns null.
+ *
+ * This helper is useful for recovering records that were created before users had an account bound.
+ */
+export async function ensureSettingsForCurrentUser(): Promise<UserSettings | null> {
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !user.email) return null;
+    const userEmail = (user.email || "").trim().toLowerCase();
+
+    // Try to find by seller_email case-insensitive
+    const { data: found, error: findErr } = await supabase
+      .from("user_settings")
+      .select("*")
+      .ilike("seller_email", userEmail)
+      .maybeSingle();
+
+    if (findErr) {
+      console.warn("ensureSettingsForCurrentUser: lookup failed", findErr);
+      return null;
+    }
+
+    if (!found) return null;
+
+    if (!found.user_id) {
+      // Attach to current user
+      const { data: updated, error: updateErr } = await supabase
+        .from("user_settings")
+        .update({ user_id: user.id, updated_at: new Date().toISOString() })
+        .eq("id", found.id)
+        .select()
+        .maybeSingle();
+
+      if (updateErr) {
+        console.warn("ensureSettingsForCurrentUser: failed to attach user_id", updateErr);
+        // still return original found record as fallback
+        return found as UserSettings;
+      }
+      return updated as UserSettings;
+    }
+
+    // If already attached, just return it
+    return found as UserSettings;
+  } catch (err) {
+    console.error("ensureSettingsForCurrentUser error", err);
+    return null;
+  }
+}
+
+/**
  * Get all users settings for admin management.
  * This now calls an Edge Function which uses the service role key to read auth.users and user_settings,
  * returning a combined list so super-admins can see all registered emails.
