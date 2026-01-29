@@ -10,7 +10,7 @@ import { ArrowRight, Loader2, Search, Plus, Trash2, Info, Presentation, CheckCir
 import { fetchBases, type StoredBase } from "@/services/productBaseService";
 import { generateProposalNumber } from "@/services/proposalService";
 import { Switch } from "@/components/ui/switch";
-import { formatCurrencyBRL, parseSpreadsheetNumber } from "@/lib/formatters";
+import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
 import { saveUserSettings } from "@/services/settingsService";
 
@@ -62,9 +62,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
   const [formData, setFormData] = useState<any>(initialFormState);
 
-  // Local state to manage the displayed total input (formatted / unformatted)
-  const [totalInput, setTotalInput] = useState<string>(() => formatCurrencyBRL(initialFormState.totalPrice));
-
   // If initialData is provided (continuing a draft), initialize state accordingly
   useEffect(() => {
     if (initialData) {
@@ -91,11 +88,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     };
     loadData();
   }, []);
-
-  // Keep totalInput in sync when formData.totalPrice changes externally
-  useEffect(() => {
-    setTotalInput(formatCurrencyBRL(formData.totalPrice));
-  }, [formData.totalPrice]);
 
   useEffect(() => {
     let q = 0; let q1 = 0; let q2 = 0;
@@ -368,7 +360,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         );
       case 4:
         return (
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
@@ -376,11 +368,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-card">
               {filteredProducts.map(p => {
                 const isSelected = (formData.selectedProducts || []).some((sp: any) => sp.baseId === p.id);
-
-                const containerClass = `flex items-center justify-between p-3 transition-colors ${isSelected ? "bg-primary/10 border border-primary/20" : "hover:bg-muted/50"}`;
-
                 return (
-                  <div key={p.id} className={containerClass}>
+                  <div key={p.id} className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
                         <span className="font-bold text-sm">{p.name}</span>
@@ -470,23 +459,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl opacity-70">R$</span>
                 <Input
-                  type="text"
+                  type="number"
+                  step="0.01"
                   className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-white"
-                  value={totalInput}
-                  onFocus={() => {
-                    // show plain number for editing
-                    setTotalInput(formData.totalPrice ? String(formData.totalPrice) : "");
-                  }}
+                  value={formData.totalPrice || ""}
                   onChange={(e) => {
-                    const raw = e.target.value;
-                    // save raw to local input to preserve typing, but also compute numeric
-                    setTotalInput(raw);
-                    const parsed = parseSpreadsheetNumber(raw);
-                    setFormData((prev: any) => ({ ...prev, totalPrice: parsed }));
-                  }}
-                  onBlur={() => {
-                    // format displayed value on blur
-                    setTotalInput(formatCurrencyBRL(formData.totalPrice));
+                    const val = parseFloat(e.target.value || "0");
+                    setFormData((prev: any) => ({ ...prev, totalPrice: val }));
                   }}
                 />
               </div>
