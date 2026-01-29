@@ -41,7 +41,6 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
     if (error) {
       console.error("getUserSettings error:", error);
-      // If error occurs, we still want to return a basic object if it's Paulo
       if (String(user.email).toLowerCase() === PAULO_EMAIL) {
         return {
           user_id: user.id,
@@ -61,7 +60,6 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       return settings;
     }
 
-    // Default for Paulo if no row exists
     if (String(user.email).toLowerCase() === PAULO_EMAIL) {
       return {
         user_id: user.id,
@@ -98,6 +96,7 @@ export async function getAllUsersSettings(): Promise<any[]> {
     const json = await resp.json();
     return json.users || [];
   } catch (err) {
+    console.warn("Falling back to direct DB select for users settings", err);
     const { data, error } = await supabase
       .from("user_settings")
       .select("user_id, seller_name, seller_email, can_view_history, can_access_settings")
@@ -110,22 +109,27 @@ export async function getAllUsersSettings(): Promise<any[]> {
 
 /**
  * Update a specific granular permission for a user.
+ * Uses upsert with only the essential fields to grant permissions even to new users.
  */
-export async function updateUserPermission(userId: string, permission: 'history' | 'settings', value: boolean): Promise<void> {
+export async function updateUserPermission(userId: string, email: string, permission: 'history' | 'settings', value: boolean): Promise<void> {
   const col = permission === 'history' ? 'can_view_history' : 'can_access_settings';
   
-  // Realiza o update diretamente. A permissão do admin é validada pelo RLS.
   const payload: Record<string, any> = { 
+    user_id: userId,
+    seller_email: email,
     [col]: value, 
     updated_at: new Date().toISOString() 
   };
 
+  // Realiza o upsert (insere se não existir, atualiza se existir) baseado no user_id
   const { error } = await supabase
     .from("user_settings")
-    .update(payload)
-    .eq("user_id", userId);
+    .upsert(payload, { onConflict: 'user_id' });
 
-  if (error) throw error;
+  if (error) {
+    console.error("updateUserPermission error:", error);
+    throw error;
+  }
 }
 
 /**

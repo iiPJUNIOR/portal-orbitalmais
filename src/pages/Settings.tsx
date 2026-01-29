@@ -163,9 +163,9 @@ export default function Settings() {
     await updateBaseMapping(base, "extra_columns", next);
   };
 
-  const toggleUserPermission = async (userId: string, permission: 'history' | 'settings', currentValue: boolean) => {
+  const toggleUserPermission = async (userId: string, email: string, permission: 'history' | 'settings', currentValue: boolean) => {
     try {
-      await updateUserPermission(userId, permission, !currentValue);
+      await updateUserPermission(userId, email, permission, !currentValue);
       toast.success("Permissão atualizada");
       loadAllUsers();
     } catch (err) {
@@ -510,7 +510,7 @@ export default function Settings() {
                               <Switch
                                 checked={!!u.can_view_history}
                                 disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
-                                onCheckedChange={() => toggleUserPermission(u.user_id, 'history', !!u.can_view_history)}
+                                onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email || u.email, 'history', !!u.can_view_history)}
                               />
                             </div>
                             <div className="flex flex-col items-end text-xs">
@@ -518,7 +518,7 @@ export default function Settings() {
                               <Switch
                                 checked={!!u.can_access_settings}
                                 disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
-                                onCheckedChange={() => toggleUserPermission(u.user_id, 'settings', !!u.can_access_settings)}
+                                onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email || u.email, 'settings', !!u.can_access_settings)}
                               />
                             </div>
                           </div>
