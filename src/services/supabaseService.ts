@@ -60,7 +60,7 @@ export const saveQuote = async (
       address: quote.address,
       proposal_date: quote.proposalDate,
       proposal_number: quote.proposalNumber,
-      price_model: quote.priceModel,
+      price_model: quote.price_model || quote.priceModel,
       total_price: quote.totalPrice,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",
@@ -123,14 +123,21 @@ export const saveQuote = async (
   }
 };
 
-export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
+export const getQuotesByCnpj = async (query: string): Promise<QuoteType[]> => {
   try {
-    const clean = cnpj.replace(/\D/g, "");
-    const { data, error } = await supabase
+    const searchTerm = query.trim();
+    
+    // Build the query to search in both CNPJ and Company Name
+    let builder = supabase
       .from("quotes")
-      .select("*")
-      .ilike("cnpj", `%${clean}%`)
-      .order("created_at", { ascending: false });
+      .select("*");
+
+    if (searchTerm) {
+      // Clean query for CNPJ numeric check (optional, but keeping ilike for original text is safer)
+      builder = builder.or(`cnpj.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%`);
+    }
+
+    const { data, error } = await builder.order("created_at", { ascending: false });
 
     if (error) throw error;
 
@@ -154,13 +161,17 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
       settings: q.settings,
     })) as QuoteType[];
 
-    // Merge with localStorage fallback entries that match the CNPJ substring
+    // Merge with localStorage fallback entries
     const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
     const localArr: LocalStored[] = localRaw ? JSON.parse(localRaw) : [];
+    
     const matchedLocal = (localArr || [])
       .filter((l) => {
-        const qcnpj = String(l.quote.cnpj || "").replace(/\D/g, "");
-        return qcnpj.includes(clean) || clean.includes(qcnpj) || (!clean && true);
+        if (!searchTerm) return true;
+        const qcnpj = String(l.quote.cnpj || "").toLowerCase();
+        const qname = String(l.quote.companyName || l.quote.company_name || "").toLowerCase();
+        const lowerSearch = searchTerm.toLowerCase();
+        return qcnpj.includes(lowerSearch) || qname.includes(lowerSearch);
       })
       .map((l) => ({
         id: l.id,
@@ -193,37 +204,8 @@ export const getQuotesByCnpj = async (cnpj: string): Promise<QuoteType[]> => {
       return tb - ta;
     });
   } catch (err) {
-    console.error("Erro ao buscar orçamentos por CNPJ (supabase), falling back to localStorage:", err);
-    // Fallback: return local entries
-    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
-    const localArr: LocalStored[] = localRaw ? JSON.parse(localRaw) : [];
-    const clean = cnpj.replace(/\D/g, "");
-    const matchedLocal = (localArr || [])
-      .filter((l) => {
-        const qcnpj = String(l.quote.cnpj || "").replace(/\D/g, "");
-        return qcnpj.includes(clean) || clean.includes(qcnpj) || (!clean && true);
-      })
-      .map((l) => ({
-        id: l.id,
-        cnpj: l.quote.cnpj || "",
-        companyName: l.quote.companyName || l.quote.company_name || "",
-        contactName: l.quote.contactName || l.quote.contact_name || "",
-        email: l.quote.email || "",
-        phone: l.quote.phone || "",
-        address: l.quote.address || "",
-        proposalDate: l.quote.proposalDate || l.created_at,
-        proposalNumber: l.quote.proposalNumber || "",
-        priceModel: l.quote.priceModel || "12m",
-        totalPrice: l.quote.totalPrice || 0,
-        status: l.quote.status || "rascunho",
-        observations: l.quote.observations || "",
-        createdAt: l.created_at,
-        updatedAt: l.created_at,
-        pptxUrl: undefined,
-        settings: l.quote.settings || l.quote,
-      })) as QuoteType[];
-
-    return matchedLocal;
+    console.error("Erro ao buscar orçamentos (supabase/local):", err);
+    return [];
   }
 };
 
@@ -270,26 +252,7 @@ export const getQuoteItems = async (quoteId: string): Promise<QuoteItemType[]> =
 
     return [];
   } catch (err) {
-    console.error("Erro ao buscar itens do orçamento (supabase), falling back to localStorage:", err);
-    // Fallback to local storage
-    const localRaw = typeof window !== "undefined" ? localStorage.getItem(LOCAL_STORAGE_KEY) : null;
-    if (localRaw) {
-      const localArr: LocalStored[] = JSON.parse(localRaw);
-      const found = localArr.find((l) => l.id === quoteId);
-      if (found) {
-        return (found.items || []).map((it, idx) => ({
-          id: `${quoteId}-local-${idx}`,
-          quoteId,
-          sku: it.sku || it.productDescription || "",
-          productDescription: it.productDescription || (it.product && it.product.description) || "",
-          quantity: it.quantity || 1,
-          unitPrice: it.unitPrice || 0,
-          priceModel: it.priceModel || "12m",
-          subtotal: (it.unitPrice || 0) * (it.quantity || 1),
-        }));
-      }
-    }
-
+    console.error("Erro ao buscar itens do orçamento (supabase/local):", err);
     return [];
   }
 };
