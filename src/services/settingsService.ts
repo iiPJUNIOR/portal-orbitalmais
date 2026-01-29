@@ -110,26 +110,20 @@ export async function getAllUsersSettings(): Promise<any[]> {
 
 /**
  * Update a specific granular permission for a user.
- * Uses upsert to handle users that don't have a settings row yet.
  */
 export async function updateUserPermission(userId: string, permission: 'history' | 'settings', value: boolean): Promise<void> {
   const col = permission === 'history' ? 'can_view_history' : 'can_access_settings';
   
-  // Primeiro, tentamos obter o e-mail do usuário para garantir que o upsert tenha dados mínimos se for uma inserção
-  const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers();
-  const targetUser = (users || []).find(u => u.id === userId);
-  const email = targetUser?.email || "";
-
+  // Realiza o update diretamente. A permissão do admin é validada pelo RLS.
   const payload: Record<string, any> = { 
-    user_id: userId,
-    seller_email: email,
     [col]: value, 
     updated_at: new Date().toISOString() 
   };
 
   const { error } = await supabase
     .from("user_settings")
-    .upsert(payload, { onConflict: 'user_id' });
+    .update(payload)
+    .eq("user_id", userId);
 
   if (error) throw error;
 }
