@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
@@ -29,6 +29,10 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const DEBOUNCE_MS = 300;
+  const debounceRef = useRef<number | null>(null);
+  const initialLoadDone = useRef(false);
+
   // Load recent quotes on mount (empty CNPJ -> returns recent / all)
   useEffect(() => {
     (async () => {
@@ -43,17 +47,16 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
         setQuotes([]);
       } finally {
         setLoading(false);
+        initialLoadDone.current = true;
       }
     })();
   }, []);
 
-  const handleSearch = async () => {
+  const doSearch = async (searchCnpj: string) => {
     setLoading(true);
     setError(null);
-
     try {
-      // getQuotesByCnpj accepts empty string to return recent/all entries
-      const results = await getQuotesByCnpj(cnpj);
+      const results = await getQuotesByCnpj(searchCnpj);
       setQuotes(results);
     } catch (err) {
       console.error("Erro ao buscar orçamentos", err);
@@ -62,6 +65,41 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
     } finally {
       setLoading(false);
     }
+  };
+
+  // Debounced live search while typing
+  useEffect(() => {
+    // Avoid firing debounce on initial mount before the initial load finished
+    if (!initialLoadDone.current && cnpj === "") {
+      return;
+    }
+
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    debounceRef.current = window.setTimeout(() => {
+      doSearch(cnpj);
+      debounceRef.current = null;
+    }, DEBOUNCE_MS);
+
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cnpj]);
+
+  const handleSearch = async () => {
+    // manual search fallback (immediate)
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    await doSearch(cnpj);
   };
 
   const getStatusBadge = (status: Quote['status']) => {
