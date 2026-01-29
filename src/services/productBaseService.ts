@@ -13,7 +13,7 @@ export type StoredBase = {
   name_column?: string | null;
   description_column?: string | null;
   info_column?: string | null;
-  extra_columns?: string[]; // Lista de nomes de colunas adicionais
+  extra_columns?: string[]; 
   created_at?: string;
 };
 
@@ -30,8 +30,8 @@ async function isSuperAdmin(): Promise<boolean> {
 
 async function getCurrentUserId(): Promise<string | null> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
-    return user?.id ?? null;
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id ?? null;
   } catch (err) {
     console.warn("getCurrentUserId failed", err);
     return null;
@@ -39,17 +39,18 @@ async function getCurrentUserId(): Promise<string | null> {
 }
 
 export async function fetchBases(): Promise<StoredBase[]> {
-  const userId = await getCurrentUserId();
-  if (!userId) return [];
-
-  // Buscamos todas as bases que o RLS nos permitir ver.
-  // O RLS agora permite ver bases próprias e as bases do Paulo.
+  // Verificamos a sessão, mas permitimos a busca mesmo que o ID local falhe, 
+  // pois o Supabase validará via token no header da requisição.
   const { data, error } = await supabase
     .from("product_bases")
     .select("*")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  if (error) {
+    console.error("Erro ao buscar bases:", error);
+    throw error;
+  }
+  
   return (data || []) as StoredBase[];
 }
 
@@ -59,7 +60,6 @@ export async function saveBase(base: StoredBase): Promise<StoredBase> {
 
   const isAdmin = await isSuperAdmin();
   
-  // Prepare payload. Keep existing user_id if editing as admin, otherwise use current user.
   const payload = { 
     ...base, 
     user_id: (isAdmin && base.user_id) ? base.user_id : userId 
@@ -71,7 +71,6 @@ export async function saveBase(base: StoredBase): Promise<StoredBase> {
       .update(payload)
       .eq("id", base.id);
     
-    // Non-admins can only update their own
     if (!isAdmin) {
       query = query.eq("user_id", userId);
     }
@@ -100,7 +99,6 @@ export async function deleteBase(id: string): Promise<void> {
   
   let query = supabase.from("product_bases").delete().eq("id", id);
   
-  // Non-admins can only delete their own
   if (!isAdmin) {
     query = query.eq("user_id", userId);
   }
