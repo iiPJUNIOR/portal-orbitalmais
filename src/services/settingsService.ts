@@ -45,15 +45,43 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
 /**
  * Get all users settings for admin management.
+ * This now attempts to call an Edge Function that lists all auth users (service role),
+ * merged with any existing user_settings rows. If the Edge Function call fails,
+ * it falls back to returning existing user_settings rows only.
  */
 export async function getAllUsersSettings(): Promise<any[]> {
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("user_id, seller_name, seller_email, has_full_access, can_view_history, can_access_settings")
-    .order("seller_name", { ascending: true });
-  
-  if (error) throw error;
-  return data;
+  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/list-users";
+
+  try {
+    const resp = await fetch(FN_URL, { method: "GET" });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      console.warn("getAllUsersSettings: edge function returned non-ok", { status: resp.status, text });
+      // fallback to previous implementation below
+      throw new Error("Edge function call failed");
+    }
+    const json = await resp.json().catch(() => null);
+    if (json && Array.isArray(json.users)) {
+      return json.users;
+    }
+    // Unexpected payload - fallback
+    console.warn("getAllUsersSettings: unexpected payload from edge function", json);
+    throw new Error("Unexpected edge function response");
+  } catch (err) {
+    // Fallback: return user_settings rows (legacy behavior)
+    try {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("user_id, seller_name, seller_email, has_full_access, can_view_history, can_access_settings")
+        .order("seller_name", { ascending: true });
+
+      if (error) throw error;
+      return data || [];
+    } catch (err2) {
+      console.error("getAllUsersSettings fallback error", err2);
+      throw err2;
+    }
+  }
 }
 
 /**
@@ -64,7 +92,7 @@ export async function updateUserAccess(userId: string, hasAccess: boolean): Prom
     .from("user_settings")
     .update({ has_full_access: hasAccess })
     .eq("user_id", userId);
-  
+
   if (error) throw error;
 }
 
