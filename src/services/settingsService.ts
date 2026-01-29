@@ -21,22 +21,146 @@ export type UserSettings = {
   updated_at?: string | null;
 };
 
+const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
+
 /**
  * Get settings for current authenticated user.
+ * - First tries to find by user_id.
+ * - If none, tries to find by seller_email (case-insensitive) and attach it to the current user when possible.
+ * - If the current user is the super-admin PAULO_EMAIL, ensure returned settings include full access flags and
+ *   create/upsert a row bound to his user_id so UI checks work reliably.
  */
 export async function getUserSettings(): Promise<UserSettings | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return null;
 
-    const { data, error } = await supabase
+    // 1) Try to get settings by user_id
+    const { data: byId, error: byIdErr } = await supabase
       .from("user_settings")
       .select("*")
       .eq("user_id", user.id)
       .maybeSingle();
 
-    if (error) throw error;
-    return (data as UserSettings) || null;
+    if (byIdErr) {
+      console.warn("getUserSettings: lookup by user_id failed", byIdErr);
+    }
+
+    if (byId) {
+      // Ensure admin flags are present for Paulo
+      if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+        const patched = { ...byId, can_view_history: true, can_access_settings: true };
+        return patched as UserSettings;
+      }
+      return byId as UserSettings;
+    }
+
+    // 2) Not found by user_id -> try to find existing row by seller_email (case-insensitive)
+    const userEmail = (user.email || "").trim();
+    if (userEmail) {
+      const { data: byEmail, error: byEmailErr } = await supabase
+        .from("user_settings")
+        .select("*")
+        .ilike("seller_email", userEmail)
+        .maybeSingle();
+
+      if (byEmailErr) {
+        console.warn("getUserSettings: lookup by seller_email failed", byEmailErr);
+      }
+
+      if (byEmail) {
+        // If the row exists but is not attached to any user_id, attach it to current user
+        if (!byEmail.user_id) {
+          try {
+            const { data: updated, error: updateErr } = await supabase
+              .from("user_settings")
+              .update({ user_id: user.id, updated_at: new Date().toISOString() })
+              .eq("id", byEmail.id)
+              .select()
+              .maybeSingle();
+
+            if (!updateErr && updated) {
+              // Ensure admin flags for Paulo
+              if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+                const patched = { ...updated, can_view_history: true, can_access_settings: true };
+                return patched as UserSettings;
+              }
+              return updated as UserSettings;
+            }
+          } catch (err) {
+            console.warn("getUserSettings: failed to attach settings row to user", err);
+            // Fallthrough to return the found row (without user_id), better than null
+            if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+              const patched = { ...byEmail, can_view_history: true, can_access_settings: true };
+              return patched as UserSettings;
+            }
+            return byEmail as UserSettings;
+          }
+        } else {
+          // row exists and belongs to somebody (not this user) — but return it if emails match
+          if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+            const patched = { ...byEmail, can_view_history: true, can_access_settings: true };
+            // Try to ensure the row is linked to this user_id (upsert may override other user_id intentionally only for admin)
+            try {
+              await supabase
+                .from("user_settings")
+                .upsert({ user_id: user.id, seller_email: user.email.toLowerCase() }, { onConflict: "user_id" });
+            } catch (err) {
+              // ignore errors here; we still return patched
+            }
+            return patched as UserSettings;
+          }
+          return byEmail as UserSettings;
+        }
+      }
+    }
+
+    // 3) No row found by user_id nor seller_email.
+    // If current user is Paulo, upsert a settings row granting full access so UI toggles and history appear immediately.
+    if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+      try {
+        const payload = {
+          user_id: user.id,
+          seller_name: user.user_metadata?.full_name || user.email,
+          seller_email: user.email,
+          can_view_history: true,
+          can_access_settings: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        };
+
+        const { data: upserted, error: upsertErr } = await supabase
+          .from("user_settings")
+          .upsert(payload, { onConflict: "user_id" })
+          .select()
+          .single();
+
+        if (!upsertErr && upserted) {
+          return upserted as UserSettings;
+        } else {
+          // fallback: return constructed settings object even if DB upsert failed
+          return {
+            user_id: user.id,
+            seller_name: user.user_metadata?.full_name || user.email,
+            seller_email: user.email,
+            can_view_history: true,
+            can_access_settings: true,
+          } as UserSettings;
+        }
+      } catch (err) {
+        console.warn("getUserSettings: failed to create default admin settings row", err);
+        return {
+          user_id: user.id,
+          seller_name: user.user_metadata?.full_name || user.email,
+          seller_email: user.email,
+          can_view_history: true,
+          can_access_settings: true,
+        } as UserSettings;
+      }
+    }
+
+    // No settings found for this user
+    return null;
   } catch (err) {
     console.error("settingsService.getUserSettings error", err);
     throw err;
