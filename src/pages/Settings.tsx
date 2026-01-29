@@ -7,10 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, UserPlus, Loader2, Info, LayoutList } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Info, LayoutList } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
-import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission, grantPermissionByEmail } from "@/services/settingsService";
+import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission } from "@/services/settingsService";
 import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -37,12 +37,9 @@ export default function Settings() {
   const [slideMappings, setSlideMappings] = useState<Record<string, number>>({});
   const [newKeyword, setNewKeyword] = useState("");
   const [newSlideNumber, setNewSlideNumber] = useState("");
-  
+
   const [canAccessSettings, setCanAccessSettings] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
-  const [newEmailToGrant, setNewEmailToGrant] = useState("");
-  const [grantingAccess, setGrantingAccess] = useState(false);
-  const [grantPermissionType, setGrantPermissionType] = useState<'history' | 'settings' | 'both'>('history');
 
   const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
 
@@ -80,11 +77,11 @@ export default function Settings() {
       } else if (isSuperAdmin) {
         setCanAccessSettings(true);
       }
-      
+
       if (isSuperAdmin || s?.can_access_settings) {
         loadBases();
       }
-      
+
       if (isSuperAdmin) {
         loadAllUsers();
       }
@@ -173,23 +170,6 @@ export default function Settings() {
     }
   };
 
-  const handleGrantPermissionByEmail = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newEmailToGrant) return;
-    
-    setGrantingAccess(true);
-    try {
-      await grantPermissionByEmail(newEmailToGrant, grantPermissionType);
-      toast.success(`Permissão(s) concedida(s) para ${newEmailToGrant}`);
-      setNewEmailToGrant("");
-      loadAllUsers();
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao conceder permissão");
-    } finally {
-      setGrantingAccess(false);
-    }
-  };
-
   const handleSaveFontSize = async (value: string) => {
     try {
       setFontSize(value);
@@ -202,7 +182,7 @@ export default function Settings() {
 
   const handleAddSlideMapping = async () => {
     if (!newKeyword.trim() || !newSlideNumber) return;
-    
+
     const next = { ...slideMappings, [newKeyword.trim().toLowerCase()]: parseInt(newSlideNumber) };
     try {
       setSlideMappings(next);
@@ -305,19 +285,19 @@ export default function Settings() {
                   <div className="flex gap-3 items-end p-4 bg-muted/30 rounded-xl border border-dashed">
                     <div className="flex-1 space-y-1.5">
                       <Label className="text-xs">Palavra-chave</Label>
-                      <Input 
-                        placeholder="Ex: Botoeira" 
-                        value={newKeyword} 
-                        onChange={e => setNewKeyword(e.target.value)} 
+                      <Input
+                        placeholder="Ex: Botoeira"
+                        value={newKeyword}
+                        onChange={e => setNewKeyword(e.target.value)}
                       />
                     </div>
                     <div className="w-24 space-y-1.5">
                       <Label className="text-xs">Slide nº</Label>
-                      <Input 
-                        type="number" 
-                        placeholder="Ex: 47" 
-                        value={newSlideNumber} 
-                        onChange={e => setNewSlideNumber(e.target.value)} 
+                      <Input
+                        type="number"
+                        placeholder="Ex: 47"
+                        value={newSlideNumber}
+                        onChange={e => setNewSlideNumber(e.target.value)}
                       />
                     </div>
                     <Button onClick={handleAddSlideMapping} size="icon">
@@ -336,10 +316,10 @@ export default function Settings() {
                             Inclui slide: <strong className="text-foreground">{slide}</strong>
                           </span>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
                           onClick={() => handleRemoveSlideMapping(kw)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -399,22 +379,22 @@ export default function Settings() {
                           <SettingsIcon className="h-5 w-5 text-primary" />
                           <h3 className="font-bold text-lg">{base.name}</h3>
                         </div>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="text-destructive hover:bg-destructive/10 text-xs h-8" 
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:bg-destructive/10 text-xs h-8"
                           onClick={() => { if(confirm("Remover esta base?")) deleteBase(base.id!).then(loadBases); }}
                         >
                           Remover Base
                         </Button>
                       </div>
-                      
+
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
-                          <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
-                            value={base.name_column || ""} 
+                          <select
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background"
+                            value={base.name_column || ""}
                             onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
                           >
                             <option value="">-- Automático --</option>
@@ -423,9 +403,9 @@ export default function Settings() {
                         </div>
                         <div className="space-y-1.5">
                           <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
-                          <select 
-                            className="w-full text-xs border rounded-lg p-1.5 bg-background" 
-                            value={base.description_column || ""} 
+                          <select
+                            className="w-full text-xs border rounded-lg p-1.5 bg-background"
+                            value={base.description_column || ""}
                             onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
                           >
                             <option value="">-- Automático --</option>
@@ -442,12 +422,12 @@ export default function Settings() {
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-background/50">
                           {base.headers.map(header => (
                             <div key={header} className="flex items-center space-x-2">
-                              <Checkbox 
+                              <Checkbox
                                 id={`extra-${base.id}-${header}`}
                                 checked={(base.extra_columns || []).includes(header)}
                                 onCheckedChange={() => handleToggleExtraColumn(base, header)}
                               />
-                              <Label 
+                              <Label
                                 htmlFor={`extra-${base.id}-${header}`}
                                 className="text-[10px] truncate cursor-pointer font-medium"
                                 title={header}
@@ -484,60 +464,43 @@ export default function Settings() {
                   <Users className="h-5 w-5 text-green-600" />
                   Gestão de Acessos
                 </CardTitle>
-                <CardDescription>Libere o acesso às áreas do sistema (Histórico e Configurações) para outros usuários.</CardDescription>
+                <CardDescription>Escolha quem pode acessar o histórico e as configurações do sistema.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <form onSubmit={handleGrantPermissionByEmail} className="space-y-3">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Conceder Permissão por E-mail</Label>
-                  <div className="flex gap-2">
-                    <Input 
-                      type="email" 
-                      placeholder="vendedor@controlid.com.br" 
-                      value={newEmailToGrant}
-                      onChange={e => setNewEmailToGrant(e.target.value)}
-                      required
-                    />
-                    <select className="border rounded px-2" value={grantPermissionType} onChange={e => setGrantPermissionType(e.target.value as any)}>
-                      <option value="history">Apenas Histórico</option>
-                      <option value="settings">Apenas Configurações</option>
-                      <option value="both">Histórico + Configurações</option>
-                    </select>
-                    <Button type="submit" disabled={grantingAccess}>
-                      {grantingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4 mr-2" />}
-                      Conceder
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">O usuário deve ter um perfil salvo (Configurações) para que possamos localizar e atualizar sua entrada.</p>
-                </form>
-
-                <div className="space-y-2 border-t pt-4">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários</Label>
-                  {allUsers.map(u => (
-                    <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
-                      <div>
-                        <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
-                        <p className="text-xs text-muted-foreground">{u.seller_email}</p>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <div className="flex flex-col items-end text-xs">
-                          <span className="font-medium">Histórico</span>
-                          <Switch 
-                            checked={u.can_view_history} 
-                            disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
-                            onCheckedChange={() => toggleUserPermission(u.user_id, 'history', !!u.can_view_history)} 
-                          />
+                <div className="space-y-2 border-t pt-2">
+                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários (registrados)</Label>
+                  {allUsers.length === 0 ? (
+                    <div className="text-sm text-muted-foreground py-6 text-center">Nenhum usuário encontrado.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {allUsers.map(u => (
+                        <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
+                          <div>
+                            <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
+                            <p className="text-xs text-muted-foreground">{u.seller_email}</p>
+                          </div>
+                          <div className="flex items-center gap-6">
+                            <div className="flex flex-col items-end text-xs">
+                              <span className="font-medium">Histórico</span>
+                              <Switch
+                                checked={u.can_view_history}
+                                disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                                onCheckedChange={() => toggleUserPermission(u.user_id, 'history', !!u.can_view_history)}
+                              />
+                            </div>
+                            <div className="flex flex-col items-end text-xs">
+                              <span className="font-medium">Configurações</span>
+                              <Switch
+                                checked={u.can_access_settings}
+                                disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                                onCheckedChange={() => toggleUserPermission(u.user_id, 'settings', !!u.can_access_settings)}
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end text-xs">
-                          <span className="font-medium">Configurações</span>
-                          <Switch 
-                            checked={u.can_access_settings} 
-                            disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
-                            onCheckedChange={() => toggleUserPermission(u.user_id, 'settings', !!u.can_access_settings)} 
-                          />
-                        </div>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -569,13 +532,13 @@ export default function Settings() {
               <Label>Telefone / WhatsApp</Label>
               <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="(11) 99999-9999" />
             </div>
-            <Button 
-              onClick={() => saveUserSettings({ 
-                seller_name: sellerName, 
-                seller_role: sellerRole, 
-                seller_email: sellerEmail, 
-                seller_phone: sellerPhone 
-              }).then(() => toast.success("Perfil atualizado!"))} 
+            <Button
+              onClick={() => saveUserSettings({
+                seller_name: sellerName,
+                seller_role: sellerRole,
+                seller_email: sellerEmail,
+                seller_phone: sellerPhone
+              }).then(() => toast.success("Perfil atualizado!"))}
               className="w-full h-11 font-bold"
             >
               Salvar Perfil
