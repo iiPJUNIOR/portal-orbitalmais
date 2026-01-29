@@ -43,7 +43,8 @@ export default function Settings() {
   const [canAccessSettings, setCanAccessSettings] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
-  const isSuperAdmin = user?.email === "paulo.sergio@controlid.com.br";
+  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
+  const isSuperAdmin = String(user?.email || "").toLowerCase() === PAULO_EMAIL;
 
   const loadBases = async () => {
     try {
@@ -168,6 +169,7 @@ export default function Settings() {
       toast.success("Permissão atualizada");
       loadAllUsers();
     } catch (err) {
+      console.error("Erro permissão:", err);
       toast.error("Erro ao atualizar permissão");
     }
   };
@@ -506,16 +508,16 @@ export default function Settings() {
                             <div className="flex flex-col items-end text-xs">
                               <span className="font-medium">Histórico</span>
                               <Switch
-                                checked={u.can_view_history}
-                                disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                                checked={!!u.can_view_history}
+                                disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
                                 onCheckedChange={() => toggleUserPermission(u.user_id, 'history', !!u.can_view_history)}
                               />
                             </div>
                             <div className="flex flex-col items-end text-xs">
                               <span className="font-medium">Configurações</span>
                               <Switch
-                                checked={u.can_access_settings}
-                                disabled={u.seller_email === "paulo.sergio@controlid.com.br"}
+                                checked={!!u.can_access_settings}
+                                disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
                                 onCheckedChange={() => toggleUserPermission(u.user_id, 'settings', !!u.can_access_settings)}
                               />
                             </div>
