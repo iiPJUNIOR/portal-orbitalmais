@@ -42,19 +42,12 @@ export async function fetchBases(): Promise<StoredBase[]> {
   const userId = await getCurrentUserId();
   if (!userId) return [];
 
-  const isAdmin = await isSuperAdmin();
-
-  let query = supabase
+  // Buscamos todas as bases que o RLS nos permitir ver.
+  // O RLS agora permite ver bases próprias e as bases do Paulo.
+  const { data, error } = await supabase
     .from("product_bases")
     .select("*")
     .order("created_at", { ascending: false });
-
-  // If not admin, only show own bases
-  if (!isAdmin) {
-    query = query.eq("user_id", userId);
-  }
-
-  const { data, error } = await query;
 
   if (error) throw error;
   return (data || []) as StoredBase[];
