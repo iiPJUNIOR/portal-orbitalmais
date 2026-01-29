@@ -29,19 +29,36 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Load recent quotes on mount (empty CNPJ -> returns recent / all)
+  useEffect(() => {
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const results = await getQuotesByCnpj("");
+        setQuotes(results);
+      } catch (err) {
+        console.error("Erro ao carregar orçamentos recentes", err);
+        setError("Erro ao carregar orçamentos recentes");
+        setQuotes([]);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
+
   const handleSearch = async () => {
-    if (!cnpj) return;
-    
     setLoading(true);
     setError(null);
-    
+
     try {
-      // In a real implementation, this would fetch from Supabase (and local fallback)
+      // getQuotesByCnpj accepts empty string to return recent/all entries
       const results = await getQuotesByCnpj(cnpj);
       setQuotes(results);
     } catch (err) {
+      console.error("Erro ao buscar orçamentos", err);
       setError("Erro ao buscar orçamentos");
-      console.error(err);
+      setQuotes([]);
     } finally {
       setLoading(false);
     }
@@ -72,7 +89,7 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Digite o CNPJ para buscar orçamentos"
+              placeholder="Pesquisar por CNPJ (ou deixe vazio para ver os últimos)"
               value={cnpj}
               onChange={(e) => setCnpj(e.target.value)}
               className="pl-8"
@@ -131,13 +148,13 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
                   </TableCell>
                 </TableRow>
               ))}
-              
+
               {quotes.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
                     {cnpj 
-                      ? "Nenhum orçamento encontrado para este CNPJ" 
-                      : "Digite um CNPJ para buscar orçamentos"}
+                      ? "Nenhum orçamento encontrado para este CNPJ"
+                      : "Nenhum orçamento recente disponível"}
                   </TableCell>
                 </TableRow>
               )}
