@@ -45,15 +45,38 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
 /**
  * Get all users settings for admin management.
+ * This now calls an Edge Function which uses the service role key to read auth.users and user_settings,
+ * returning a combined list so super-admins can see all registered emails.
  */
 export async function getAllUsersSettings(): Promise<any[]> {
-  const { data, error } = await supabase
-    .from("user_settings")
-    .select("user_id, seller_name, seller_email, has_full_access, can_view_history, can_access_settings")
-    .order("seller_name", { ascending: true });
-  
-  if (error) throw error;
-  return data;
+  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/list-users";
+
+  try {
+    const resp = await fetch(FN_URL, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      throw new Error(`Edge Function list-users failed (status ${resp.status}): ${text}`);
+    }
+
+    const json = await resp.json().catch(() => ({}));
+    return (json.users || []) as any[];
+  } catch (err) {
+    console.error("getAllUsersSettings (edge) failed, falling back to local user_settings query", err);
+    // Fallback: return the legacy user_settings rows if the Edge Function is not available.
+    const { data, error } = await supabase
+      .from("user_settings")
+      .select("user_id, seller_name, seller_email, has_full_access, can_view_history, can_access_settings")
+      .order("seller_name", { ascending: true });
+    
+    if (error) throw error;
+    return data || [];
+  }
 }
 
 /**
