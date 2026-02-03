@@ -36,6 +36,8 @@ export default function Index() {
   const [canViewHistory, setCanViewHistory] = useState(false);
   const [canAccessSettings, setCanAccessSettings] = useState(false);
 
+  const [editInitialData, setEditInitialData] = useState<any | null>(null);
+
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
   useEffect(() => {
@@ -190,6 +192,9 @@ export default function Index() {
     } catch (err) {
       console.error(err);
       toast.error(`Erro ao gerar PPTX.`, { id: loadToastId });
+    } finally {
+      // clear any edit state once wizard finishes
+      setEditInitialData(null);
     }
   };
 
@@ -267,6 +272,15 @@ export default function Index() {
     }
   };
 
+  const handleEditQuote = (quote: Quote) => {
+    if (!quote || !quote.settings) {
+      toast.error("Não há dados para editar nesta proposta.");
+      return;
+    }
+    setEditInitialData(quote.settings);
+    setStep("wizard");
+  };
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <main className="flex-1 container mx-auto py-10 px-4">
@@ -337,7 +351,10 @@ export default function Index() {
             <ProposalWizard 
               initialSellerData={sellerInfo}
               onComplete={handleWizardComplete}
-              onCancel={() => setStep("welcome")}
+              onCancel={() => (editInitialData ? setStep("details") : setStep("welcome"))}
+              initialData={editInitialData ?? undefined}
+              initialStep={1}
+              draftId={selectedQuote?.id ?? undefined}
             />
           </div>
         )}
@@ -369,6 +386,7 @@ export default function Index() {
               items={quoteItems} 
               onBack={() => setStep(canViewHistory ? "history" : "welcome")} 
               onRegenerate={handleRegenerateQuote}
+              onEdit={() => handleEditQuote(selectedQuote)}
             />
           </div>
         )}

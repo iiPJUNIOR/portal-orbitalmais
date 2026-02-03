@@ -20,9 +20,10 @@ interface QuoteDetailsProps {
   items: QuoteItem[];
   onBack: () => void;
   onRegenerate: () => void;
+  onEdit?: () => void;
 }
 
-export function QuoteDetails({ quote, items, onBack, onRegenerate }: QuoteDetailsProps) {
+export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: QuoteDetailsProps) {
   const getStatusBadge = (status: Quote['status']) => {
     switch (status) {
       case 'rascunho':
@@ -51,6 +52,13 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate }: QuoteDetail
               <Button variant="outline" onClick={onBack}>
                 Voltar
               </Button>
+
+              {onEdit ? (
+                <Button variant="secondary" onClick={onEdit}>
+                  Editar
+                </Button>
+              ) : null}
+
               <Button onClick={onRegenerate}>
                 Regenerar Proposta
               </Button>
