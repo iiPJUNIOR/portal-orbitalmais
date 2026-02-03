@@ -442,7 +442,7 @@ export default function Settings() {
                       <div className="space-y-3">
                         <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-2">
                           Colunas Extras para Exibição (Passo 4)
-                          <Info className="h-3 w-3" title="Estas colunas aparecerão como detalhes adicionais na busca de produtos." />
+                          <span title="Estas colunas aparecerão como detalhes adicionais na busca de produtos."><Info className="h-3 w-3" /></span>
                         </Label>
                         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-background/50">
                           {base.headers.map(header => (

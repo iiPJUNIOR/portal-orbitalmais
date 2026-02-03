@@ -47,7 +47,6 @@ const MODEL_TO_SLIDE: Record<string, number> = {
   "idflex pro": 23, "idaccess": 24, "idfit 4x2": 25, "idaccess pro": 26,
   "secbox": 27, "iduhf": 28, "iduhf lite": 29, "idblock next facial": 30,
   "idblock next biometria digital": 31, "idblock facial inox": 32,
-  "idblock facial inox ": 32, "idblock facial inox": 32,
   "idblock facial preta": 33, "idblock facial mini preta": 34,
   "idblock facial mini inox": 35, "idblock inox biométrica": 36,
   "idblock preta biométrica": 37, "idblock braço articulado inox": 38,
@@ -184,7 +183,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   const width = doc.internal.pageSize.getWidth();
   const height = doc.internal.pageSize.getHeight();
   
-  const colors = {
+  const colors: { primary: [number, number, number]; accent: [number, number, number]; light: [number, number, number]; text: [number, number, number]; white: [number, number, number] } = {
     primary: [20, 20, 20],
     accent: [220, 20, 60],
     light: [245, 245, 245],
@@ -257,8 +256,8 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
       ["TELEFONE", data.phone || "Não informado"],
     ],
     theme: 'plain',
-    styles: { fontSize: 13, cellPadding: 5, textColor: [50, 50, 50] },
-    columnStyles: { 0: { fontStyle: 'bold', width: 60, textColor: colors.accent } }
+    styles: { fontSize: 13, cellPadding: 5, textColor: colors.text },
+    columnStyles: { 0: { fontStyle: 'bold', cellWidth: 60, textColor: colors.accent } }
   });
 
   data.items.forEach(item => {
@@ -309,11 +308,11 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
       "INCLUSO NO PACOTE"
     ]),
     theme: 'grid',
-    headStyles: { fillColor: colors.primary, textColor: 255, fontSize: 10, halign: 'center' },
+    headStyles: { fillColor: colors.primary, textColor: colors.white, fontSize: 10, halign: 'center' },
     styles: { fontSize: 10, cellPadding: 6 },
-    columnStyles: { 
-      0: { halign: 'center', width: 20 },
-      2: { halign: 'center', width: 20 },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 20 },
+      2: { halign: 'center', cellWidth: 20 },
       3: { halign: 'center', fontStyle: 'bold', textColor: colors.accent }
     }
   });

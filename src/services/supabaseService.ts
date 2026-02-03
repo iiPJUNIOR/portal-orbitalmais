@@ -60,7 +60,7 @@ export const saveQuote = async (
       address: quote.address,
       proposal_date: quote.proposalDate,
       proposal_number: quote.proposalNumber,
-      price_model: quote.price_model || quote.priceModel,
+      price_model: quote.priceModel,
       total_price: quote.totalPrice,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",

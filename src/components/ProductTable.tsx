@@ -78,8 +78,8 @@ export function ProductTable({ products, onAddToQuote }: ProductTableProps) {
             const controle = getComplementMeta(product, ["controle", "control", "controle tipo", "tipo controle"]);
 
             // prices may be stored on product as price_com_iDSecure / price_sem_iDSecure or inside complementMeta columns
-            const priceCom = (product as any).price_com_iDSecure ?? parseFloat(getComplementMeta(product, ["com idsecure", "com ids", "com id", "com_idsecure", "comids", "com"] as string[])) || 0;
-            const priceSem = (product as any).price_sem_iDSecure ?? parseFloat(getComplementMeta(product, ["sem idsecure", "sem ids", "sem id", "semid", "sem"] as string[])) || 0;
+            const priceCom = ((product as any).price_com_iDSecure ?? parseFloat(getComplementMeta(product, ["com idsecure", "com ids", "com id", "com_idsecure", "comids", "com"] as string[]))) || 0;
+            const priceSem = ((product as any).price_sem_iDSecure ?? parseFloat(getComplementMeta(product, ["sem idsecure", "sem ids", "sem id", "semid", "sem"] as string[]))) || 0;
 
             // Additional system field (lite or other)
             const liteOrSystem = getComplementMeta(product, ["lite", "sistema", "system", "software", "outro sistema"]);

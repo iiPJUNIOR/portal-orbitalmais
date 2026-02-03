@@ -31,8 +31,9 @@ export default function Login() {
     const checkSession = async () => {
       try {
         const resp = await supabase.auth.getSession?.();
-        const currentSession = resp?.data?.session ?? resp?.session ?? null;
+        const currentSession = (resp as any)?.data?.session ?? (resp as any)?.session ?? null; // compatible access for different supabase SDK return shapes
         if (currentSession && mounted) {
+
           navigate("/", { replace: true });
         }
       } catch {

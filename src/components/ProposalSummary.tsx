@@ -11,7 +11,7 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
-import { calculateProposalSummary, generateProposalNumber, formatDateForProposal } from "@/services/proposalService";
+import { generateProposalNumber, formatDateForProposal } from "@/services/proposalService";
 import { QuoteItem } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
 
