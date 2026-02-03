@@ -72,6 +72,15 @@ function healTokensInXml(xml: string): string {
   });
 }
 
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/\"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
 function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
   let out = xml;
   
@@ -82,7 +91,9 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
   for (const [key, val] of Object.entries(replacements || {})) {
     const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const regex = new RegExp(`{{\\s*${escapedKey}\\s*}}`, 'gi');
-    out = out.replace(regex, String(val ?? ""));
+    // Ensure we XML-escape the replacement value to avoid introducing invalid XML (e.g., &)
+    const safeVal = escapeXml(String(val ?? ""));
+    out = out.replace(regex, safeVal);
   }
 
   // 3. Aplica os mapeamentos manuais
@@ -90,7 +101,8 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
-    out = out.split(sourceText).join(val);
+    const safeVal = escapeXml(val);
+    out = out.split(sourceText).join(safeVal);
   }
 
   return out;
