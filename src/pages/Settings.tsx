@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Info, LayoutList, Loader2 } from "lucide-react";
+import { Plus, Trash2, Settings as SettingsIcon, ScanText, ShieldCheck, Users, Lock, Type, Info, LayoutList, Loader2, FileCheck } from "lucide-react";
 import * as googleClient from "@/integrations/google/client";
 import { fetchBases, saveBase, deleteBase, type StoredBase } from "@/services/productBaseService";
 import { getUserSettings, saveUserSettings, getAllUsersSettings, updateUserPermission } from "@/services/settingsService";
@@ -15,6 +15,7 @@ import { useSession } from "@/contexts/SessionProvider";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { scanDocxTemplate } from "@/utils/docxScanner";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -40,11 +41,37 @@ export default function Settings() {
   const [newKeyword, setNewKeyword] = useState("");
   const [newSlideNumber, setNewSlideNumber] = useState("");
 
+  // DOCX Mappings
+  const [docxTokens, setDocxTokens] = useState<string[]>([]);
+  const [docxMappings, setDocxMappings] = useState<Record<string, string>>({});
+  const [scanningDocx, setScanningDocx] = useState(false);
+
   const [canAccessSettings, setCanAccessSettings] = useState(false);
   const [allUsers, setAllUsers] = useState<any[]>([]);
 
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
   const isSuperAdmin = String(user?.email || "").toLowerCase() === PAULO_EMAIL;
+
+  const VISTORIA_FIELDS = [
+    { value: "vendedor", label: "Vendedor" },
+    { value: "empresa", label: "Empresa (Razão Social)" },
+    { value: "cnpj", label: "CNPJ" },
+    { value: "empresa_phone", label: "Telefone da Empresa" },
+    { value: "empresa_email", label: "E-mail da Empresa" },
+    { value: "contato_nome", label: "Nome do Contato" },
+    { value: "contato_telefone", label: "Telefone do Contato" },
+    { value: "cep", label: "CEP" },
+    { value: "rua", label: "Rua" },
+    { value: "numero", label: "Número" },
+    { value: "complemento", label: "Complemento" },
+    { value: "bairro", label: "Bairro" },
+    { value: "cidade", label: "Cidade" },
+    { value: "uf", label: "UF" },
+    { value: "endereco", label: "Endereço Completo (Bloco)" },
+    { value: "quantidade", label: "Quantidade" },
+    { value: "produto", label: "Produto" },
+    { value: "observacoes", label: "Observações" },
+  ];
 
   const loadBases = async () => {
     try {
@@ -76,6 +103,7 @@ export default function Settings() {
         setSpreadsheetLink(s.spreadsheet_link || "");
         setFontSize(s.font_size || "medium");
         setSlideMappings(s.slide_mappings || {});
+        setDocxMappings(s.docx_mappings || {});
         setCanAccessSettings(!!s?.can_access_settings || isSuperAdmin);
       } else if (isSuperAdmin) {
         setCanAccessSettings(true);
@@ -211,6 +239,34 @@ export default function Settings() {
     }
   };
 
+  const handleScanDocx = async () => {
+    setScanningDocx(true);
+    try {
+      const tokens = await scanDocxTemplate();
+      if (tokens.length > 0) {
+        setDocxTokens(tokens);
+        toast.success(`${tokens.length} tokens encontrados no template de vistoria.`);
+      } else {
+        toast.error("Nenhum token encontrado no template.");
+      }
+    } catch (err) {
+      toast.error("Falha ao escanear template.");
+    } finally {
+      setScanningDocx(false);
+    }
+  };
+
+  const handleUpdateDocxMapping = async (token: string, field: string) => {
+    const next = { ...docxMappings, [token]: field };
+    setDocxMappings(next);
+    try {
+      await saveUserSettings({ docx_mappings: next });
+      toast.success("Mapeamento salvo!");
+    } catch (err) {
+      toast.error("Erro ao salvar mapeamento");
+    }
+  };
+
   const handleSaveProfile = async () => {
     setSavingProfile(true);
     try {
@@ -280,7 +336,7 @@ export default function Settings() {
                 <CardHeader className="bg-primary/10 dark:bg-primary/5">
                   <CardTitle className="flex items-center gap-2">
                     <ScanText className="h-5 w-5" />
-                    Mapeamento de Tokens do Template
+                    Mapeamento de Tokens do Template PPTX
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6">
@@ -288,8 +344,68 @@ export default function Settings() {
                     Sincronize as variáveis do seu arquivo PPTX com o sistema.
                   </p>
                   <Button onClick={() => navigate("/token-scan")} className="w-full h-12 text-lg font-bold">
-                    Mapear Variáveis do Template
+                    Mapear Variáveis do Template PPTX
                   </Button>
+                </CardContent>
+              </Card>
+
+              {/* Novo Mapeamento DOCX Vistoria */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <FileCheck className="h-5 w-5 text-primary" />
+                    Mapeamento de Tokens do Template Vistoria (DOCX)
+                  </CardTitle>
+                  <CardDescription>Associe as tags do seu arquivo DOCX aos campos do formulário de vistoria.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="p-4 border rounded-xl bg-muted/30 border-dashed flex items-center justify-between">
+                    <div>
+                      <p className="font-bold text-sm">Escanear Template</p>
+                      <p className="text-xs text-muted-foreground">Identifica todos os {{campos}} dentro do arquivo DOCX.</p>
+                    </div>
+                    <Button onClick={handleScanDocx} disabled={scanningDocx}>
+                      {scanningDocx ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanText className="h-4 w-4 mr-2" />}
+                      Escanear Agora
+                    </Button>
+                  </div>
+
+                  {docxTokens.length > 0 && (
+                    <div className="space-y-3">
+                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags Encontradas no DOCX</Label>
+                      <div className="grid grid-cols-1 gap-2">
+                        {docxTokens.map(token => (
+                          <div key={token} className="flex items-center gap-3 p-3 bg-card border rounded-lg shadow-sm">
+                            <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded min-w-[120px] text-center">
+                              {"{{"}{token}{"}}"}
+                            </span>
+                            <div className="flex-1">
+                              <Select
+                                value={docxMappings[token] || ""}
+                                onValueChange={(val) => handleUpdateDocxMapping(token, val)}
+                              >
+                                <SelectTrigger className="h-9">
+                                  <SelectValue placeholder="Selecione o campo correspondente" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="none">-- Ignorar --</SelectItem>
+                                  {VISTORIA_FIELDS.map(f => (
+                                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {docxTokens.length === 0 && (
+                    <p className="text-center py-6 text-sm text-muted-foreground italic">
+                      Clique em "Escanear Agora" para começar o mapeamento do template DOCX.
+                    </p>
+                  )}
                 </CardContent>
               </Card>
 
@@ -297,7 +413,7 @@ export default function Settings() {
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <LayoutList className="h-5 w-5" />
-                    Mapeamento Dinâmico de Slides
+                    Mapeamento Dinâmico de Slides (PPTX)
                   </CardTitle>
                   <CardDescription>
                     Configure palavras-chave que, se encontradas no nome/descrição do produto, incluem um slide específico.

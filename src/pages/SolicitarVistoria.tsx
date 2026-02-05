@@ -9,8 +9,9 @@ import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
-import { getUserSettings } from "@/services/settingsService";
+import { getUserSettings, UserSettings } from "@/services/settingsService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Loader2, ScanText, Mail, FileText, ArrowLeft, CheckCircle2, Copy } from "lucide-react";
 
 export default function SolicitarVistoria() {
   // Seller / contact info
@@ -24,6 +25,7 @@ export default function SolicitarVistoria() {
   const [produto, setProduto] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [loadingDoc, setLoadingDoc] = useState(false);
+  const [settings, setSettings] = useState<UserSettings | null>(null);
 
   // Address split fields
   const [cep, setCep] = useState("");
@@ -54,13 +56,14 @@ export default function SolicitarVistoria() {
       try {
         const s = await getUserSettings();
         if (!s) return;
+        setSettings(s);
         if (!vendedor && s.seller_name) setVendedor(s.seller_name);
       } catch (err) {
         // non-blocking
         console.warn("SolicitarVistoria: falha ao obter seller settings", err);
       }
-      // eslint-disable-next-line react-hooks/exhaustive-deps
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
@@ -209,8 +212,8 @@ export default function SolicitarVistoria() {
       const zip = new PizZip(arrayBuffer);
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // Data object includes both split fields and legacy 'endereco'
-      const data = {
+      // Current form data in a standardized structure
+      const formData = {
         vendedor: vendedor || "",
         empresa: empresa || "",
         cnpj: cnpj || "",
@@ -218,7 +221,6 @@ export default function SolicitarVistoria() {
         empresa_email: empresaEmail || "",
         contato_nome: contatoNome || "",
         contato_telefone: contatoTelefone || "",
-        // split address fields
         cep: cep || "",
         rua: rua || "",
         numero: numero || "",
@@ -226,14 +228,35 @@ export default function SolicitarVistoria() {
         bairro: bairro || "",
         cidade: cidade || "",
         uf: uf || "",
-        // legacy full address field for templates that expect a single variable
         endereco: composeFullAddress(),
         quantidade: quantidade || "",
         produto: produto || "",
         observacoes: observacoes || "",
       } as any;
 
-      doc.render(data);
+      // Apply mappings from settings if present
+      const mappings = settings?.docx_mappings || {};
+      const renderData: Record<string, any> = {};
+
+      if (Object.keys(mappings).length > 0) {
+        // If mappings exist, populate the object for Docxtemplater using the mapping keys
+        Object.entries(mappings).forEach(([token, field]) => {
+          if (field === "none") return;
+          renderData[token] = formData[field] || "";
+        });
+        
+        // Also include the original formData keys as fallback for tags that might match directly
+        Object.keys(formData).forEach(key => {
+          if (renderData[key] === undefined) {
+            renderData[key] = formData[key];
+          }
+        });
+      } else {
+        // No mappings saved, use original formData
+        Object.assign(renderData, formData);
+      }
+
+      doc.render(renderData);
 
       const out = doc.getZip().generate({ type: "blob" });
       const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
@@ -526,170 +549,174 @@ export default function SolicitarVistoria() {
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <h1 className="text-2xl font-bold mb-2">Solicitar Vistoria</h1>
-      <p className="text-sm text-muted-foreground mb-6">Preencha os dados abaixo. Você pode gerar um DOCX preenchido a partir do template ou preparar o e-mail automaticamente.</p>
+      <div className="flex items-center gap-2 mb-2">
+        <FileText className="h-6 w-6 text-primary" />
+        <h1 className="text-2xl font-bold">Solicitar Vistoria</h1>
+      </div>
+      <p className="text-sm text-muted-foreground mb-6">Preencha os dados abaixo. O sistema usará o mapeamento de tokens configurado para preencher o DOCX.</p>
 
       <div className="space-y-4 bg-card p-6 rounded-lg shadow-sm">
         <div>
-          <Label className="text-sm">Vendedor responsável</Label>
+          <Label className="text-sm font-semibold">Vendedor responsável</Label>
           <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Nome do vendedor" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm">CNPJ</Label>
+            <Label className="text-sm font-semibold">CNPJ</Label>
             <div className="flex gap-2">
               <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
-              <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>{fetchingCnpj ? "Buscando..." : "Buscar"}</Button>
+              <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>{fetchingCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}</Button>
             </div>
-            <div className="text-sm text-muted-foreground">O sistema preencherá número, complemento e tentará obter o CEP (se disponível) a partir do CNPJ.</div>
+            <div className="text-[10px] text-muted-foreground leading-tight">Preenchimento automático de número, complemento e CEP (se disponível).</div>
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">Empresa (Razão Social)</Label>
+            <Label className="text-sm font-semibold">Empresa (Razão Social)</Label>
             <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">E-mail da empresa</Label>
+            <Label className="text-sm font-semibold">E-mail da empresa</Label>
             <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com.br" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-sm">Contato responsável - Nome</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Contato responsável - Nome</Label>
             <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
           </div>
 
-          <div>
-            <Label className="text-sm">Contato responsável - Telefone</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Contato responsável - Telefone</Label>
             <Input
               value={contatoTelefone}
               onChange={handleContatoTelefoneChange}
               onPaste={handlePhonePaste(setContatoTelefone)}
               placeholder="(00) 00000-0000"
-              rows={1}
             />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
-          <div className="md:col-span-2">
-            <Label className="text-sm">CEP</Label>
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-muted/20 rounded-xl border border-dashed">
+          <div className="md:col-span-2 space-y-2">
+            <Label className="text-sm font-semibold">CEP</Label>
             <div className="flex gap-2">
               <Input placeholder="00000-000" value={cep} onChange={handleCepChange} />
-              <Button type="button" onClick={handleManualCepLookup}>Buscar</Button>
+              <Button type="button" variant="outline" size="sm" onClick={handleManualCepLookup}>Buscar</Button>
             </div>
           </div>
 
-          <div className="md:col-span-4">
-            <Label className="text-sm">Rua</Label>
+          <div className="md:col-span-4 space-y-2">
+            <Label className="text-sm font-semibold">Rua</Label>
             <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Logradouro / Rua" />
           </div>
 
-          <div>
-            <Label className="text-sm">Número</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Número</Label>
             <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Número" />
           </div>
 
-          <div>
-            <Label className="text-sm">Complemento</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Complemento</Label>
             <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Complemento" />
           </div>
 
-          <div>
-            <Label className="text-sm">Bairro</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Bairro</Label>
             <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" />
           </div>
 
-          <div>
-            <Label className="text-sm">Cidade</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Cidade</Label>
             <Input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" />
           </div>
 
-          <div>
-            <Label className="text-sm">UF</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">UF</Label>
             <Input value={uf} onChange={(e) => setUf(e.target.value)} placeholder="UF" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <Label className="text-sm">Quantidade</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Quantidade</Label>
             <Input value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="Quantidade" />
           </div>
-          <div>
-            <Label className="text-sm">Produto</Label>
+          <div className="space-y-2">
+            <Label className="text-sm font-semibold">Produto</Label>
             <Input value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="Descrição do produto/solicitação" />
           </div>
         </div>
 
-        <div>
-          <Label className="text-sm">Observações</Label>
-            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} placeholder="Observações adicionais" />
+        <div className="space-y-2">
+          <Label className="text-sm font-semibold">Observações</Label>
+            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={3} placeholder="Observações adicionais para o técnico" />
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-4 border-t">
           <div className="flex gap-2">
-            <Button onClick={handleGenerateDocx} disabled={loadingDoc}>{loadingDoc ? "Gerando..." : "Gerar DOCX preenchido"}</Button>
-
-            <Button variant="outline" onClick={handleCopyBody}>
-              Copiar corpo do e-mail
+            <Button onClick={handleGenerateDocx} disabled={loadingDoc} className="font-bold">
+              {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+              Baixar DOCX
             </Button>
 
-            <Button variant="outline" onClick={handleOpenMailClient}>Abrir no cliente de e-mail</Button>
+            <Button variant="outline" onClick={handleCopyBody}>
+              <Copy className="h-4 w-4 mr-2" />
+              Copiar E-mail
+            </Button>
+
+            <Button variant="secondary" onClick={handleOpenMailClient}>
+              <Mail className="h-4 w-4 mr-2" />
+              Enviar E-mail
+            </Button>
           </div>
-          <div className="text-sm text-muted-foreground">Assunto: <span className="font-medium">{subject}</span></div>
+          <div className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">Assunto: <span className="font-medium">{subject}</span></div>
         </div>
 
         {/* Improved preview card with edit capability */}
-        <Card>
-          <CardHeader className="flex items-center justify-between">
-            <CardTitle>Pré-visualização do e-mail</CardTitle>
-            <div className="flex items-center gap-2">
+        <Card className="mt-8 border-none shadow-md overflow-hidden">
+          <CardHeader className="bg-muted/30 p-4 border-b flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="text-sm font-bold">Pré-visualização do e-mail</CardTitle>
+            </div>
+            <div className="flex items-center gap-1">
               {!editingPreview ? (
-                <Button variant="ghost" size="sm" onClick={() => startEditPreview()}>
-                  Editar
+                <Button variant="ghost" size="xs" onClick={() => startEditPreview()} className="h-7 text-[10px]">
+                  Editar Texto
                 </Button>
               ) : (
                 <>
-                  <Button size="sm" onClick={() => saveEditPreview()}>Salvar</Button>
-                  <Button variant="outline" size="sm" onClick={() => cancelEditPreview()}>Cancelar</Button>
+                  <Button size="xs" onClick={() => saveEditPreview()} className="h-7 text-[10px]">Salvar</Button>
+                  <Button variant="outline" size="xs" onClick={() => cancelEditPreview()} className="h-7 text-[10px]">Cancelar</Button>
                 </>
               )}
 
-              <Button variant="ghost" size="sm" onClick={() => { setShowRawPreview((s) => !s); setEditingPreview(false); }}>
-                {showRawPreview ? "Ver formatado" : "Ver raw"}
+              <Button variant="ghost" size="xs" onClick={() => { setShowRawPreview((s) => !s); setEditingPreview(false); }} className="h-7 text-[10px]">
+                {showRawPreview ? "Ver Formatado" : "Ver Raw"}
               </Button>
-
-              <Button variant="outline" size="sm" onClick={handleCopyBody}>Copiar</Button>
-              <Button size="sm" onClick={handleOpenMailClient}>Abrir</Button>
             </div>
           </CardHeader>
-          <CardContent>
-            {/* Subject displayed separately for clarity */}
-            <div className="mb-4">
-              <div className="text-xs text-muted-foreground">Assunto</div>
-              <div className="font-semibold">{subject}</div>
-            </div>
-
+          <CardContent className="p-6">
             {editingPreview ? (
               <div>
-                <div className="text-xs text-muted-foreground mb-2">Editar texto (o que você digitar aqui será usado ao copiar/abrir):</div>
+                <Label className="text-[10px] text-muted-foreground mb-2 block uppercase tracking-wider">Editor Manual</Label>
                 <Textarea
                   value={previewText ?? ""}
                   onChange={(e) => setPreviewText(e.target.value)}
-                  rows={12}
+                  rows={10}
+                  className="font-mono text-xs"
                 />
               </div>
             ) : showRawPreview ? (
-              <Textarea readOnly value={getEffectivePreviewText()} rows={12} />
+              <div className="bg-muted/10 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap border">
+                {getEffectivePreviewText()}
+              </div>
             ) : (
               <div className="space-y-4">
                 {getEmailSections().map((section, idx) => (
-                  <div key={idx} className="bg-background/40 p-3 rounded">
-                    {/* preserve paragraphs inside section */}
+                  <div key={idx} className="bg-muted/5 p-3 rounded-lg border border-border/50">
                     {section.split("\n").map((line, li) => (
                       <p key={li} className={line.trim() === "" ? "my-2" : "text-sm leading-relaxed"}>
                         {line}
@@ -698,14 +725,13 @@ export default function SolicitarVistoria() {
                   </div>
                 ))}
 
-                {/* Signature / sender block */}
-                <div className="pt-2 border-t">
-                  <div className="text-xs text-muted-foreground mb-1">Assinatura</div>
-                  <div className="text-sm">
-                    <div className="font-medium">{vendedor || "[Vendedor]"}</div>
-                    {empresa && <div className="text-muted-foreground text-xs">{empresa}</div>}
-                    {empresaEmail && <div className="text-muted-foreground text-xs">{empresaEmail}</div>}
-                    {empresaPhone && <div className="text-muted-foreground text-xs">{empresaPhone}</div>}
+                <div className="pt-4 border-t border-dashed">
+                  <div className="text-[10px] uppercase font-bold text-muted-foreground mb-2">Assinatura</div>
+                  <div className="text-sm bg-primary/5 p-3 rounded-xl inline-block border border-primary/10">
+                    <div className="font-bold text-primary">{vendedor || "[Seu Nome]"}</div>
+                    <div className="text-muted-foreground text-xs">{settings?.seller_role || "Vendedor"}</div>
+                    {sellerInfo.email && <div className="text-muted-foreground text-[10px]">{sellerInfo.email}</div>}
+                    {sellerInfo.phone && <div className="text-muted-foreground text-[10px]">{sellerInfo.phone}</div>}
                   </div>
                 </div>
               </div>

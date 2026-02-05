@@ -19,6 +19,7 @@ export type UserSettings = {
   can_access_settings?: boolean;
   font_size?: 'small' | 'medium' | 'large' | 'extra-large';
   slide_mappings?: Record<string, number>; // Mapeamento palavra-chave -> número do slide
+  docx_mappings?: Record<string, string>; // Mapeamento tag_no_docx -> campo_do_form
   created_at?: string | null;
   updated_at?: string | null;
 };
