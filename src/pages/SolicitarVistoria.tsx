@@ -86,21 +86,19 @@ export default function SolicitarVistoria() {
     return parts.filter(Boolean).join(" - ");
   }
 
-  // Build a nicely formatted address for email / docx
+  // Build a nicely formatted address for email / docx with line breaks after colons
   function formatAddressNiceFromFields() {
     const lines: string[] = [];
     if (rua) {
-      let line = rua;
-      if (numero) line += `, ${numero}`;
-      if (complemento) line += ` ${complemento}`;
+      let line = `Rua:\n${rua}`;
+      if (numero) line += `\nNúmero:\n${numero}`;
+      if (complemento) line += `\nComplemento:\n${complemento}`;
       lines.push(line);
     }
-    const cityLineParts: string[] = [];
-    if (bairro) cityLineParts.push(bairro);
-    if (cidade) cityLineParts.push(cidade);
-    if (uf) cityLineParts.push(uf);
-    if (cityLineParts.length) lines.push(cityLineParts.join(" - "));
-    if (cep) lines.push(`CEP: ${cep}`);
+    if (bairro) lines.push(`Bairro:\n${bairro}`);
+    if (cidade) lines.push(`Cidade:\n${cidade}`);
+    if (uf) lines.push(`UF:\n${uf}`);
+    if (cep) lines.push(`CEP:\n${cep}`);
     return lines.join("\n");
   }
 
@@ -115,18 +113,18 @@ export default function SolicitarVistoria() {
     }
 
     if (empresa || cnpj || empresaPhone || empresaEmail) {
-      lines.push(`Empresa:`);
-      if (empresa) lines.push(`${empresa}`);
-      if (cnpj) lines.push(`CNPJ: ${cnpj}`);
-      if (empresaPhone) lines.push(`Telefone: ${empresaPhone}`);
-      if (empresaEmail) lines.push(`E-mail: ${empresaEmail}`);
+      lines.push(`Dados da Empresa:`);
+      if (empresa) lines.push(`Razão Social:\n${empresa}`);
+      if (cnpj) lines.push(`CNPJ:\n${cnpj}`);
+      if (empresaPhone) lines.push(`Telefone:\n${empresaPhone}`);
+      if (empresaEmail) lines.push(`E-mail:\n${empresaEmail}`);
       lines.push("");
     }
 
     if (contatoNome || contatoTelefone) {
       lines.push(`Contato responsável:`);
-      if (contatoNome) lines.push(`Nome: ${contatoNome}`);
-      if (contatoTelefone) lines.push(`Telefone: ${contatoTelefone}`);
+      if (contatoNome) lines.push(`Nome:\n${contatoNome}`);
+      if (contatoTelefone) lines.push(`Telefone:\n${contatoTelefone}`);
       lines.push("");
     }
 
@@ -139,11 +137,11 @@ export default function SolicitarVistoria() {
     if (produto) {
       lines.push(`Produto:\n${produto}`);
       if (quantidade) {
-        lines.push(`Quantidade: ${quantidade}`);
+        lines.push(`Quantidade:\n${quantidade}`);
       }
       lines.push("");
     } else if (quantidade) {
-      lines.push(`Quantidade: ${quantidade}`);
+      lines.push(`Quantidade:\n${quantidade}`);
       lines.push("");
     }
 
