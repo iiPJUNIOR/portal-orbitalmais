@@ -215,7 +215,7 @@ export default function SolicitarVistoria() {
       if (Array.isArray(errors) && errors.length > 0) {
         const explanations = errors.map((part: any) => {
           try {
-            return part.properties?.explanation || JSON.stringify(part);
+            return part.properties?.explanation || part.message || JSON.stringify(part);
           } catch {
             return String(part);
           }
@@ -230,45 +230,50 @@ export default function SolicitarVistoria() {
   }
 
   /**
-   * Heal fragmented tokens in docx XML.
-   * It scans each <w:p> paragraph, collects all <w:t> run texts, and if the concatenated
-   * paragraph contains a token marker {{ or }}, it writes the full concatenated text
-   * into the first <w:t> and empties the other <w:t> nodes. This preserves run structure
-   * (formatting) while ensuring tokens are contiguous for Docxtemplater.
+   * Robust healing of fragmented tokens in docx XML.
+   * Scans each <w:p> and if it contains '{' or '}', it joins all text content
+   * into a single <w:t> node to prevent Docxtemplater from failing on split XML nodes.
    */
   function healDocxTokens(xml: string): string {
     if (!xml) return xml;
-    const paragraphRegex = /<w:p(?: [\s\S]*?)?>[\s\S]*?<\/w:p>/gi;
-    const textNodeRegex = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
+    
+    // 1. Identify all paragraphs
+    const paragraphRegex = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
+    
+    return xml.replace(paragraphRegex, (pFull, pContent) => {
+      // If the paragraph doesn't contain braces, don't touch it to preserve potentially complex formatting
+      if (!pContent.includes('{') && !pContent.includes('}')) {
+        return pFull;
+      }
 
-    return xml.replace(paragraphRegex, (pMatch) => {
-      // Extract all text run contents in this paragraph
-      const runs: { open: string; text: string; close: string; full: string }[] = [];
+      // 2. Extract all text runs within this paragraph
+      const textNodeRegex = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
+      const runs: { open: string; text: string; close: string }[] = [];
       let m;
-      while ((m = textNodeRegex.exec(pMatch)) !== null) {
-        runs.push({ open: m[1], text: m[2], close: m[3], full: m[1] + m[2] + m[3] });
+      while ((m = textNodeRegex.exec(pContent)) !== null) {
+        runs.push({ open: m[1], text: m[2], close: m[3] });
       }
 
-      if (runs.length === 0) return pMatch;
+      if (runs.length <= 1) return pFull;
 
-      const joined = runs.map((r) => r.text).join("");
-      if (!joined.includes("{{") && !joined.includes("}}")) {
-        return pMatch;
-      }
-
-      // Reconstruct paragraph: put full joined text in the first <w:t>, clear others
+      // 3. Reconstruct paragraph by putting all text into the first <w:t> and emptying others
+      // We keep the first run's wrapper tags and the full joined text.
+      // Other runs are kept as empty wrappers to maintain structural integrity (important for Word).
       let runIndex = 0;
-      const healed = pMatch.replace(textNodeRegex, () => {
+      const healedContent = pContent.replace(textNodeRegex, () => {
         const r = runs[runIndex++];
-        if (!r) return "";
         if (runIndex === 1) {
-          return r.open + joined + r.close;
+          // Join ALL text nodes from the entire paragraph
+          const fullText = runs.map(run => run.text).join("");
+          return r.open + fullText + r.close;
         }
-        // Keep wrappers but empty text node to preserve formatting
-        return r.open + "" + r.close;
+        // Return empty text node to preserve run structure without splitting tokens
+        return r.open + r.close;
       });
 
-      return healed;
+      // Extract opening tag of paragraph
+      const pOpen = pFull.match(/^<w:p(?: [\s\S]*?)?>/i)?.[0] || "<w:p>";
+      return pOpen + healedContent + "</w:p>";
     });
   }
 
@@ -283,23 +288,24 @@ export default function SolicitarVistoria() {
 
       const zip = new PizZip(arrayBuffer);
 
-      // Heal document.xml to fix split tokens (prevents Docxtemplater 'duplicate open/close tags')
-      try {
-        const docFile = zip.file("word/document.xml");
-        if (docFile) {
-          const docXml = await docFile.async("string");
-          const healed = healDocxTokens(docXml);
-          zip.file("word/document.xml", healed);
+      // Clean multiple XML files in the docx where tags might reside
+      const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml", "word/footer1.xml", "word/footer2.xml", "word/footer3.xml"];
+      
+      for (const fileName of filesToHeal) {
+        const file = zip.file(fileName);
+        if (file) {
+          const content = await file.async("string");
+          const healed = healDocxTokens(content);
+          zip.file(fileName, healed);
         }
-      } catch (healErr) {
-        console.warn("healDocxTokens failed:", healErr);
-        // proceed anyway; docxtemplater will report errors if unfixable
       }
 
-      // Docxtemplater: return empty string for undefined tags so missing tags don't throw
-      const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
+      const doc = new Docxtemplater(zip, { 
+        paragraphLoop: true, 
+        linebreaks: true, 
+        delimiters: { start: "{{", end: "}}" } // explicitly set delimiters
+      });
 
-      // Current form data in a standardized structure
       const formData = {
         vendedor: vendedor || "",
         empresa: empresa || "",
@@ -321,54 +327,40 @@ export default function SolicitarVistoria() {
         observacoes: observacoes || "",
       } as any;
 
-      // Apply mappings from settings if present
+      // Map docx tokens to form fields
       const mappings = settings?.docx_mappings || {};
       const renderData: Record<string, any> = {};
 
+      // Initialize with default form data
+      Object.assign(renderData, formData);
+
+      // Apply specific overrides from mapping configuration
       if (Object.keys(mappings).length > 0) {
         Object.entries(mappings).forEach(([token, field]) => {
           if (field === "none") return;
-          renderData[token] = formData[field] ?? "";
+          // Ensure we strip any remaining braces if the token key in mapping has them
+          const cleanToken = token.replace(/[{}]/g, "").trim();
+          renderData[cleanToken] = formData[field] ?? "";
         });
-
-        // fallback: ensure original keys exist too
-        Object.keys(formData).forEach((k) => {
-          if (renderData[k] === undefined) renderData[k] = formData[k];
-        });
-      } else {
-        Object.assign(renderData, formData);
       }
 
       try {
         doc.render(renderData);
       } catch (renderErr: any) {
-        // Extract detailed explanations when available
         const details = extractDocxRenderErrorDetails(renderErr);
-        console.error("Docxtemplater render error (detailed):", renderErr);
-        const shortMsg = details
-          ? `Erro ao processar o template: ${details}`
-          : `Erro ao processar o template: ${renderErr.message || String(renderErr)}`;
-
-        // Suggest next steps
-        showError(
-          `${shortMsg}\nVerifique as tags do template e o mapeamento em Configurações → Mapeamento DOCX. Detalhes no console.`,
-          { id: toastId }
-        );
-        setLoadingDoc(false);
-        return;
+        console.error("Docxtemplater error details:", renderErr);
+        throw new Error(details || renderErr.message);
       }
 
-      const out = doc.getZip().generate({ type: "blob" });
+      const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
       const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
       saveAs(out, `Solicitacao_vistoria_${safeName}.docx`);
+      
       dismissToast(toastId as any);
-      showSuccess("Documento DOCX gerado e baixado com sucesso.");
+      showSuccess("Documento DOCX gerado com sucesso.");
     } catch (err: any) {
-      console.error("handleGenerateDocx unexpected error:", err);
-      const details = extractDocxRenderErrorDetails(err);
-      const message = details
-        ? `Erro ao gerar DOCX: ${details}`
-        : `Erro ao gerar o DOCX. Verifique se o template possui as tags corretas. (${err?.message || String(err)})`;
+      console.error("handleGenerateDocx error:", err);
+      const message = `Erro ao processar o template: ${err.message || String(err)}`;
       showError(message, { id: toastId });
     } finally {
       setLoadingDoc(false);
