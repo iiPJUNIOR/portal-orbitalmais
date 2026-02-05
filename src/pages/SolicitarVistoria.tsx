@@ -12,23 +12,22 @@ import { saveAs } from "file-saver";
 
 export default function SolicitarVistoria() {
   const [destinatario, setDestinatario] = useState("");
-  const [cc, setCc] = useState("controladoria@limaoebrasa.com.br");
-  const [vendedor, setVendedor] = useState("Paulo Sergio Junior");
-  const [empresa, setEmpresa] = useState("VISEU 03 Bar e Restaurante Ltda");
-  const [empresaEmail, setEmpresaEmail] = useState("controladoria@limaoebrasa.com.br");
-  const [contatoNome, setContatoNome] = useState("Paulo Martinho");
-  const [contatoTelefone, setContatoTelefone] = useState("11 96473-7685");
-  const [endereco, setEndereco] = useState("Rua Guaipá, 1017\nVila Leopoldina\nSão Paulo – SP\nCEP: 05089-001");
-  const [quantidade, setQuantidade] = useState("1");
-  const [produto, setProduto] = useState("Kit iDFace PRO + Botoeira + Fechadura C90");
-  const [observacoes, setObservacoes] = useState("Cliente ciente de que será necessária a execução de infraestrutura e acabamento.\nO local já possui uma fechadura modelo C90; verificar em vistoria se o cliente deseja realizar a troca ou permanecer com a existente antes da instalação do novo equipamento.");
+  const [cc, setCc] = useState("");
+  const [vendedor, setVendedor] = useState("");
+  const [empresa, setEmpresa] = useState("");
+  const [empresaEmail, setEmpresaEmail] = useState("");
+  const [contatoNome, setContatoNome] = useState("");
+  const [contatoTelefone, setContatoTelefone] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [quantidade, setQuantidade] = useState("");
+  const [produto, setProduto] = useState("");
+  const [observacoes, setObservacoes] = useState("");
   const [loadingDoc, setLoadingDoc] = useState(false);
-  const [loadingEmail, setLoadingEmail] = useState(false);
 
-  const subject = `Solicitação de vistoria técnica presencial – ${empresa}`;
+  const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
   const buildEmailBody = () => {
-    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor}\n\nEmpresa:\n${empresa}\n\nE-mail:\n${empresaEmail}\n\nContato responsável:\n\nNome: ${contatoNome}\n\nTelefone: ${contatoTelefone}\n\nEndereço para vistoria:\n${endereco}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade}\n\nProduto: ${produto}\n\nObservações:\n\n${observacoes}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor}`;
+    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nE-mail:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
   };
 
   const handleCopyBody = async () => {
@@ -87,7 +86,8 @@ export default function SolicitarVistoria() {
       doc.render(data);
 
       const out = doc.getZip().generate({ type: "blob" });
-      saveAs(out, `Solicitacao_vistoria_${empresa.replace(/[^a-z0-9]/gi, "_")}.docx`);
+      const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
+      saveAs(out, `Solicitacao_vistoria_${safeName}.docx`);
       showSuccess("Documento DOCX gerado e baixado com sucesso.");
     } catch (err: any) {
       console.error(err);
@@ -110,53 +110,53 @@ export default function SolicitarVistoria() {
 
         <div>
           <Label className="text-sm">CC</Label>
-          <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="controle@empresa.com.br" />
+          <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="cc@empresa.com.br (opcional)" />
         </div>
 
         <div>
           <Label className="text-sm">Vendedor responsável</Label>
-          <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} />
+          <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Nome do vendedor" />
         </div>
 
         <div>
           <Label className="text-sm">Empresa</Label>
-          <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} />
+          <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
         </div>
 
         <div>
           <Label className="text-sm">E-mail da empresa</Label>
-          <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} />
+          <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com.br" />
         </div>
 
         <div>
           <Label className="text-sm">Contato responsável - Nome</Label>
-          <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} />
+          <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
         </div>
 
         <div>
           <Label className="text-sm">Contato responsável - Telefone</Label>
-          <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} />
+          <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} placeholder="(00) 0 0000-0000" />
         </div>
 
         <div>
           <Label className="text-sm">Endereço para vistoria</Label>
-          <Textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={4} />
+          <Textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={4} placeholder="Rua, número, bairro, cidade, CEP" />
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm">Quantidade</Label>
-            <Input value={quantidade} onChange={(e) => setQuantidade(e.target.value)} />
+            <Input value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="Quantidade" />
           </div>
           <div>
             <Label className="text-sm">Produto</Label>
-            <Input value={produto} onChange={(e) => setProduto(e.target.value)} />
+            <Input value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="Descrição do produto/solicitação" />
           </div>
         </div>
 
         <div>
           <Label className="text-sm">Observações</Label>
-          <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} />
+          <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} placeholder="Observações adicionais" />
         </div>
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
