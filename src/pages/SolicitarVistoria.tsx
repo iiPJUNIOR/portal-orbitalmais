@@ -41,10 +41,6 @@ export default function SolicitarVistoria() {
   const [fetchingCnpj, setFetchingCnpj] = useState(false);
   const lastFetchedCnpj = useRef<string | null>(null);
 
-  // Debounce refs
-  const debounceCepRef = useRef<number | null>(null);
-  const debounceCnpjRef = useRef<number | null>(null);
-
   // Track last fetched CEP to avoid repeated requests
   const lastFetchedCepRef = useRef<string | null>(null);
 
@@ -68,7 +64,7 @@ export default function SolicitarVistoria() {
   function composeFullAddress() {
     const parts: string[] = [];
     
-    // 1. Street and Number
+    // Part 1: Street and Number
     if (rua) {
       let main = rua;
       if (numero) main += `, ${numero}`;
@@ -76,14 +72,14 @@ export default function SolicitarVistoria() {
       parts.push(main);
     }
     
-    // 2. Neighborhood
+    // Part 2: Neighborhood
     if (bairro) parts.push(bairro);
     
-    // 3. City/UF
+    // Part 3: City/UF
     const cityState = [cidade, uf].filter(Boolean).join("/");
     if (cityState) parts.push(cityState);
     
-    // 4. CEP
+    // Part 4: CEP
     if (cep) parts.push(`CEP: ${cep}`);
     
     return parts.filter(Boolean).join(" - ");
@@ -146,17 +142,17 @@ export default function SolicitarVistoria() {
     const toastId = showLoading("Gerando documento...");
     try {
       const res = await fetch(encodeURI("/Solicitação de vistoria.docx"));
-      if (!res.ok) throw new Error("Template DOCX não encontrado.");
+      if (!res.ok) throw new Error("Template DOCX não encontrado no servidor.");
       const arrayBuffer = await res.arrayBuffer();
       
-      // PizZip works synchronously
       const zip = new PizZip(arrayBuffer);
 
+      // Limpa fragmentação de tags XML
       const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"];
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
         if (file) {
-          const content = file.asText(); // Corrected synchronous method
+          const content = file.asText();
           zip.file(fileName, healDocxTokens(content));
         }
       }
@@ -167,26 +163,26 @@ export default function SolicitarVistoria() {
         delimiters: { start: "{{", end: "}}" }
       });
 
-      // Prepare data for DOCX with the requested \n after labels
+      // Dados para o DOCX sem prefixo \n para evitar quebras indesejadas
       const docxData = {
-        vendedor: vendedor ? `\n${vendedor}` : "",
-        empresa: empresa ? `\n${empresa}` : "",
-        cnpj: cnpj ? `\n${cnpj}` : "",
-        empresa_phone: empresaPhone ? `\n${empresaPhone}` : "",
-        empresa_email: empresaEmail ? `\n${empresaEmail}` : "",
-        contato_nome: contatoNome ? `\n${contatoNome}` : "",
-        contato_telefone: contatoTelefone ? `\n${contatoTelefone}` : "",
-        cep: cep ? `\n${cep}` : "",
-        rua: rua ? `\n${rua}` : "",
-        numero: numero ? `\n${numero}` : "",
-        complemento: complemento ? `\n${complemento}` : "",
-        bairro: bairro ? `\n${bairro}` : "",
-        cidade: cidade ? `\n${cidade}` : "",
-        uf: uf ? `\n${uf}` : "",
-        endereco: `\n${composeFullAddress()}`,
-        quantidade: quantidade ? `\n${quantidade}` : "",
-        produto: produto ? `\n${produto}` : "",
-        observacoes: observacoes ? `\n${observacoes}` : "",
+        vendedor: vendedor || "",
+        empresa: empresa || "",
+        cnpj: cnpj || "",
+        empresa_phone: empresaPhone || "",
+        empresa_email: empresaEmail || "",
+        contato_nome: contatoNome || "",
+        contato_telefone: contatoTelefone || "",
+        cep: cep || "",
+        rua: rua || "",
+        numero: numero || "",
+        complemento: complemento || "",
+        bairro: bairro || "",
+        cidade: cidade || "",
+        uf: uf || "",
+        endereco: composeFullAddress(), // Única linha: Rua, Nº - Bairro - Cidade/UF - CEP
+        quantidade: quantidade || "",
+        produto: produto || "",
+        observacoes: observacoes || "",
       } as any;
 
       const mappings = settings?.docx_mappings || {};
