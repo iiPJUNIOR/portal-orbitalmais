@@ -25,14 +25,53 @@ export type UserSettings = {
 };
 
 const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
+const LOCAL_SETTINGS_KEY = "local_user_settings_v1";
+
+/**
+ * Try to read settings from localStorage fallback.
+ */
+function readLocalSettings(): UserSettings | null {
+  try {
+    const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed as UserSettings;
+  } catch (err) {
+    console.warn("settingsService: readLocalSettings failed", err);
+    return null;
+  }
+}
+
+/**
+ * Persist settings to localStorage fallback.
+ */
+function writeLocalSettings(payload: Partial<UserSettings>): UserSettings {
+  try {
+    const existing = readLocalSettings() || {};
+    const merged = { ...existing, ...payload, updated_at: new Date().toISOString() } as UserSettings;
+    localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
+    // notify listeners
+    try { window.dispatchEvent(new Event("user_settings_changed")); } catch {}
+    return merged;
+  } catch (err) {
+    console.warn("settingsService: writeLocalSettings failed", err);
+    return payload as UserSettings;
+  }
+}
 
 /**
  * Get settings for current authenticated user.
+ * If no authenticated user or Supabase fails, returns a localStorage fallback (if present).
  */
 export async function getUserSettings(): Promise<UserSettings | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return null;
+    if (!user) {
+      // No authenticated user; return local fallback if available
+      const local = readLocalSettings();
+      if (local) return local;
+      return null;
+    }
 
     const { data, error } = await supabase
       .from("user_settings")
@@ -42,6 +81,9 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
     if (error) {
       console.error("getUserSettings error:", error);
+      // On error, try local fallback
+      const local = readLocalSettings();
+      if (local) return local;
       if (String(user.email).toLowerCase() === PAULO_EMAIL) {
         return {
           user_id: user.id,
@@ -61,6 +103,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       return settings;
     }
 
+    // No DB row found; if super admin, return default admin flags
     if (String(user.email).toLowerCase() === PAULO_EMAIL) {
       return {
         user_id: user.id,
@@ -70,9 +113,15 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       } as UserSettings;
     }
 
+    // As a last resort, check local fallback
+    const local = readLocalSettings();
+    if (local) return local;
     return null;
   } catch (err) {
     console.error("settingsService.getUserSettings unexpected error", err);
+    // Try local fallback on unexpected error
+    const local = readLocalSettings();
+    if (local) return local;
     return null;
   }
 }
@@ -153,26 +202,48 @@ export async function grantPermissionByEmail(email: string, permission: 'history
 
 /**
  * Upsert user settings.
+ * If there is no authenticated user or Supabase fails, persist to localStorage as a fallback.
  */
 export async function saveUserSettings(payload: Partial<UserSettings>): Promise<UserSettings> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) throw new Error("No authenticated user");
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      // No authenticated user: persist locally as fallback
+      const saved = writeLocalSettings(payload);
+      return saved;
+    }
 
-  const { data, error } = await supabase
-    .from("user_settings")
-    .upsert({
-      user_id: user.id,
-      ...payload,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" })
-    .select()
-    .single();
+    const { data, error } = await supabase
+      .from("user_settings")
+      .upsert({
+        user_id: user.id,
+        ...payload,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "user_id" })
+      .select()
+      .single();
 
-  if (error) {
-    console.error("saveUserSettings error:", error);
-    throw error;
+    if (error) {
+      console.error("saveUserSettings error:", error);
+      // On error try to persist locally to avoid losing user's changes
+      const local = writeLocalSettings(payload);
+      return local;
+    }
+
+    // If we succeeded saving to server, also remove/merge any local fallback to avoid divergence.
+    try {
+      const localRaw = localStorage.getItem(LOCAL_SETTINGS_KEY);
+      if (localRaw) {
+        localStorage.removeItem(LOCAL_SETTINGS_KEY);
+      }
+    } catch {}
+
+    window.dispatchEvent(new Event("user_settings_changed"));
+    return data as UserSettings;
+  } catch (err) {
+    console.error("saveUserSettings unexpected error:", err);
+    // Fallback to local storage so user's changes are not lost
+    const local = writeLocalSettings(payload);
+    return local;
   }
-
-  window.dispatchEvent(new Event("user_settings_changed"));
-  return data as UserSettings;
 }
