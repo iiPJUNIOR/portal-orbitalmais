@@ -240,17 +240,77 @@ export default function Settings() {
     }
   };
 
+  // Normalization helper: remove braces, accents, non-alphanum, lowercase
+  function normalizeTokenKey(s: string) {
+    if (!s) return "";
+    const noBraces = s.replace(/^[\s{]+|[\s}]+$/g, "").replace(/[{}]/g, "");
+    const lower = noBraces.toLowerCase();
+    const noAccents = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return noAccents.replace(/[^a-z0-9]/g, "");
+  }
+
   const handleScanDocx = async () => {
     setScanningDocx(true);
     try {
       const tokens = await scanDocxTemplate();
+      setDocxTokens(tokens);
+
+      // Merge existing mappings into the new token list using normalization heuristics
+      const existing = { ...docxMappings };
+      const nextMappings: Record<string, string> = { ...existing };
+
+      // Build index of normalized existing keys -> original key
+      const normalizedIndex: Record<string, string> = {};
+      Object.keys(existing).forEach((k) => {
+        normalizedIndex[normalizeTokenKey(k)] = k;
+      });
+
+      tokens.forEach((t) => {
+        // If mapping already exists keyed by exact token, keep it
+        if (existing[t] !== undefined) {
+          nextMappings[t] = existing[t];
+          return;
+        }
+
+        const norm = normalizeTokenKey(t);
+
+        // Try to find a matching existing key by normalized form
+        const matchedKey = Object.keys(normalizedIndex).find((nk) => nk === norm) || normalizedIndex[norm];
+        if (matchedKey && existing[matchedKey] !== undefined) {
+          nextMappings[t] = existing[matchedKey];
+          return;
+        }
+
+        // As a fallback, try partial substring matches (loose)
+        const looseMatchKey = Object.keys(normalizedIndex).find((nk) => nk.includes(norm) || norm.includes(nk));
+        if (looseMatchKey && existing[normalizedIndex[looseMatchKey]] !== undefined) {
+          nextMappings[t] = existing[normalizedIndex[looseMatchKey]];
+          return;
+        }
+
+        // Otherwise ensure the token exists in the map to drive the UI (empty = not mapped)
+        if (nextMappings[t] === undefined) nextMappings[t] = "";
+      });
+
+      // Also keep older mappings for keys that were present before (they are preserved in 'existing'),
+      // but ensure we don't lose user edits by not overwriting unrelated keys.
+
+      setDocxMappings(nextMappings);
+
+      // Persist merged mapping so rescans keep the association
+      try {
+        await saveUserSettings({ docx_mappings: nextMappings });
+      } catch (err) {
+        console.warn("Failed to persist merged docx mappings after scan", err);
+      }
+
       if (tokens.length > 0) {
-        setDocxTokens(tokens);
         toast.success(`${tokens.length} tokens encontrados no template de vistoria.`);
       } else {
         toast.error("Nenhum token encontrado no template.");
       }
     } catch (err) {
+      console.error("Failed scanning DOCX template", err);
       toast.error("Falha ao escanear template.");
     } finally {
       setScanningDocx(false);
@@ -397,7 +457,7 @@ export default function Settings() {
                                   </span>
                                   <div className="flex-1">
                                     <Select
-                                      value={docxMappings[token] || ""}
+                                      value={docxMappings[token] ?? ""}
                                       onValueChange={(val) => handleUpdateDocxMapping(token, val)}
                                     >
                                       <SelectTrigger className="h-9">
