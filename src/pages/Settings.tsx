@@ -293,6 +293,24 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
+              {/* New: DOCX mapper for vistoria template */}
+              <Card className="border-primary/20 shadow-lg">
+                <CardHeader className="bg-primary/10 dark:bg-primary/5">
+                  <CardTitle className="flex items-center gap-2">
+                    <ScanText className="h-5 w-5" />
+                    Mapeamento de Tokens do Template Vistoria
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Mapear tags do template DOCX de Solicitação de Vistoria e associá-las aos campos do formulário.
+                  </p>
+                  <Button onClick={() => navigate("/docx-mapper")} className="w-full h-12 text-lg font-bold">
+                    Mapear Template Vistoria
+                  </Button>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
