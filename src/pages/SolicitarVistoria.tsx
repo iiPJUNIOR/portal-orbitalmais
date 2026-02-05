@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { showSuccess, showError } from "@/utils/toast";
+import { showSuccess, showError, showLoading, dismissToast } from "@/utils/toast";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
@@ -23,6 +23,12 @@ export default function SolicitarVistoria() {
   const [produto, setProduto] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [loadingDoc, setLoadingDoc] = useState(false);
+
+  // CNPJ related
+  const [cnpj, setCnpj] = useState("");
+  const [fetchingCnpj, setFetchingCnpj] = useState(false);
+  const lastFetchedCnpj = useRef<string | null>(null);
+  const debounceRef = useRef<number | null>(null);
 
   // On mount: try to prefill seller info from user settings (if present).
   useEffect(() => {
@@ -45,7 +51,7 @@ export default function SolicitarVistoria() {
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
   const buildEmailBody = () => {
-    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nE-mail:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
+    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nCNPJ:\n${cnpj || ""}\n\nE-mail:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
   };
 
   const handleCopyBody = async () => {
@@ -91,6 +97,7 @@ export default function SolicitarVistoria() {
       const data = {
         vendedor,
         empresa,
+        cnpj,
         empresa_email: empresaEmail,
         contato_nome: contatoNome,
         contato_telefone: contatoTelefone,
@@ -114,6 +121,118 @@ export default function SolicitarVistoria() {
     }
   };
 
+  // Helper: format CNPJ as user types
+  const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length > 14) value = value.substring(0, 14);
+    
+    let formatted = '';
+    for (let i = 0; i < value.length; i++) {
+      if (i === 2 || i === 5) formatted += '.';
+      if (i === 8) formatted += '/';
+      if (i === 12) formatted += '-';
+      formatted += value[i];
+    }
+
+    setCnpj(formatted);
+  };
+
+  // Build address string from API response
+  function buildAddressFromApi(data: any) {
+    const parts: string[] = [];
+    const street = data.logradouro || data.street || data.address || data.rua || "";
+    const number = data.numero || data.number || data.numero_endereco || "";
+    const complement = data.complemento || data.complement || "";
+    const neighborhood = data.bairro || data.neighborhood || "";
+    const city = data.municipio || data.municipio_nome || data.city || data.nome_cidade || "";
+    const uf = data.uf || data.estado || data.state || "";
+    const cep = data.cep || data.CEP || "";
+
+    if (street) {
+      const s = `${street}${number ? `, ${number}` : ""}${complement ? ` ${complement}` : ""}`;
+      parts.push(s);
+    }
+    if (neighborhood) parts.push(neighborhood);
+    if (city || uf) parts.push([city, uf].filter(Boolean).join("/"));
+    if (cep) parts.push(cep);
+
+    return parts.filter(Boolean).join(" - ");
+  }
+
+  // Fetch CNPJ data and populate fields
+  const fetchCnpjData = async (rawDigits: string) => {
+    if (!rawDigits || rawDigits.length !== 14) return;
+    if (lastFetchedCnpj.current === rawDigits) return;
+
+    lastFetchedCnpj.current = rawDigits;
+    setFetchingCnpj(true);
+    const id = showLoading("Buscando dados do CNPJ...");
+
+    try {
+      const url = `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`API retornou ${res.status}`);
+      const data = await res.json();
+
+      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || "";
+      const email = data.email || data.e_mail || data.contato_email || "";
+      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || "";
+      const address = buildAddressFromApi(data);
+
+      if (companyName) setEmpresa(companyName);
+      if (email) setEmpresaEmail(email);
+      if (phone) setContatoTelefone(phone);
+      if (address) setEndereco(address);
+
+      dismissToast(id as any);
+      showSuccess("Dados do CNPJ preenchidos automaticamente");
+    } catch (err) {
+      console.error("fetchCnpjData error", err);
+      dismissToast(id as any);
+      showError("Não foi possível obter dados para o CNPJ informado.");
+      lastFetchedCnpj.current = null;
+    } finally {
+      setFetchingCnpj(false);
+    }
+  };
+
+  // Auto-trigger fetch when CNPJ reaches 14 digits (debounced)
+  useEffect(() => {
+    const digits = (cnpj || "").replace(/\D/g, "");
+
+    if (debounceRef.current) {
+      window.clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+
+    if (digits.length === 14) {
+      debounceRef.current = window.setTimeout(() => {
+        fetchCnpjData(digits);
+        debounceRef.current = null;
+      }, 600);
+    } else {
+      if (digits.length === 0) {
+        lastFetchedCnpj.current = null;
+      }
+    }
+
+    return () => {
+      if (debounceRef.current) {
+        window.clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    };
+  }, [cnpj]);
+
+  const handleManualLookup = () => {
+    const digits = (cnpj || "").replace(/\D/g, "");
+    if (digits.length !== 14) {
+      showError("Informe um CNPJ válido (14 dígitos) para buscar");
+      return;
+    }
+    fetchCnpjData(digits);
+  };
+
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <h1 className="text-2xl font-bold mb-2">Solicitar Vistoria</h1>
@@ -125,14 +244,25 @@ export default function SolicitarVistoria() {
           <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Nome do vendedor" />
         </div>
 
-        <div>
-          <Label className="text-sm">Empresa</Label>
-          <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
-        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="space-y-2">
+            <Label className="text-sm">CNPJ</Label>
+            <div className="flex gap-2">
+              <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
+              <Button type="button" onClick={handleManualLookup} disabled={fetchingCnpj}>{fetchingCnpj ? "Buscando..." : "Buscar"}</Button>
+            </div>
+            <div className="text-sm text-muted-foreground">Ao digitar o CNPJ completo o sistema tentará preencher automaticamente os dados.</div>
+          </div>
 
-        <div>
-          <Label className="text-sm">E-mail da empresa</Label>
-          <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com.br" />
+          <div className="space-y-2">
+            <Label className="text-sm">Empresa</Label>
+            <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
+          </div>
+
+          <div className="space-y-2">
+            <Label className="text-sm">E-mail da empresa</Label>
+            <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com.br" />
+          </div>
         </div>
 
         <div>
