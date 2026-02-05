@@ -229,6 +229,49 @@ export default function SolicitarVistoria() {
     }
   }
 
+  /**
+   * Heal fragmented tokens in docx XML.
+   * It scans each <w:p> paragraph, collects all <w:t> run texts, and if the concatenated
+   * paragraph contains a token marker {{ or }}, it writes the full concatenated text
+   * into the first <w:t> and empties the other <w:t> nodes. This preserves run structure
+   * (formatting) while ensuring tokens are contiguous for Docxtemplater.
+   */
+  function healDocxTokens(xml: string): string {
+    if (!xml) return xml;
+    const paragraphRegex = /<w:p(?: [\s\S]*?)?>[\s\S]*?<\/w:p>/gi;
+    const textNodeRegex = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
+
+    return xml.replace(paragraphRegex, (pMatch) => {
+      // Extract all text run contents in this paragraph
+      const runs: { open: string; text: string; close: string; full: string }[] = [];
+      let m;
+      while ((m = textNodeRegex.exec(pMatch)) !== null) {
+        runs.push({ open: m[1], text: m[2], close: m[3], full: m[1] + m[2] + m[3] });
+      }
+
+      if (runs.length === 0) return pMatch;
+
+      const joined = runs.map((r) => r.text).join("");
+      if (!joined.includes("{{") && !joined.includes("}}")) {
+        return pMatch;
+      }
+
+      // Reconstruct paragraph: put full joined text in the first <w:t>, clear others
+      let runIndex = 0;
+      const healed = pMatch.replace(textNodeRegex, () => {
+        const r = runs[runIndex++];
+        if (!r) return "";
+        if (runIndex === 1) {
+          return r.open + joined + r.close;
+        }
+        // Keep wrappers but empty text node to preserve formatting
+        return r.open + "" + r.close;
+      });
+
+      return healed;
+    });
+  }
+
   const handleGenerateDocx = async () => {
     setLoadingDoc(true);
     const toastId = showLoading("Gerando documento...");
@@ -239,6 +282,19 @@ export default function SolicitarVistoria() {
       const arrayBuffer = await res.arrayBuffer();
 
       const zip = new PizZip(arrayBuffer);
+
+      // Heal document.xml to fix split tokens (prevents Docxtemplater 'duplicate open/close tags')
+      try {
+        const docFile = zip.file("word/document.xml");
+        if (docFile) {
+          const docXml = await docFile.async("string");
+          const healed = healDocxTokens(docXml);
+          zip.file("word/document.xml", healed);
+        }
+      } catch (healErr) {
+        console.warn("healDocxTokens failed:", healErr);
+        // proceed anyway; docxtemplater will report errors if unfixable
+      }
 
       // Docxtemplater: return empty string for undefined tags so missing tags don't throw
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
