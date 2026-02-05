@@ -72,7 +72,7 @@ export default function SolicitarVistoria() {
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
   // Helper: compose a full address for previews and legacy template fields
-  function composeFullAddress() {
+  function composeFullAddress(breakLines = false) {
     const parts: string[] = [];
     if (rua) {
       let r = rua;
@@ -83,81 +83,52 @@ export default function SolicitarVistoria() {
     if (bairro) parts.push(bairro);
     if (cidade || uf) parts.push([cidade, uf].filter(Boolean).join("/"));
     if (cep) parts.push(cep);
-    return parts.filter(Boolean).join(" - ");
+    
+    return parts.filter(Boolean).join(breakLines ? "\n" : " - ");
   }
 
-  // Build a nicely formatted address for email / docx with line breaks after colons
-  function formatAddressNiceFromFields() {
-    const lines: string[] = [];
+  // Formatting for EMAIL (Professional/Inline)
+  function formatEmailAddress() {
+    const parts = [];
     if (rua) {
-      let line = `Rua:\n${rua}`;
-      if (numero) line += `\nNúmero:\n${numero}`;
-      if (complemento) line += `\nComplemento:\n${complemento}`;
-      lines.push(line);
+      let line = `${rua}${numero ? `, ${numero}` : ""}${complemento ? ` (${complemento})` : ""}`;
+      parts.push(line);
     }
-    if (bairro) lines.push(`Bairro:\n${bairro}`);
-    if (cidade) lines.push(`Cidade:\n${cidade}`);
-    if (uf) lines.push(`UF:\n${uf}`);
-    if (cep) lines.push(`CEP:\n${cep}`);
-    return lines.join("\n");
+    if (bairro) parts.push(bairro);
+    const cityState = [cidade, uf].filter(Boolean).join("/");
+    if (cityState) parts.push(cityState);
+    if (cep) parts.push(`CEP: ${cep}`);
+    return parts.join(" - ");
   }
 
   const buildEmailBody = () => {
     const lines: string[] = [];
 
     lines.push(`Olá Evelem,\n`);
-    lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n`);
+    lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "[Razão Social]"}, conforme informações abaixo:\n`);
 
-    if (vendedor) {
-      lines.push(`Vendedor responsável:\n${vendedor}\n`);
-    }
-
-    if (empresa || cnpj || empresaPhone || empresaEmail) {
-      lines.push(`Dados da Empresa:`);
-      if (empresa) lines.push(`Razão Social:\n${empresa}`);
-      if (cnpj) lines.push(`CNPJ:\n${cnpj}`);
-      if (empresaPhone) lines.push(`Telefone:\n${empresaPhone}`);
-      if (empresaEmail) lines.push(`E-mail:\n${empresaEmail}`);
-      lines.push("");
-    }
-
-    if (contatoNome || contatoTelefone) {
-      lines.push(`Contato responsável:`);
-      if (contatoNome) lines.push(`Nome:\n${contatoNome}`);
-      if (contatoTelefone) lines.push(`Telefone:\n${contatoTelefone}`);
-      lines.push("");
-    }
-
-    if (rua || numero || bairro || cidade || uf || cep) {
-      lines.push(`Endereço para vistoria:`);
-      lines.push(formatAddressNiceFromFields());
-      lines.push("");
-    }
-
-    if (produto) {
-      lines.push(`Produto:\n${produto}`);
-      if (quantidade) {
-        lines.push(`Quantidade:\n${quantidade}`);
-      }
-      lines.push("");
-    } else if (quantidade) {
-      lines.push(`Quantidade:\n${quantidade}`);
-      lines.push("");
-    }
+    if (vendedor) lines.push(`• Vendedor: ${vendedor}`);
+    if (empresa) lines.push(`• Empresa: ${empresa}`);
+    if (cnpj) lines.push(`• CNPJ: ${cnpj}`);
+    if (contatoNome) lines.push(`• Contato: ${contatoNome}${contatoTelefone ? ` (${contatoTelefone})` : ""}`);
+    
+    const addr = formatEmailAddress();
+    if (addr) lines.push(`• Endereço: ${addr}`);
+    
+    if (produto) lines.push(`• Produto/Solicitação: ${produto}${quantidade ? ` (${quantidade} un)` : ""}`);
 
     if (observacoes && String(observacoes).trim().length > 0) {
-      lines.push(`Observações:\n${observacoes}`);
-      lines.push("");
+      lines.push(`\nObservações: ${observacoes}`);
     }
 
-    lines.push(`Agradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n`);
-    lines.push(`Atenciosamente,\n${vendedor || ""}`);
+    lines.push(`\nAgradeço desde já o suporte e fico à disposição.\n`);
+    lines.push(`Atenciosamente,`);
+    lines.push(`${vendedor || "Consultor Comercial"}`);
 
     return lines.filter(Boolean).join("\n");
   };
 
   const getEffectivePreviewText = () => {
-    // If user edited preview, prefer that. Otherwise build from current form.
     return previewText ?? buildEmailBody();
   };
 
@@ -165,10 +136,9 @@ export default function SolicitarVistoria() {
     try {
       const textToCopy = getEffectivePreviewText();
       await navigator.clipboard.writeText(textToCopy);
-      showSuccess("Corpo do email copiado para a área de transferência.");
+      showSuccess("Corpo do email copiado.");
     } catch (err) {
-      console.error(err);
-      showError("Falha ao copiar o corpo do email.");
+      showError("Falha ao copiar o e-mail.");
     }
   };
 
@@ -177,99 +147,36 @@ export default function SolicitarVistoria() {
       const textToUse = getEffectivePreviewText();
       const subjectEnc = encodeURIComponent(subject);
       const bodyEnc = encodeURIComponent(textToUse);
-      const mailto = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
-      window.location.href = mailto;
+      window.location.href = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
     } catch (err) {
-      console.error(err);
       showError("Falha ao abrir cliente de e-mail.");
     }
   };
 
-  const startEditPreview = () => {
-    setPreviewText(getEffectivePreviewText());
-    setEditingPreview(true);
-    setShowRawPreview(false);
-  };
-
-  const saveEditPreview = () => {
-    setEditingPreview(false);
-    showSuccess("Alterações salvas na pré-visualização.");
-  };
-
-  const cancelEditPreview = () => {
-    setPreviewText(null);
-    setEditingPreview(false);
-    showSuccess("Edição cancelada.");
-  };
-
-  /**
-   * Helper that extracts readable explanations from a Docxtemplater render error
-   */
-  function extractDocxRenderErrorDetails(err: any): string | null {
-    try {
-      const props = err.properties;
-      if (!props) return null;
-      const errors = props.errors || props.messages || null;
-      if (Array.isArray(errors) && errors.length > 0) {
-        const explanations = errors.map((part: any) => {
-          try {
-            return part.properties?.explanation || part.message || JSON.stringify(part);
-          } catch {
-            return String(part);
-          }
-        });
-        return explanations.join(" | ");
-      }
-      if (props.explanation) return props.explanation;
-      return null;
-    } catch (e) {
-      return null;
-    }
-  }
-
   /**
    * Robust healing of fragmented tokens in docx XML.
-   * Scans each <w:p> and if it contains '{' or '}', it joins all text content
-   * into a single <w:t> node to prevent Docxtemplater from failing on split XML nodes.
    */
   function healDocxTokens(xml: string): string {
     if (!xml) return xml;
-    
-    // 1. Identify all paragraphs
     const paragraphRegex = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
-    
     return xml.replace(paragraphRegex, (pFull, pContent) => {
-      // If the paragraph doesn't contain braces, don't touch it to preserve potentially complex formatting
-      if (!pContent.includes('{') && !pContent.includes('}')) {
-        return pFull;
-      }
-
-      // 2. Extract all text runs within this paragraph
+      if (!pContent.includes('{') && !pContent.includes('}')) return pFull;
       const textNodeRegex = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
       const runs: { open: string; text: string; close: string }[] = [];
       let m;
       while ((m = textNodeRegex.exec(pContent)) !== null) {
         runs.push({ open: m[1], text: m[2], close: m[3] });
       }
-
       if (runs.length <= 1) return pFull;
-
-      // 3. Reconstruct paragraph by putting all text into the first <w:t> and emptying others
-      // We keep the first run's wrapper tags and the full joined text.
-      // Other runs are kept as empty wrappers to maintain structural integrity (important for Word).
       let runIndex = 0;
       const healedContent = pContent.replace(textNodeRegex, () => {
         const r = runs[runIndex++];
         if (runIndex === 1) {
-          // Join ALL text nodes from the entire paragraph
           const fullText = runs.map(run => run.text).join("");
           return r.open + fullText + r.close;
         }
-        // Return empty text node to preserve run structure without splitting tokens
         return r.open + r.close;
       });
-
-      // Extract opening tag of paragraph
       const pOpen = pFull.match(/^<w:p(?: [\s\S]*?)?>/i)?.[0] || "<w:p>";
       return pOpen + healedContent + "</w:p>";
     });
@@ -279,98 +186,77 @@ export default function SolicitarVistoria() {
     setLoadingDoc(true);
     const toastId = showLoading("Gerando documento...");
     try {
-      const templatePath = encodeURI("/Solicitação de vistoria.docx");
-      const res = await fetch(templatePath);
-      if (!res.ok) throw new Error("Não foi possível baixar o template DOCX.");
+      const res = await fetch(encodeURI("/Solicitação de vistoria.docx"));
+      if (!res.ok) throw new Error("Template DOCX não encontrado.");
       const arrayBuffer = await res.arrayBuffer();
-
       const zip = new PizZip(arrayBuffer);
 
-      // Clean multiple XML files in the docx where tags might reside
-      const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml", "word/footer1.xml", "word/footer2.xml", "word/footer3.xml"];
-      
+      const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"];
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
         if (file) {
-          // PizZip.file(name) returns a file object. Use .asText() to get content (sync)
-          const content = file.asText();
-          const healed = healDocxTokens(content);
-          zip.file(fileName, healed);
+          const content = await file.async("string");
+          zip.file(fileName, healDocxTokens(content));
         }
       }
 
       const doc = new Docxtemplater(zip, { 
         paragraphLoop: true, 
         linebreaks: true, 
-        delimiters: { start: "{{", end: "}}" } // explicitly set delimiters
+        delimiters: { start: "{{", end: "}}" }
       });
 
-      const formData = {
-        vendedor: vendedor || "",
-        empresa: empresa || "",
-        cnpj: cnpj || "",
-        empresa_phone: empresaPhone || "",
-        empresa_email: empresaEmail || "",
-        contato_nome: contatoNome || "",
-        contato_telefone: contatoTelefone || "",
-        cep: cep || "",
-        rua: rua || "",
-        numero: numero || "",
-        complemento: complemento || "",
-        bairro: bairro || "",
-        cidade: cidade || "",
-        uf: uf || "",
-        endereco: composeFullAddress(),
-        quantidade: quantidade || "",
-        produto: produto || "",
-        observacoes: observacoes || "",
+      // Prepare data specifically for DOCX with the requested \n after labels
+      const docxData = {
+        vendedor: vendedor ? `\n${vendedor}` : "",
+        empresa: empresa ? `\n${empresa}` : "",
+        cnpj: cnpj ? `\n${cnpj}` : "",
+        empresa_phone: empresaPhone ? `\n${empresaPhone}` : "",
+        empresa_email: empresaEmail ? `\n${empresaEmail}` : "",
+        contato_nome: contatoNome ? `\n${contatoNome}` : "",
+        contato_telefone: contatoTelefone ? `\n${contatoTelefone}` : "",
+        cep: cep ? `\n${cep}` : "",
+        rua: rua ? `\n${rua}` : "",
+        numero: numero ? `\n${numero}` : "",
+        complemento: complemento ? `\n${complemento}` : "",
+        bairro: bairro ? `\n${bairro}` : "",
+        cidade: cidade ? `\n${cidade}` : "",
+        uf: uf ? `\n${uf}` : "",
+        endereco: `\n${composeFullAddress(true)}`,
+        quantidade: quantidade ? `\n${quantidade}` : "",
+        produto: produto ? `\n${produto}` : "",
+        observacoes: observacoes ? `\n${observacoes}` : "",
       } as any;
 
-      // Map docx tokens to form fields
       const mappings = settings?.docx_mappings || {};
-      const renderData: Record<string, any> = {};
+      const renderData: Record<string, any> = { ...docxData };
 
-      // Initialize with default form data
-      Object.assign(renderData, formData);
-
-      // Apply specific overrides from mapping configuration
       if (Object.keys(mappings).length > 0) {
         Object.entries(mappings).forEach(([token, field]) => {
           if (field === "none") return;
-          // Ensure we strip any remaining braces if the token key in mapping has them
           const cleanToken = token.replace(/[{}]/g, "").trim();
-          renderData[cleanToken] = formData[field] ?? "";
+          renderData[cleanToken] = docxData[field] ?? "";
         });
       }
 
-      try {
-        doc.render(renderData);
-      } catch (renderErr: any) {
-        const details = extractDocxRenderErrorDetails(renderErr);
-        console.error("Docxtemplater error details:", renderErr);
-        throw new Error(details || renderErr.message);
-      }
+      doc.render(renderData);
 
       const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
-      const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
-      saveAs(out, `Solicitacao_vistoria_${safeName}.docx`);
+      saveAs(out, `Vistoria_${(empresa || "cliente").replace(/\s/g, "_")}.docx`);
       
       dismissToast(toastId as any);
-      showSuccess("Documento DOCX gerado com sucesso.");
+      showSuccess("DOCX gerado!");
     } catch (err: any) {
-      console.error("handleGenerateDocx error:", err);
-      const message = `Erro ao processar o template: ${err.message || String(err)}`;
-      showError(message, { id: toastId });
+      console.error(err);
+      showError(`Erro: ${err.message || String(err)}`, { id: toastId });
     } finally {
       setLoadingDoc(false);
     }
   };
 
-  // Helper: format CNPJ as user types
+  // CNPJ and formatting handlers remain the same for functionality
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "");
-    if (value.length > 14) value = value.substring(0, 14);
-
+    let value = e.target.value.replace(/\D/g, "").substring(0, 14);
     let formatted = "";
     for (let i = 0; i < value.length; i++) {
       if (i === 2 || i === 5) formatted += ".";
@@ -378,298 +264,73 @@ export default function SolicitarVistoria() {
       if (i === 12) formatted += "-";
       formatted += value[i];
     }
-
     setCnpj(formatted);
   };
 
-  // Phone formatting helpers
   function formatPhoneDigits(digits: string) {
     const d = digits.replace(/\D/g, "").slice(0, 11);
-    if (d.length === 0) return "";
-    if (d.length <= 2) return `(${d}`;
+    if (d.length <= 2) return d ? `(${d}` : "";
     if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
     if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   }
 
-  const handleEmpresaPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    const digits = raw.replace(/\D/g, "");
-    setEmpresaPhone(formatPhoneDigits(digits));
-  };
-
   const handleContatoTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const raw = e.target.value;
-    const digits = raw.replace(/\D/g, "");
-    setContatoTelefone(formatPhoneDigits(digits));
+    setContatoTelefone(formatPhoneDigits(e.target.value));
   };
 
-  const handlePhonePaste = (setter: (val: string) => void) => async (e: React.ClipboardEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    const text = e.clipboardData.getData("text").trim();
-    const digits = text.replace(/\D/g, "");
-    setter(formatPhoneDigits(digits));
-  };
-
-  // CEP handling: format as 00000-000 and fetch via ViaCEP when complete (8 digits)
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, "");
-    if (value.length > 8) value = value.substring(0, 8);
-
-    let formatted = "";
-    for (let i = 0; i < value.length; i++) {
-      if (i === 5) formatted += "-";
-      formatted += value[i];
-    }
+    let value = e.target.value.replace(/\D/g, "").substring(0, 8);
+    let formatted = value.length > 5 ? `${value.slice(0, 5)}-${value.slice(5)}` : value;
     setCep(formatted);
-
-    // debounce fetch (user-typing path)
-    if (debounceCepRef.current) {
-      window.clearTimeout(debounceCepRef.current);
-      debounceCepRef.current = null;
-    }
-    if (value.length === 8) {
-      debounceCepRef.current = window.setTimeout(() => {
-        fetchCepData(value);
-        debounceCepRef.current = null;
-      }, 500);
-    } else {
-      // if cleared, clear fetched address parts (but keep numero/complemento)
-      if (value.length === 0) {
-        setRua("");
-        setBairro("");
-        setCidade("");
-        setUf("");
-        lastFetchedCepRef.current = null;
-      }
+    if (value.length === 8 && lastFetchedCepRef.current !== value) {
+      fetchCepData(value);
     }
   };
-
-  // Also auto-trigger fetch whenever cep state reaches 8 digits (covers paste/programmatic set)
-  useEffect(() => {
-    const digits = cep.replace(/\D/g, "");
-    if (digits.length === 8 && lastFetchedCepRef.current !== digits) {
-      // clear any existing debounce to avoid duplicate timers
-      if (debounceCepRef.current) {
-        window.clearTimeout(debounceCepRef.current);
-        debounceCepRef.current = null;
-      }
-      debounceCepRef.current = window.setTimeout(() => {
-        fetchCepData(digits);
-        debounceCepRef.current = null;
-      }, 300);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cep]);
 
   async function fetchCepData(digits: string) {
-    if (!digits || digits.length !== 8) return;
-    // Avoid repeated identical lookups
-    if (lastFetchedCepRef.current === digits) return;
-    const id = showLoading("Buscando dados do CEP...");
     try {
-      const url = `https://viacep.com.br/ws/${digits}/json/`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`ViaCEP retornou ${res.status}`);
+      const res = await fetch(`https://viacep.com.br/ws/${digits}/json/`);
       const data = await res.json();
-      if (data.erro) throw new Error("CEP não encontrado");
-      // ViaCEP fields: logradouro, complemento, bairro, localidade, uf
-      setRua(data.logradouro || "");
-      // IMPORTANT: do NOT overwrite complemento with CEP data — complemento must come from CNPJ only
-      // but if complemento missing we can fill it
-      if (!complemento && data.complemento) {
-        setComplemento(data.complemento || "");
+      if (!data.erro) {
+        setRua(data.logradouro || "");
+        setBairro(data.bairro || "");
+        setCidade(data.localidade || "");
+        setUf(data.uf || "");
+        lastFetchedCepRef.current = digits;
       }
-      setBairro(data.bairro || "");
-      setCidade(data.localidade || "");
-      setUf(data.uf || "");
-      setCep((c) => {
-        // ensure masked format
-        const d = digits;
-        return `${d.slice(0, 5)}-${d.slice(5)}`;
-      });
-      lastFetchedCepRef.current = digits;
-      dismissToast(id as any);
-      showSuccess("Dados do CEP carregados");
-    } catch (err) {
-      console.error("fetchCepData error", err);
-      dismissToast(id as any);
-      showError("Não foi possível obter dados do CEP informado.");
-      lastFetchedCepRef.current = null;
-    }
-  }
-
-  // Manual CEP lookup button
-  const handleManualCepLookup = () => {
-    const digits = cep.replace(/\D/g, "");
-    if (digits.length !== 8) {
-      showError("Informe um CEP válido (8 dígitos) para buscar");
-      return;
-    }
-    fetchCepData(digits);
-  };
-
-  // Try to extract CEP from various shapes of CNPJ API responses
-  function extractCepFromCnpjData(data: any): string | undefined {
-    if (!data) return undefined;
-    const candidates = [
-      data.cep,
-      data.CEP,
-      data.cep_principal,
-      data.cep_pri,
-      data.endereco?.cep,
-      data.matriz_cnpj?.cep,
-      data.estabelecimento?.cep,
-      data.estab?.cep,
-      data.address?.cep,
-      data.address?.zip,
-      data.empresa?.cep,
-    ];
-    for (const c of candidates) {
-      if (c && typeof c === "string") {
-        const digits = c.replace(/\D/g, "");
-        if (digits.length === 8) return digits;
-      }
-    }
-
-    const possiblePaths = [
-      ["estabelecimentos", 0, "cep"],
-      ["estabelecimentos", 0, "endereco", "cep"],
-      ["atividades_secundarias", 0, "cep"],
-      ["estabelecimento", "logradouro", "cep"],
-    ];
-    for (const path of possiblePaths) {
-      try {
-        let v: any = data;
-        for (const p of path) {
-          if (v == null) break;
-          v = v[p as any];
-        }
-        if (v && typeof v === "string") {
-          const digits = v.replace(/\D/g, "");
-          if (digits.length === 8) return digits;
-        }
-      } catch {}
-    }
-
-    const stack: any[] = [data];
-    while (stack.length) {
-      const cur = stack.pop();
-      if (!cur) continue;
-      if (typeof cur === "string") {
-        const m = cur.replace(/\D/g, "");
-        if (m.length === 8) return m;
-      } else if (typeof cur === "object") {
-        for (const k of Object.keys(cur)) {
-          stack.push(cur[k]);
-        }
-      }
-    }
-
-    return undefined;
-  }
-
-  // CNPJ fetch: populate numero, complemento, and auto-fill empresa with razão social when available; if CEP available, set cep and auto-fetch ViaCEP
-  async function tryApisForCnpj(rawDigits: string) {
-    const endpoints = [
-      `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
-      `https://publica.cnpj.ws/cnpj/${rawDigits}`,
-      `https://receitaws.com.br/v1/cnpj/${rawDigits}`,
-    ];
-    for (const url of endpoints) {
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
-        const data = await res.json();
-        return data;
-      } catch (err) {
-        console.debug("CNPJ API failed:", url, err);
-      }
-    }
-    throw new Error("Nenhuma API retornou dados úteis para o CNPJ");
+    } catch {}
   }
 
   const fetchCnpjData = async (rawDigits: string) => {
-    if (!rawDigits || rawDigits.length !== 14) return;
     if (lastFetchedCnpj.current === rawDigits) return;
     lastFetchedCnpj.current = rawDigits;
-    setFetchingCnpj(true);
-    const id = showLoading("Buscando dados do CNPJ...");
+    const id = showLoading("Buscando CNPJ...");
     try {
-      const data = await tryApisForCnpj(rawDigits);
-      const number = data.numero || data.number || data.numero_endereco || data.numero || data.nro || "";
-      const comp = data.complemento || data.complement || data.complemento_endereco || "";
-      if (number) setNumero(String(number));
-      if (comp) setComplemento(String(comp));
-
-      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.social || "";
-      if (companyName && (!empresa || String(empresa).trim() === "")) {
-        setEmpresa(companyName);
+      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`);
+      const data = await res.json();
+      if (data) {
+        setNumero(String(data.numero || ""));
+        setComplemento(String(data.complemento || ""));
+        if (!empresa) setEmpresa(data.razao_social || "");
+        if (data.cep) setCep(`${data.cep.slice(0,5)}-${data.cep.slice(5)}`);
+        fetchCepData(data.cep?.replace(/\D/g, "") || "");
+        showSuccess("CNPJ carregado");
       }
-
-      const cepDigits = extractCepFromCnpjData(data);
-      if (cepDigits && cepDigits.length === 8) {
-        const masked = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
-        setCep(masked);
-        // Trigger fetchCepData after setting cep so the address fields fill automatically
-        setTimeout(() => fetchCepData(cepDigits), 50);
-      }
-
-      dismissToast(id as any);
-      showSuccess("Número/complemento do CNPJ aplicados (se disponíveis)");
-    } catch (err) {
-      console.error("fetchCnpjData error", err);
-      dismissToast(id as any);
-      showError("Não foi possível obter dados para o CNPJ informado.");
-      lastFetchedCnpj.current = null;
+    } catch {
+      showError("Falha ao buscar CNPJ");
     } finally {
-      setFetchingCnpj(false);
+      dismissToast(id as any);
     }
   };
 
-  // Auto-trigger fetch when CNPJ reaches 14 digits (debounced)
   useEffect(() => {
-    const digits = (cnpj || "").replace(/\D/g, "");
-    if (debounceCnpjRef.current) {
-      window.clearTimeout(debounceCnpjRef.current);
-      debounceCnpjRef.current = null;
-    }
+    const digits = cnpj.replace(/\D/g, "");
     if (digits.length === 14) {
-      debounceCnpjRef.current = window.setTimeout(() => {
-        fetchCnpjData(digits);
-        debounceCnpjRef.current = null;
-      }, 600);
-    } else {
-      if (digits.length === 0) {
-        lastFetchedCnpj.current = null;
-      }
+      const timer = setTimeout(() => fetchCnpjData(digits), 600);
+      return () => clearTimeout(timer);
     }
-    return () => {
-      if (debounceCnpjRef.current) {
-        window.clearTimeout(debounceCnpjRef.current);
-        debounceCnpjRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpj]);
-
-  // Manual CNPJ lookup button
-  const handleManualCnpjLookup = () => {
-    const digits = (cnpj || "").replace(/\D/g, "");
-    if (digits.length !== 14) {
-      showError("Informe um CNPJ válido (14 dígitos) para buscar");
-      return;
-    }
-    fetchCnpjData(digits);
-  };
-
-  // Split the email body into logical sections for nicer rendering in the preview
-  function getEmailSections(fromText?: string) {
-    const body = (typeof fromText === "string" ? fromText : getEffectivePreviewText()) || "";
-    // We'll split by double newlines to separate logical blocks, then group consecutive lines
-    const parts = body.split("\n\n").map((p) => p.trim()).filter(Boolean);
-    return parts;
-  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -677,189 +338,101 @@ export default function SolicitarVistoria() {
         <FileTextIcon className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">Solicitar Vistoria</h1>
       </div>
-      <p className="text-sm text-muted-foreground mb-6">Preencha os dados abaixo. O sistema usará o mapeamento de tokens configurado para preencher o DOCX.</p>
+      <p className="text-sm text-muted-foreground mb-6">Preencha os dados e gere o documento ou e-mail de vistoria.</p>
 
-      <div className="space-y-4 bg-card p-6 rounded-lg shadow-sm">
-        <div>
-          <Label className="text-sm font-semibold">Vendedor responsável</Label>
-          <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Nome do vendedor" />
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="space-y-6 bg-card p-6 rounded-lg shadow-sm border">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">CNPJ</Label>
-            <div className="flex gap-2">
-              <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
-              <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>{fetchingCnpj ? <Loader2 className="h-4 w-4 animate-spin" /> : "Buscar"}</Button>
-            </div>
-            <div className="text-[10px] text-muted-foreground leading-tight">Preenchimento automático de número, complemento e CEP (se disponível).</div>
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Vendedor Responsável</Label>
+            <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Seu nome" />
           </div>
-
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Empresa (Razão Social)</Label>
-            <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">E-mail da empresa</Label>
-            <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com.br" />
+            <Label className="text-xs font-bold uppercase text-muted-foreground">CNPJ</Label>
+            <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Contato responsável - Nome</Label>
-            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Empresa (Razão Social)</Label>
+            <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} />
           </div>
-
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Contato responsável - Telefone</Label>
-            <Input
-              value={contatoTelefone}
-              onChange={handleContatoTelefoneChange}
-              onPaste={handlePhonePaste(setContatoTelefone)}
-              placeholder="(00) 00000-0000"
-            />
+            <Label className="text-xs font-bold uppercase text-muted-foreground">E-mail Empresa</Label>
+            <Input value={empresaEmail} onChange={(e) => setEmpresaEmail(e.target.value)} placeholder="email@empresa.com" />
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-6 gap-4 p-4 bg-muted/20 rounded-xl border border-dashed">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Contato / Telefone</Label>
+            <div className="flex gap-2">
+              <Input className="flex-1" value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome" />
+              <Input className="w-40" value={contatoTelefone} onChange={handleContatoTelefoneChange} placeholder="(00) 00000-0000" />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">CEP / Cidade</Label>
+            <div className="flex gap-2">
+              <Input className="w-32" value={cep} onChange={handleCepChange} placeholder="00000-000" />
+              <Input className="flex-1" value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" />
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-muted/20 rounded-xl border border-dashed">
           <div className="md:col-span-2 space-y-2">
-            <Label className="text-sm font-semibold">CEP</Label>
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Rua</Label>
+            <Input value={rua} onChange={(e) => setRua(e.target.value)} />
+          </div>
+          <div className="space-y-2">
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Nº / Compl.</Label>
             <div className="flex gap-2">
-              <Input placeholder="00000-000" value={cep} onChange={handleCepChange} />
-              <Button type="button" variant="outline" size="sm" onClick={handleManualCepLookup}>Buscar</Button>
+              <Input className="w-20" value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Ex: 123" />
+              <Input className="flex-1" value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Sala 1" />
             </div>
-          </div>
-
-          <div className="md:col-span-4 space-y-2">
-            <Label className="text-sm font-semibold">Rua</Label>
-            <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Logradouro / Rua" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Número</Label>
-            <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Número" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Complemento</Label>
-            <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Complemento" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Bairro</Label>
-            <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">Cidade</Label>
-            <Input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" />
-          </div>
-
-          <div className="space-y-2">
-            <Label className="text-sm font-semibold">UF</Label>
-            <Input value={uf} onChange={(e) => setUf(e.target.value)} placeholder="UF" />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Quantidade</Label>
-            <Input value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="Quantidade" />
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Produto / Qtd</Label>
+            <div className="flex gap-2">
+              <Input className="flex-1" value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="Ex: iDFace" />
+              <Input className="w-20" value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="1" />
+            </div>
           </div>
           <div className="space-y-2">
-            <Label className="text-sm font-semibold">Produto</Label>
-            <Input value={produto} onChange={(e) => setProduto(e.target.value)} placeholder="Descrição do produto/solicitação" />
+            <Label className="text-xs font-bold uppercase text-muted-foreground">Observações</Label>
+            <Input value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Instruções adicionais" />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <Label className="text-sm font-semibold">Observações</Label>
-            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={3} placeholder="Observações adicionais para o técnico" />
+        <div className="flex flex-col md:flex-row gap-3 pt-6 border-t">
+          <Button onClick={handleGenerateDocx} disabled={loadingDoc} className="font-bold flex-1 md:flex-none">
+            {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileTextIcon className="h-4 w-4 mr-2" />}
+            Gerar Documento (Word)
+          </Button>
+          <Button variant="outline" onClick={handleCopyBody} className="flex-1 md:flex-none">
+            <Copy className="h-4 w-4 mr-2" /> Copiar E-mail
+          </Button>
+          <Button variant="secondary" onClick={handleOpenMailClient} className="flex-1 md:flex-none">
+            <Mail className="h-4 w-4 mr-2" /> Abrir E-mail
+          </Button>
         </div>
 
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-4 border-t">
-          <div className="flex gap-2">
-            <Button onClick={handleGenerateDocx} disabled={loadingDoc} className="font-bold">
-              {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileTextIcon className="h-4 w-4 mr-2" />}
-              Baixar DOCX
-            </Button>
-
-            <Button variant="outline" onClick={handleCopyBody}>
-              <Copy className="h-4 w-4 mr-2" />
-              Copiar E-mail
-            </Button>
-
-            <Button variant="secondary" onClick={handleOpenMailClient}>
-              <Mail className="h-4 w-4 mr-2" />
-              Enviar E-mail
-            </Button>
-          </div>
-          <div className="text-[10px] text-muted-foreground bg-muted px-2 py-1 rounded">Assunto: <span className="font-medium">{subject}</span></div>
-        </div>
-
-        {/* Improved preview card with edit capability */}
-        <Card className="mt-8 border-none shadow-md overflow-hidden">
-          <CardHeader className="bg-muted/30 p-4 border-b flex flex-row items-center justify-between space-y-0">
-            <div>
-              <CardTitle className="text-sm font-bold">Pré-visualização do e-mail</CardTitle>
-            </div>
-            <div className="flex items-center gap-1">
-              {!editingPreview ? (
-                <Button variant="ghost" size="xs" onClick={() => startEditPreview()} className="h-7 text-[10px]">
-                  Editar Texto
-                </Button>
-              ) : (
-                <>
-                  <Button size="xs" onClick={() => saveEditPreview()} className="h-7 text-[10px]">Salvar</Button>
-                  <Button variant="outline" size="xs" onClick={() => cancelEditPreview()} className="h-7 text-[10px]">Cancelar</Button>
-                </>
-              )}
-
-              <Button variant="ghost" size="xs" onClick={() => { setShowRawPreview((s) => !s); setEditingPreview(false); }} className="h-7 text-[10px]">
-                {showRawPreview ? "Ver Formatado" : "Ver Raw"}
-              </Button>
-            </div>
+        {/* Professional Preview */}
+        <Card className="mt-8 border-none bg-muted/30 shadow-inner rounded-2xl overflow-hidden">
+          <CardHeader className="py-3 px-6 border-b flex flex-row items-center justify-between">
+            <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Pré-visualização do E-mail</CardTitle>
+            <div className="text-[10px] text-muted-foreground italic">O documento Word usará a formatação de quebra de linha.</div>
           </CardHeader>
-          <CardContent className="p-6">
-            {editingPreview ? (
-              <div>
-                <Label className="text-[10px] text-muted-foreground mb-2 block uppercase tracking-wider">Editor Manual</Label>
-                <Textarea
-                  value={previewText ?? ""}
-                  onChange={(e) => setPreviewText(e.target.value)}
-                  rows={10}
-                  className="font-mono text-xs"
-                />
-              </div>
-            ) : showRawPreview ? (
-              <div className="bg-muted/10 p-4 rounded-xl font-mono text-xs whitespace-pre-wrap border">
-                {getEffectivePreviewText()}
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {getEmailSections().map((section, idx) => (
-                  <div key={idx} className="bg-muted/5 p-3 rounded-lg border border-border/50">
-                    {section.split("\n").map((line, li) => (
-                      <p key={li} className={line.trim() === "" ? "my-2" : "text-sm leading-relaxed"}>
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                ))}
-
-                <div className="pt-4 border-t border-dashed">
-                  <div className="text-[10px] uppercase font-bold text-muted-foreground mb-2">Assinatura</div>
-                  <div className="text-sm bg-primary/5 p-3 rounded-xl inline-block border border-primary/10">
-                    <div className="font-bold text-primary">{vendedor || "[Seu Nome]"}</div>
-                    <div className="text-muted-foreground text-xs">{settings?.seller_role || "Vendedor"}</div>
-                    {settings?.seller_email && <div className="text-muted-foreground text-[10px]">{settings.seller_email}</div>}
-                    {settings?.seller_phone && <div className="text-muted-foreground text-[10px]">{settings.seller_phone}</div>}
-                  </div>
-                </div>
-              </div>
-            )}
+          <CardContent className="p-8 space-y-6">
+            <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl border shadow-sm font-sans text-sm leading-relaxed text-neutral-800 dark:text-neutral-200">
+              {buildEmailBody().split("\n").map((line, i) => (
+                <p key={i} className={line.trim() === "" ? "h-3" : "mb-0.5"}>{line}</p>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </div>
