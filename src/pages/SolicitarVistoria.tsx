@@ -39,7 +39,7 @@ export default function SolicitarVistoria() {
         if (!s) return;
         // Only set fields when they're currently empty so the user can override later
         if (!vendedor && s.seller_name) setVendedor(s.seller_name);
-        if (!empresaEmail && s.seller_email) setEmpresaEmail(s.seller_email);
+        // NOTE: empresaEmail is client email and should NOT be prefilled with seller email
         // NOTE: contatoTelefone is client contact and should NOT be prefilled with seller phone
       } catch (err) {
         // non-blocking; keep form blank if fetch fails
