@@ -16,6 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { scanDocxTemplate } from "@/utils/docxScanner";
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from "@/components/ui/accordion";
 
 export default function Settings() {
   const navigate = useNavigate();
@@ -285,6 +286,10 @@ export default function Settings() {
     }
   };
 
+  // Helper to show a compact summary of docx mappings
+  const docxMappedCount = Object.keys(docxMappings || {}).filter(k => docxMappings[k] && docxMappings[k] !== "none").length;
+  const docxTotalTokens = docxTokens.length;
+
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div className="flex items-center justify-between">
@@ -349,65 +354,87 @@ export default function Settings() {
                 </CardContent>
               </Card>
 
-              {/* Novo Mapeamento DOCX Vistoria */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <FileCheck className="h-5 w-5 text-primary" />
-                    Mapeamento de Tokens do Template Vistoria (DOCX)
-                  </CardTitle>
-                  <CardDescription>Associe as tags do seu arquivo DOCX aos campos do formulário de vistoria.</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div className="p-4 border rounded-xl bg-muted/30 border-dashed flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-sm">Escanear Template</p>
-                      <p className="text-xs text-muted-foreground">Identifica todos os {"{{campos}}"} dentro do arquivo DOCX.</p>
-                    </div>
-                    <Button onClick={handleScanDocx} disabled={scanningDocx}>
-                      {scanningDocx ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanText className="h-4 w-4 mr-2" />}
-                      Escanear Agora
-                    </Button>
-                  </div>
+              {/* DOCX mapping: now inside an accordion (collapsed by default) */}
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="docx-mapping">
+                  <Card className="border">
+                    <CardHeader className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <FileCheck className="h-5 w-5 text-primary" />
+                        <div>
+                          <div className="font-bold">Mapeamento de Tokens do Template Vistoria (DOCX)</div>
+                          <div className="text-xs text-muted-foreground">
+                            {docxMappedCount} mapeado(s) {docxTotalTokens ? `• ${docxTotalTokens} token(s) detectado(s)` : ""}
+                          </div>
+                        </div>
+                      </div>
 
-                  {docxTokens.length > 0 && (
-                    <div className="space-y-3">
-                      <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Tags Encontradas no DOCX</Label>
-                      <div className="grid grid-cols-1 gap-2">
-                        {docxTokens.map(token => (
-                          <div key={token} className="flex items-center gap-3 p-3 bg-card border rounded-lg shadow-sm">
-                            <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded min-w-[120px] text-center">
-                              {"{{"}{token}{"}}"}
-                            </span>
-                            <div className="flex-1">
-                              <Select
-                                value={docxMappings[token] || ""}
-                                onValueChange={(val) => handleUpdateDocxMapping(token, val)}
-                              >
-                                <SelectTrigger className="h-9">
-                                  <SelectValue placeholder="Selecione o campo correspondente" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="none">-- Ignorar --</SelectItem>
-                                  {VISTORIA_FIELDS.map(f => (
-                                    <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                      <div className="flex items-center gap-3">
+                        <Button size="sm" variant="ghost" onClick={handleScanDocx} disabled={scanningDocx}>
+                          {scanningDocx ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanText className="h-4 w-4 mr-2" />}
+                          Escanear
+                        </Button>
+
+                        <AccordionTrigger className="rounded-md px-3 py-2 bg-muted/10 hover:bg-muted">
+                          Ver mapeamentos
+                        </AccordionTrigger>
+                      </div>
+                    </CardHeader>
+
+                    <AccordionContent>
+                      <CardContent className="space-y-6">
+                        <p className="text-sm text-muted-foreground mb-2">
+                          Associe as tags encontradas no DOCX aos campos do formulário de vistoria.
+                        </p>
+
+                        {docxTokens.length > 0 ? (
+                          <div className="space-y-3">
+                            <div className="grid grid-cols-1 gap-2">
+                              {docxTokens.map(token => (
+                                <div key={token} className="flex items-center gap-3 p-3 bg-card border rounded-lg shadow-sm">
+                                  <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded min-w-[120px] text-center">
+                                    {"{{"}{token}{"}}"}
+                                  </span>
+                                  <div className="flex-1">
+                                    <Select
+                                      value={docxMappings[token] || ""}
+                                      onValueChange={(val) => handleUpdateDocxMapping(token, val)}
+                                    >
+                                      <SelectTrigger className="h-9">
+                                        <SelectValue placeholder="Selecione o campo correspondente" />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        <SelectItem value="none">-- Ignorar --</SelectItem>
+                                        {VISTORIA_FIELDS.map(f => (
+                                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                        ))}
+                                      </SelectContent>
+                                    </Select>
+                                  </div>
+                                </div>
+                              ))}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                        ) : (
+                          <div className="text-center py-6 text-muted-foreground italic">
+                            Nenhum token escaneado ainda. Use "Escanear" para detectar tags no template DOCX.
+                          </div>
+                        )}
 
-                  {docxTokens.length === 0 && (
-                    <p className="text-center py-6 text-sm text-muted-foreground italic">
-                      Clique em "Escanear Agora" para começar o mapeamento do template DOCX.
-                    </p>
-                  )}
-                </CardContent>
-              </Card>
+                        <div className="flex justify-end">
+                          <Button onClick={() => {
+                            // quick save of current mappings (already saved per change, but keep UX)
+                            saveUserSettings({ docx_mappings: docxMappings });
+                            toast.success("Mapeamentos salvos");
+                          }}>
+                            Salvar Mapeamentos
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </AccordionContent>
+                  </Card>
+                </AccordionItem>
+              </Accordion>
 
               <Card>
                 <CardHeader>
@@ -474,7 +501,9 @@ export default function Settings() {
               </Card>
 
               <Card>
-                <CardHeader><CardTitle>Importar Nova Base</CardTitle></CardHeader>
+                <CardHeader>
+                  <CardTitle>Importar Nova Base</CardTitle>
+                </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
                     <Label>Link da Planilha</Label>
