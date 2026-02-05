@@ -104,15 +104,17 @@ export default function Settings() {
         setSpreadsheetLink(s.spreadsheet_link || "");
         setFontSize(s.font_size || "medium");
         setSlideMappings(s.slide_mappings || {});
-        setDocxMappings(s.docx_mappings || {});
-        // IMPORTANT: if there are saved docx mappings, show them as tokens so the UI displays them
+        
         const savedDocx = s.docx_mappings || {};
-        const savedKeys = Object.keys(savedDocx || {});
-        if (savedKeys.length > 0) {
-          setDocxTokens(savedKeys);
-        } else {
-          setDocxTokens([]);
-        }
+        setDocxMappings(savedDocx);
+        
+        // Ensure tokens list shows mapped items by default
+        const savedKeys = Object.keys(savedDocx);
+        setDocxTokens(prev => {
+           const merged = Array.from(new Set([...prev, ...savedKeys]));
+           return merged;
+        });
+
         setCanAccessSettings(!!s?.can_access_settings || isSuperAdmin);
       } else if (isSuperAdmin) {
         setCanAccessSettings(true);
@@ -248,82 +250,29 @@ export default function Settings() {
     }
   };
 
-  // Normalization helper: remove braces, accents, non-alphanum, lowercase
-  function normalizeTokenKey(s: string) {
-    if (!s) return "";
-    const noBraces = s.replace(/^[\s{]+|[\s}]+$/g, "").replace(/[{}]/g, "");
-    const lower = noBraces.toLowerCase();
-    const noAccents = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-    return noAccents.replace(/[^a-z0-9]/g, "");
-  }
-
   const handleScanDocx = async () => {
     setScanningDocx(true);
     try {
       const tokens = await scanDocxTemplate();
-      setDocxTokens(tokens);
+      // Union of currently found tokens and existing mapped keys to avoid losing items from list
+      const combinedTokens = Array.from(new Set([...docxTokens, ...tokens]));
+      setDocxTokens(combinedTokens);
 
-      // Merge existing mappings into the new token list using normalization heuristics
-      const existing = { ...docxMappings };
-      const nextMappings: Record<string, string> = { ...existing };
-
-      // Build index of normalized existing keys -> original key
-      const normalizedIndex: Record<string, string> = {};
-      Object.keys(existing).forEach((k) => {
-        normalizedIndex[normalizeTokenKey(k)] = k;
-      });
-
-      tokens.forEach((t) => {
-        // If mapping already exists keyed by exact token, keep it
-        if (existing[t] !== undefined) {
-          nextMappings[t] = existing[t];
-          return;
-        }
-
-        const norm = normalizeTokenKey(t);
-
-        // Try to find a matching existing key by normalized form
-        const matchedKey = Object.keys(normalizedIndex).find((nk) => nk === norm) || normalizedIndex[norm];
-        if (matchedKey && existing[matchedKey] !== undefined) {
-          nextMappings[t] = existing[matchedKey];
-          return;
-        }
-
-        // As a fallback, try partial substring matches (loose)
-        const looseMatchKey = Object.keys(normalizedIndex).find((nk) => nk.includes(norm) || norm.includes(nk));
-        if (looseMatchKey && existing[normalizedIndex[looseMatchKey]] !== undefined) {
-          nextMappings[t] = existing[normalizedIndex[looseMatchKey]];
-          return;
-        }
-
-        // Otherwise ensure the token exists in the map to drive the UI (empty = not mapped)
+      const nextMappings = { ...docxMappings };
+      tokens.forEach(t => {
         if (nextMappings[t] === undefined) nextMappings[t] = "";
       });
 
-      // Also keep older mappings for keys that were present before (they are preserved in 'existing'),
-      // but ensure we don't lose user edits by not overwriting unrelated keys.
-
       setDocxMappings(nextMappings);
-      setDocxTokens((prev) => {
-        // ensure tokens list contains both scanned tokens and any mapping keys
-        const merged = Array.from(new Set([...(tokens || []), ...Object.keys(nextMappings || {})]));
-        return merged;
-      });
-
-      // Persist merged mapping so rescans keep the association
-      try {
-        await saveUserSettings({ docx_mappings: nextMappings });
-      } catch (err) {
-        console.warn("Failed to persist merged docx mappings after scan", err);
-      }
+      await saveUserSettings({ docx_mappings: nextMappings });
 
       if (tokens.length > 0) {
-        toast.success(`${tokens.length} tokens encontrados no template de vistoria.`);
+        toast.success(`${tokens.length} tokens encontrados.`);
       } else {
-        toast.error("Nenhum token encontrado no template.");
+        toast.info("Nenhum novo token encontrado no template.");
       }
     } catch (err) {
-      console.error("Failed scanning DOCX template", err);
+      console.error(err);
       toast.error("Falha ao escanear template.");
     } finally {
       setScanningDocx(false);
@@ -333,11 +282,9 @@ export default function Settings() {
   const handleUpdateDocxMapping = async (token: string, field: string) => {
     const next = { ...docxMappings, [token]: field };
     setDocxMappings(next);
-    // keep tokens list in sync so UI shows it immediately
-    setDocxTokens((prev) => Array.from(new Set([...prev, token])));
     try {
       await saveUserSettings({ docx_mappings: next });
-      toast.success("Mapeamento salvo!");
+      // success toast is handled by individual change if desired, but here we just ensure state is updated
     } catch (err) {
       toast.error("Erro ao salvar mapeamento");
     }
@@ -361,7 +308,6 @@ export default function Settings() {
     }
   };
 
-  // Helper to show a compact summary of docx mappings
   const docxMappedCount = Object.keys(docxMappings || {}).filter(k => docxMappings[k] && docxMappings[k] !== "none").length;
   const docxTotalTokens = docxTokens.length;
 
@@ -381,7 +327,6 @@ export default function Settings() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 space-y-6">
-          {/* Seção acessível a todos: Preferências */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -404,12 +349,10 @@ export default function Settings() {
                     <SelectItem value="extra-large">Extra Grande</SelectItem>
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] text-muted-foreground">Isso ajustará o tamanho de todos os textos do sistema.</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Seções Restritas */}
           {canAccessSettings ? (
             <>
               <Card className="border-primary/20 shadow-lg">
@@ -420,16 +363,12 @@ export default function Settings() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-6">
-                  <p className="text-sm text-muted-foreground mb-4">
-                    Sincronize as variáveis do seu arquivo PPTX com o sistema.
-                  </p>
                   <Button onClick={() => navigate("/token-scan")} className="w-full h-12 text-lg font-bold">
                     Mapear Variáveis do Template PPTX
                   </Button>
                 </CardContent>
               </Card>
 
-              {/* DOCX mapping: now inside an accordion (collapsed by default) */}
               <Accordion type="single" collapsible className="w-full">
                 <AccordionItem value="docx-mapping">
                   <Card className="border">
@@ -464,43 +403,40 @@ export default function Settings() {
 
                         {docxTokens.length > 0 ? (
                           <div className="space-y-3">
-                            <div className="grid grid-cols-1 gap-2">
-                              {docxTokens.map(token => (
-                                <div key={token} className="flex items-center gap-3 p-3 bg-card border rounded-lg shadow-sm">
-                                  <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded min-w-[120px] text-center">
-                                    {"{{"}{token}{"}}"}
-                                  </span>
-                                  <div className="flex-1">
-                                    <Select
-                                      value={docxMappings[token] ?? ""}
-                                      onValueChange={(val) => handleUpdateDocxMapping(token, val)}
-                                    >
-                                      <SelectTrigger className="h-9">
-                                        <SelectValue placeholder="Selecione o campo correspondente" />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        <SelectItem value="none">-- Ignorar --</SelectItem>
-                                        {VISTORIA_FIELDS.map(f => (
-                                          <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
-                                        ))}
-                                      </SelectContent>
-                                    </Select>
-                                  </div>
+                            {docxTokens.map(token => (
+                              <div key={token} className="flex items-center gap-3 p-3 bg-card border rounded-lg shadow-sm">
+                                <span className="text-xs font-bold bg-primary/10 text-primary px-2 py-1 rounded min-w-[120px] text-center">
+                                  {"{{"}{token}{"}}"}
+                                </span>
+                                <div className="flex-1">
+                                  <Select
+                                    value={docxMappings[token] ?? ""}
+                                    onValueChange={(val) => handleUpdateDocxMapping(token, val)}
+                                  >
+                                    <SelectTrigger className="h-9">
+                                      <SelectValue placeholder="Selecione o campo correspondente" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="none">-- Ignorar --</SelectItem>
+                                      {VISTORIA_FIELDS.map(f => (
+                                        <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
                                 </div>
-                              ))}
-                            </div>
+                              </div>
+                            ))}
                           </div>
                         ) : (
                           <div className="text-center py-6 text-muted-foreground italic">
-                            Nenhum token escaneado ainda. Use "Escanear" para detectar tags no template DOCX.
+                            Nenhum token detectado. Clique em "Escanear" para ler o template DOCX.
                           </div>
                         )}
 
                         <div className="flex justify-end">
-                          <Button onClick={() => {
-                            // quick save of current mappings (already saved per change, but keep UX)
-                            saveUserSettings({ docx_mappings: docxMappings });
-                            toast.success("Mapeamentos salvos");
+                          <Button onClick={async () => {
+                            await saveUserSettings({ docx_mappings: docxMappings });
+                            toast.success("Mapeamentos salvos com sucesso");
                           }}>
                             Salvar Mapeamentos
                           </Button>
@@ -517,68 +453,36 @@ export default function Settings() {
                     <LayoutList className="h-5 w-5" />
                     Mapeamento Dinâmico de Slides (PPTX)
                   </CardTitle>
-                  <CardDescription>
-                    Configure palavras-chave que, se encontradas no nome/descrição do produto, incluem um slide específico.
-                  </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="flex gap-3 items-end p-4 bg-muted/30 rounded-xl border border-dashed">
                     <div className="flex-1 space-y-1.5">
                       <Label className="text-xs">Palavra-chave</Label>
-                      <Input
-                        placeholder="Ex: Botoeira"
-                        value={newKeyword}
-                        onChange={e => setNewKeyword(e.target.value)}
-                      />
+                      <Input placeholder="Ex: Botoeira" value={newKeyword} onChange={e => setNewKeyword(e.target.value)} />
                     </div>
                     <div className="w-24 space-y-1.5">
                       <Label className="text-xs">Slide nº</Label>
-                      <Input
-                        type="number"
-                        placeholder="Ex: 47"
-                        value={newSlideNumber}
-                        onChange={e => setNewSlideNumber(e.target.value)}
-                      />
+                      <Input type="number" placeholder="Ex: 47" value={newSlideNumber} onChange={e => setNewSlideNumber(e.target.value)} />
                     </div>
-                    <Button onClick={handleAddSlideMapping} size="icon">
-                      <Plus className="h-4 w-4" />
-                    </Button>
+                    <Button onClick={handleAddSlideMapping} size="icon"><Plus className="h-4 w-4" /></Button>
                   </div>
 
                   <div className="space-y-2">
                     {Object.entries(slideMappings).map(([kw, slide]) => (
                       <div key={kw} className="flex items-center justify-between p-3 bg-card border rounded-lg shadow-sm">
                         <div className="flex items-center gap-4">
-                          <span className="text-sm font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase">
-                            "{kw}"
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            Inclui slide: <strong className="text-foreground">{slide}</strong>
-                          </span>
+                          <span className="text-sm font-bold bg-primary/10 text-primary px-2 py-0.5 rounded uppercase">"{kw}"</span>
+                          <span className="text-sm text-muted-foreground">Inclui slide: <strong>{slide}</strong></span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 text-destructive hover:bg-destructive/10"
-                          onClick={() => handleRemoveSlideMapping(kw)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleRemoveSlideMapping(kw)}><Trash2 className="h-4 w-4" /></Button>
                       </div>
                     ))}
-                    {Object.keys(slideMappings).length === 0 && (
-                      <div className="text-center py-6 text-muted-foreground text-sm italic">
-                        Nenhuma palavra-chave cadastrada.
-                      </div>
-                    )}
                   </div>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Importar Nova Base</CardTitle>
-                </CardHeader>
+                <CardHeader><CardTitle>Importar Nova Base</CardTitle></CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid gap-2">
                     <Label>Link da Planilha</Label>
@@ -588,7 +492,6 @@ export default function Settings() {
                       <Button variant="outline" onClick={handleLoadSheets} disabled={!connected}>Abas</Button>
                     </div>
                   </div>
-
                   {sheetTitles.length > 0 && (
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
@@ -603,187 +506,89 @@ export default function Settings() {
                       </div>
                     </div>
                   )}
-
                   <Button onClick={handleSaveImportedBase} className="w-full" disabled={!selectedSheet || !newBaseName || loading}>
-                    {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                    {loading && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
                     Salvar Base no Servidor
                   </Button>
                 </CardContent>
               </Card>
 
               <Card>
-                <CardHeader>
-                  <CardTitle>Bases Salvas e Mapeamento</CardTitle>
-                  <CardDescription>Defina quais colunas da planilha representam cada informação no assistente.</CardDescription>
-                </CardHeader>
+                <CardHeader><CardTitle>Bases Salvas</CardTitle></CardHeader>
                 <CardContent className="space-y-8">
                   {bases.map(base => (
-                    <div key={base.id} className="p-6 border rounded-2xl space-y-6 bg-muted/30 dark:bg-muted/10 shadow-sm">
-                      <div className="flex items-center justify-between border-b pb-4">
-                        <div className="flex items-center gap-2">
-                          <SettingsIcon className="h-5 w-5 text-primary" />
-                          <h3 className="font-bold text-lg">{base.name}</h3>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:bg-destructive/10 text-xs h-8"
-                          onClick={() => { if(confirm("Remover esta base?")) deleteBase(base.id!).then(loadBases); }}
-                        >
-                          Remover Base
-                        </Button>
+                    <div key={base.id} className="p-6 border rounded-2xl space-y-4 bg-muted/30">
+                      <div className="flex items-center justify-between border-b pb-2">
+                        <h3 className="font-bold">{base.name}</h3>
+                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if(confirm("Remover base?")) deleteBase(base.id!).then(loadBases); }}>Remover</Button>
                       </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Nome do Produto</Label>
-                          <select
-                            className="w-full text-xs border rounded-lg p-1.5 bg-background"
-                            value={base.name_column || ""}
-                            onChange={e => updateBaseMapping(base, "name_column", e.target.value)}
-                          >
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold">Coluna Nome</Label>
+                          <select className="w-full text-xs border rounded p-1" value={base.name_column || ""} onChange={e => updateBaseMapping(base, "name_column", e.target.value)}>
                             <option value="">-- Automático --</option>
                             {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                           </select>
                         </div>
-                        <div className="space-y-1.5">
-                          <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Coluna Descrição</Label>
-                          <select
-                            className="w-full text-xs border rounded-lg p-1.5 bg-background"
-                            value={base.description_column || ""}
-                            onChange={e => updateBaseMapping(base, "description_column", e.target.value)}
-                          >
+                        <div className="space-y-1">
+                          <Label className="text-[10px] font-bold">Coluna Descrição</Label>
+                          <select className="w-full text-xs border rounded p-1" value={base.description_column || ""} onChange={e => updateBaseMapping(base, "description_column", e.target.value)}>
                             <option value="">-- Automático --</option>
                             {base.headers.map(h => <option key={h} value={h}>{h}</option>)}
                           </select>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3">
-                        <Label className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider flex items-center gap-2">
-                          Colunas Extras para Exibição (Passo 4)
-                          <span title="Estas colunas aparecerão como detalhes adicionais na busca de produtos."><Info className="h-3 w-3" /></span>
-                        </Label>
-                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-40 overflow-y-auto p-3 border rounded-xl bg-background/50">
-                          {base.headers.map(header => (
-                            <div key={header} className="flex items-center space-x-2">
-                              <Checkbox
-                                id={`extra-${base.id}-${header}`}
-                                checked={(base.extra_columns || []).includes(header)}
-                                onCheckedChange={() => handleToggleExtraColumn(base, header)}
-                              />
-                              <Label
-                                htmlFor={`extra-${base.id}-${header}`}
-                                className="text-[10px] truncate cursor-pointer font-medium"
-                                title={header}
-                              >
-                                {header}
-                              </Label>
-                            </div>
-                          ))}
                         </div>
                       </div>
                     </div>
                   ))}
-                  {bases.length === 0 && <p className="text-sm text-center text-muted-foreground py-10 border border-dashed rounded-2xl">Nenhuma base importada ainda.</p>}
                 </CardContent>
               </Card>
             </>
           ) : (
-            <Card className="bg-muted/20 border-dashed">
-              <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-                <Lock className="h-12 w-12 text-neutral-300 mb-4" />
-                <h3 className="text-lg font-bold">Configurações Avançadas Restritas</h3>
-                <p className="text-sm text-neutral-500 max-w-sm mt-2">
-                  As opções de importação de bases e mapeamento de tokens estão disponíveis apenas para administradores autorizados.
-                </p>
-              </CardContent>
+            <Card className="bg-muted/20 py-12 text-center">
+              <Lock className="h-12 w-12 mx-auto text-neutral-300 mb-4" />
+              <h3 className="font-bold">Acesso Restrito</h3>
+              <p className="text-sm text-neutral-500">Configurações de bases e mapeamentos são limitadas a administradores.</p>
             </Card>
           )}
 
-          {/* Gestão de Acessos (Apenas para Paulo) */}
           {isSuperAdmin && (
-            <Card className="border-green-100 dark:border-green-900/30 bg-green-50/30 dark:bg-green-900/10">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Users className="h-5 w-5 text-green-600" />
-                  Gestão de Acessos
-                </CardTitle>
-                <CardDescription>Escolha quem pode acessar o histórico e as configurações do sistema.</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="space-y-2 border-t pt-2">
-                  <Label className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2 block">Lista de Usuários (registrados)</Label>
-                  {allUsers.length === 0 ? (
-                    <div className="text-sm text-muted-foreground py-6 text-center">Nenhum usuário encontrado.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {allUsers.map(u => (
-                        <div key={u.user_id} className="flex items-center justify-between p-3 bg-card rounded-xl border border-border shadow-sm">
-                          <div>
-                            <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
-                            <p className="text-xs text-muted-foreground">{u.seller_email}</p>
-                          </div>
-                          <div className="flex items-center gap-6">
-                            <div className="flex flex-col items-end text-xs">
-                              <span className="font-medium">Histórico</span>
-                              <Switch
-                                checked={!!u.can_view_history}
-                                disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
-                                onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email || u.email, 'history', !!u.can_view_history)}
-                              />
-                            </div>
-                            <div className="flex flex-col items-end text-xs">
-                              <span className="font-medium">Configurações</span>
-                              <Switch
-                                checked={!!u.can_access_settings}
-                                disabled={String(u.seller_email || "").toLowerCase() === PAULO_EMAIL}
-                                onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email || u.email, 'settings', !!u.can_access_settings)}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      ))}
+            <Card className="bg-green-50/30 border-green-100">
+              <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5 text-green-600" /> Gestão de Usuários</CardTitle></CardHeader>
+              <CardContent className="space-y-2">
+                {allUsers.map(u => (
+                  <div key={u.user_id} className="flex items-center justify-between p-3 bg-card border rounded-xl">
+                    <div>
+                      <p className="font-bold text-sm">{u.seller_name || "Sem Nome"}</p>
+                      <p className="text-xs text-muted-foreground">{u.seller_email}</p>
                     </div>
-                  )}
-                </div>
+                    <div className="flex gap-4">
+                      <div className="flex flex-col items-end text-[10px]">
+                        <span>Histórico</span>
+                        <Switch checked={!!u.can_view_history} onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email, 'history', !!u.can_view_history)} />
+                      </div>
+                      <div className="flex flex-col items-end text-[10px]">
+                        <span>Configurações</span>
+                        <Switch checked={!!u.can_access_settings} onCheckedChange={() => toggleUserPermission(u.user_id, u.seller_email, 'settings', !!u.can_access_settings)} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Perfil do Vendedor */}
         <Card className="h-fit lg:sticky lg:top-6 shadow-md overflow-hidden">
-          <CardHeader className="border-b bg-muted/30 dark:bg-muted/20">
-            <CardTitle className="flex items-center gap-2">
-              <ShieldCheck className="h-5 w-5 text-primary" />
-              Perfil do Vendedor
-            </CardTitle>
+          <CardHeader className="border-b bg-muted/30">
+            <CardTitle className="flex items-center gap-2"><ShieldCheck className="h-5 w-5 text-primary" /> Perfil do Vendedor</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 pt-6">
-            <div className="space-y-2">
-              <Label>Nome Completo</Label>
-              <Input value={sellerName} onChange={e => setSellerName(e.target.value)} placeholder="Seu nome na proposta" />
-            </div>
-            <div className="space-y-2">
-              <Label>Cargo / Departamento</Label>
-              <Input value={sellerRole} onChange={e => setSellerRole(e.target.value)} placeholder="Ex: Consultor de Vendas" />
-            </div>
-            <div className="space-y-2">
-              <Label>E-mail Corporativo</Label>
-              <Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} placeholder="email@controlid.com.br" />
-            </div>
-            <div className="space-y-2">
-              <Label>Telefone / WhatsApp</Label>
-              <Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} placeholder="(11) 99999-9999" />
-            </div>
-            <Button
-              onClick={handleSaveProfile}
-              className="w-full h-11 font-bold"
-              disabled={savingProfile}
-            >
-              {savingProfile ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Salvar Perfil
+            <div className="space-y-2"><Label>Nome Completo</Label><Input value={sellerName} onChange={e => setSellerName(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Cargo</Label><Input value={sellerRole} onChange={e => setSellerRole(e.target.value)} /></div>
+            <div className="space-y-2"><Label>E-mail</Label><Input value={sellerEmail} onChange={e => setSellerEmail(e.target.value)} /></div>
+            <div className="space-y-2"><Label>Telefone</Label><Input value={sellerPhone} onChange={e => setSellerPhone(e.target.value)} /></div>
+            <Button onClick={handleSaveProfile} className="w-full font-bold" disabled={savingProfile}>
+              {savingProfile && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Salvar Perfil
             </Button>
           </CardContent>
         </Card>

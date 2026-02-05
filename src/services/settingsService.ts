@@ -26,6 +26,30 @@ export type UserSettings = {
 
 const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 const LOCAL_SETTINGS_KEY = "local_user_settings_v1";
+const DOCX_MAP_KEY = "docx_token_map";
+
+/**
+ * Helper to get DOCX mappings from local storage (source of truth for this field)
+ */
+function getLocalDocxMappings(): Record<string, string> {
+  try {
+    const raw = localStorage.getItem(DOCX_MAP_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Helper to save DOCX mappings to local storage
+ */
+function saveLocalDocxMappings(map: Record<string, string>) {
+  try {
+    localStorage.setItem(DOCX_MAP_KEY, JSON.stringify(map));
+  } catch (err) {
+    console.warn("settingsService: failed to save docx mappings locally", err);
+  }
+}
 
 /**
  * Try to read settings from localStorage fallback.
@@ -34,8 +58,10 @@ function readLocalSettings(): UserSettings | null {
   try {
     const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw);
-    return parsed as UserSettings;
+    const parsed = JSON.parse(raw) as UserSettings;
+    // Inject docx mappings
+    parsed.docx_mappings = getLocalDocxMappings();
+    return parsed;
   } catch (err) {
     console.warn("settingsService: readLocalSettings failed", err);
     return null;
@@ -47,6 +73,9 @@ function readLocalSettings(): UserSettings | null {
  */
 function writeLocalSettings(payload: Partial<UserSettings>): UserSettings {
   try {
+    if (payload.docx_mappings) {
+      saveLocalDocxMappings(payload.docx_mappings);
+    }
     const existing = readLocalSettings() || {};
     const merged = { ...existing, ...payload, updated_at: new Date().toISOString() } as UserSettings;
     localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
@@ -66,63 +95,46 @@ function writeLocalSettings(payload: Partial<UserSettings>): UserSettings {
 export async function getUserSettings(): Promise<UserSettings | null> {
   try {
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      // No authenticated user; return local fallback if available
-      const local = readLocalSettings();
-      if (local) return local;
-      return null;
-    }
+    
+    let baseSettings: UserSettings | null = null;
 
-    const { data, error } = await supabase
-      .from("user_settings")
-      .select("*")
-      .eq("user_id", user.id)
-      .maybeSingle();
+    if (user) {
+      const { data, error } = await supabase
+        .from("user_settings")
+        .select("*")
+        .eq("user_id", user.id)
+        .maybeSingle();
 
-    if (error) {
-      console.error("getUserSettings error:", error);
-      // On error, try local fallback
-      const local = readLocalSettings();
-      if (local) return local;
-      if (String(user.email).toLowerCase() === PAULO_EMAIL) {
-        return {
+      if (!error && data) {
+        baseSettings = data as UserSettings;
+        if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+          baseSettings.can_view_history = true;
+          baseSettings.can_access_settings = true;
+        }
+      } else if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+        baseSettings = {
           user_id: user.id,
           seller_email: user.email,
           can_view_history: true,
           can_access_settings: true,
         } as UserSettings;
       }
-      return null;
     }
 
-    if (data) {
-      const settings = data as UserSettings;
-      if (String(user.email).toLowerCase() === PAULO_EMAIL) {
-        return { ...settings, can_view_history: true, can_access_settings: true };
-      }
-      return settings;
+    if (!baseSettings) {
+      baseSettings = readLocalSettings();
     }
 
-    // No DB row found; if super admin, return default admin flags
-    if (String(user.email).toLowerCase() === PAULO_EMAIL) {
-      return {
-        user_id: user.id,
-        seller_email: user.email,
-        can_view_history: true,
-        can_access_settings: true,
-      } as UserSettings;
+    if (baseSettings) {
+      // Always ensure docx_mappings are included from local storage source
+      baseSettings.docx_mappings = getLocalDocxMappings();
     }
 
-    // As a last resort, check local fallback
-    const local = readLocalSettings();
-    if (local) return local;
-    return null;
+    return baseSettings;
   } catch (err) {
     console.error("settingsService.getUserSettings unexpected error", err);
-    // Try local fallback on unexpected error
     const local = readLocalSettings();
-    if (local) return local;
-    return null;
+    return local;
   }
 }
 
@@ -206,6 +218,11 @@ export async function grantPermissionByEmail(email: string, permission: 'history
  */
 export async function saveUserSettings(payload: Partial<UserSettings>): Promise<UserSettings> {
   try {
+    // 1. Handle docx_mappings locally first as they don't have a DB column
+    if (payload.docx_mappings) {
+      saveLocalDocxMappings(payload.docx_mappings);
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       // No authenticated user: persist locally as fallback
@@ -213,11 +230,15 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
       return saved;
     }
 
+    // 2. Build cleaned payload for DB (remove non-db fields)
+    const dbPayload = { ...payload };
+    delete dbPayload.docx_mappings; // DB doesn't have this column
+
     const { data, error } = await supabase
       .from("user_settings")
       .upsert({
         user_id: user.id,
-        ...payload,
+        ...dbPayload,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" })
       .select()
@@ -225,12 +246,11 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
 
     if (error) {
       console.error("saveUserSettings error:", error);
-      // On error try to persist locally to avoid losing user's changes
       const local = writeLocalSettings(payload);
       return local;
     }
 
-    // If we succeeded saving to server, also remove/merge any local fallback to avoid divergence.
+    // If we succeeded saving to server, also remove any separate local fallback to avoid divergence.
     try {
       const localRaw = localStorage.getItem(LOCAL_SETTINGS_KEY);
       if (localRaw) {
@@ -239,10 +259,11 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
     } catch {}
 
     window.dispatchEvent(new Event("user_settings_changed"));
-    return data as UserSettings;
+    const final = data as UserSettings;
+    final.docx_mappings = getLocalDocxMappings();
+    return final;
   } catch (err) {
     console.error("saveUserSettings unexpected error:", err);
-    // Fallback to local storage so user's changes are not lost
     const local = writeLocalSettings(payload);
     return local;
   }
