@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -9,6 +9,7 @@ import { showSuccess, showError } from "@/utils/toast";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
+import { getUserSettings } from "@/services/settingsService";
 
 export default function SolicitarVistoria() {
   // Removed destinatario and cc states as requested
@@ -22,6 +23,24 @@ export default function SolicitarVistoria() {
   const [produto, setProduto] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [loadingDoc, setLoadingDoc] = useState(false);
+
+  // On mount: try to prefill seller info from user settings (if present).
+  useEffect(() => {
+    (async () => {
+      try {
+        const s = await getUserSettings();
+        if (!s) return;
+        // Only set fields when they're currently empty so the user can override later
+        if (!vendedor && s.seller_name) setVendedor(s.seller_name);
+        if (!empresaEmail && s.seller_email) setEmpresaEmail(s.seller_email);
+        if (!contatoTelefone && s.seller_phone) setContatoTelefone(s.seller_phone);
+      } catch (err) {
+        // non-blocking; keep form blank if fetch fails
+        console.warn("SolicitarVistoria: falha ao obter seller settings", err);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    })();
+  }, []);
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
@@ -123,7 +142,7 @@ export default function SolicitarVistoria() {
 
         <div>
           <Label className="text-sm">Contato responsável - Telefone</Label>
-          <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} placeholder="(00) 0 0000-0000" />
+          <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} rows={1} placeholder="(00) 0 0000-0000" />
         </div>
 
         <div>
