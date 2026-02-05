@@ -335,7 +335,70 @@ export default function SolicitarVistoria() {
     fetchCepData(digits);
   };
 
-  // CNPJ fetch: only populate numero and complemento from CNPJ data
+  // Try to extract CEP from various shapes of CNPJ API responses
+  function extractCepFromCnpjData(data: any): string | undefined {
+    if (!data) return undefined;
+    // Common direct fields
+    const candidates = [
+      data.cep,
+      data.CEP,
+      data.cep_principal,
+      data.cep_pri,
+      data.endereco?.cep,
+      data.matriz_cnpj?.cep,
+      data.estabelecimento?.cep,
+      data.estab?.cep,
+      data.address?.cep,
+      data.address?.zip,
+      data.empresa?.cep,
+    ];
+    for (const c of candidates) {
+      if (c && typeof c === "string") {
+        const digits = c.replace(/\D/g, "");
+        if (digits.length === 8) return digits;
+      }
+    }
+
+    // Some APIs include addresses in nested objects or arrays - try some common keys
+    const possiblePaths = [
+      ["estabelecimentos", 0, "cep"],
+      ["estabelecimentos", 0, "endereco", "cep"],
+      ["atividades_secundarias", 0, "cep"],
+      ["estabelecimento", "logradouro", "cep"],
+    ];
+    for (const path of possiblePaths) {
+      try {
+        let v: any = data;
+        for (const p of path) {
+          if (v == null) break;
+          v = v[p as any];
+        }
+        if (v && typeof v === "string") {
+          const digits = v.replace(/\D/g, "");
+          if (digits.length === 8) return digits;
+        }
+      } catch {}
+    }
+
+    // Try to parse any string value that looks like a CEP anywhere in object values
+    const stack: any[] = [data];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur) continue;
+      if (typeof cur === "string") {
+        const m = cur.replace(/\D/g, "");
+        if (m.length === 8) return m;
+      } else if (typeof cur === "object") {
+        for (const k of Object.keys(cur)) {
+          stack.push(cur[k]);
+        }
+      }
+    }
+
+    return undefined;
+  }
+
+  // CNPJ fetch: only populate numero and complemento from CNPJ data; if CEP available, fill cep and auto-fetch ViaCEP
   async function tryApisForCnpj(rawDigits: string) {
     const endpoints = [
       `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
@@ -347,9 +410,8 @@ export default function SolicitarVistoria() {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
         const data = await res.json();
-        const hasNumber = Boolean(data.numero || data.number || data.numero_endereco);
-        const hasAny = hasNumber || Boolean(data.complemento || data.complement);
-        if (hasNumber || hasAny) return data;
+        // Prefer returning data even if partial; calling code will decide what to use
+        return data;
       } catch (err) {
         console.debug("CNPJ API failed:", url, err);
       }
@@ -366,12 +428,24 @@ export default function SolicitarVistoria() {
     try {
       const data = await tryApisForCnpj(rawDigits);
       // Only set number and complement from CNPJ response per requirement
-      const number = data.numero || data.number || data.numero_endereco || "";
-      const comp = data.complemento || data.complement || "";
+      const number = data.numero || data.number || data.numero_endereco || data.numero || data.nro || "";
+      const comp = data.complemento || data.complement || data.complemento_endereco || "";
       if (number) setNumero(String(number));
       if (comp) setComplemento(String(comp));
+
+      // Try to extract CEP from the returned CNPJ data; if found, set CEP (masked) and trigger ViaCEP fetch
+      const cepDigits = extractCepFromCnpjData(data);
+      if (cepDigits && cepDigits.length === 8) {
+        // Format as 00000-000
+        const masked = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
+        setCep(masked);
+        // Trigger ViaCEP fetch to populate rua/bairro/cidade/uf
+        // small timeout to ensure state updates are batched nicely
+        setTimeout(() => fetchCepData(cepDigits), 50);
+      }
+
       dismissToast(id as any);
-      showSuccess("Número e complemento do CNPJ preenchidos (se disponíveis)");
+      showSuccess("Número/complemento do CNPJ aplicados (se disponíveis)");
     } catch (err) {
       console.error("fetchCnpjData error", err);
       dismissToast(id as any);
@@ -435,7 +509,7 @@ export default function SolicitarVistoria() {
               <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
               <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>{fetchingCnpj ? "Buscando..." : "Buscar"}</Button>
             </div>
-            <div className="text-sm text-muted-foreground">O sistema preencherá número e complemento (se disponíveis) a partir do CNPJ.</div>
+            <div className="text-sm text-muted-foreground">O sistema preencherá número, complemento e tentará obter o CEP (se disponível) a partir do CNPJ.</div>
           </div>
 
           <div className="space-y-2">
