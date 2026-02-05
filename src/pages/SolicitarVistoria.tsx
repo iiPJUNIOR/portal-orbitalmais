@@ -306,8 +306,7 @@ export default function SolicitarVistoria() {
       if (data.erro) throw new Error("CEP não encontrado");
       // ViaCEP fields: logradouro, complemento, bairro, localidade, uf
       setRua(data.logradouro || "");
-      // Do not override numero (it's from CNPJ or manual)
-      if (!complemento && data.complemento) setComplemento(data.complemento);
+      // IMPORTANT: do NOT overwrite complemento with CEP data — complemento must come from CNPJ only
       setBairro(data.bairro || "");
       setCidade(data.localidade || "");
       setUf(data.uf || "");
