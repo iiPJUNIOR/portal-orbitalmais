@@ -398,7 +398,7 @@ export default function SolicitarVistoria() {
     return undefined;
   }
 
-  // CNPJ fetch: only populate numero and complemento from CNPJ data; if CEP available, fill cep and auto-fetch ViaCEP
+  // CNPJ fetch: populate numero, complemento, and auto-fill empresa with razão social when available; if CEP available, fill cep and auto-fetch ViaCEP
   async function tryApisForCnpj(rawDigits: string) {
     const endpoints = [
       `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
@@ -432,6 +432,12 @@ export default function SolicitarVistoria() {
       const comp = data.complemento || data.complement || data.complemento_endereco || "";
       if (number) setNumero(String(number));
       if (comp) setComplemento(String(comp));
+
+      // Auto-fill company Razão Social (empresa) when available, but do not overwrite if user already filled it
+      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.social || "";
+      if (companyName && (!empresa || String(empresa).trim() === "")) {
+        setEmpresa(companyName);
+      }
 
       // Try to extract CEP from the returned CNPJ data; if found, set CEP (masked) and trigger ViaCEP fetch
       const cepDigits = extractCepFromCnpjData(data);
@@ -513,7 +519,7 @@ export default function SolicitarVistoria() {
           </div>
 
           <div className="space-y-2">
-            <Label className="text-sm">Empresa</Label>
+            <Label className="text-sm">Empresa (Razão Social)</Label>
             <Input value={empresa} onChange={(e) => setEmpresa(e.target.value)} placeholder="Razão social da empresa" />
           </div>
 
@@ -594,7 +600,7 @@ export default function SolicitarVistoria() {
 
         <div>
           <Label className="text-sm">Observações</Label>
-          <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} placeholder="Observações adicionais" />
+            <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} rows={4} placeholder="Observações adicionais" />
         </div>
 
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
