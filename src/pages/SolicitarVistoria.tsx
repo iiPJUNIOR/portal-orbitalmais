@@ -16,6 +16,7 @@ export default function SolicitarVistoria() {
   const [vendedor, setVendedor] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
+  const [empresaPhone, setEmpresaPhone] = useState("");
   const [contatoNome, setContatoNome] = useState("");
   const [contatoTelefone, setContatoTelefone] = useState("");
   const [endereco, setEndereco] = useState("");
@@ -39,7 +40,7 @@ export default function SolicitarVistoria() {
         // Only set fields when they're currently empty so the user can override later
         if (!vendedor && s.seller_name) setVendedor(s.seller_name);
         if (!empresaEmail && s.seller_email) setEmpresaEmail(s.seller_email);
-        if (!contatoTelefone && s.seller_phone) setContatoTelefone(s.seller_phone);
+        // NOTE: contatoTelefone is client contact and should NOT be prefilled with seller phone
       } catch (err) {
         // non-blocking; keep form blank if fetch fails
         console.warn("SolicitarVistoria: falha ao obter seller settings", err);
@@ -51,7 +52,7 @@ export default function SolicitarVistoria() {
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
   const buildEmailBody = () => {
-    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nCNPJ:\n${cnpj || ""}\n\nE-mail:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
+    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nCNPJ:\n${cnpj || ""}\n\nTelefone da empresa:\n${empresaPhone || ""}\n\nE-mail da empresa:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
   };
 
   const handleCopyBody = async () => {
@@ -98,6 +99,7 @@ export default function SolicitarVistoria() {
         vendedor,
         empresa,
         cnpj,
+        empresa_phone: empresaPhone,
         empresa_email: empresaEmail,
         contato_nome: contatoNome,
         contato_telefone: contatoTelefone,
@@ -159,7 +161,33 @@ export default function SolicitarVistoria() {
     return parts.filter(Boolean).join(" - ");
   }
 
-  // Fetch CNPJ data and populate fields
+  // Try multiple APIs in order until one returns usable data
+  const tryApisForCnpj = async (rawDigits: string) => {
+    const endpoints = [
+      `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
+      `https://publica.cnpj.ws/cnpj/${rawDigits}`,
+      `https://receitaws.com.br/v1/cnpj/${rawDigits}`,
+    ];
+
+    for (const url of endpoints) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
+        const data = await res.json();
+        // basic validation: must have some company name or address
+        const hasName = Boolean(data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.company || data.nome);
+        const hasAny = hasName || Boolean(data.logradouro || data.address || data.street);
+        if (hasAny) return data;
+      } catch (err) {
+        // continue to next
+        console.debug("CNPJ API failed:", url, err);
+      }
+    }
+
+    throw new Error("Nenhuma API retornou dados válidos para o CNPJ");
+  };
+
+  // Fetch CNPJ data and populate fields with fallback support
   const fetchCnpjData = async (rawDigits: string) => {
     if (!rawDigits || rawDigits.length !== 14) return;
     if (lastFetchedCnpj.current === rawDigits) return;
@@ -169,19 +197,16 @@ export default function SolicitarVistoria() {
     const id = showLoading("Buscando dados do CNPJ...");
 
     try {
-      const url = `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error(`API retornou ${res.status}`);
-      const data = await res.json();
+      const data = await tryApisForCnpj(rawDigits);
 
-      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || "";
-      const email = data.email || data.e_mail || data.contato_email || "";
-      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || "";
+      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.company || "";
+      const email = data.email || data.e_mail || data.contato_email || data.contato || "";
+      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || data.phone || "";
       const address = buildAddressFromApi(data);
 
       if (companyName) setEmpresa(companyName);
       if (email) setEmpresaEmail(email);
-      if (phone) setContatoTelefone(phone);
+      if (phone) setEmpresaPhone(phone);
       if (address) setEndereco(address);
 
       dismissToast(id as any);
@@ -265,9 +290,16 @@ export default function SolicitarVistoria() {
           </div>
         </div>
 
-        <div>
-          <Label className="text-sm">Contato responsável - Nome</Label>
-          <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <Label className="text-sm">Telefone da empresa</Label>
+            <Input value={empresaPhone} onChange={(e) => setEmpresaPhone(e.target.value)} placeholder="(00) 0000-0000" />
+          </div>
+
+          <div>
+            <Label className="text-sm">Contato responsável - Nome</Label>
+            <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
+          </div>
         </div>
 
         <div>
