@@ -730,8 +730,8 @@ export default function SolicitarVistoria() {
                   <div className="text-sm bg-primary/5 p-3 rounded-xl inline-block border border-primary/10">
                     <div className="font-bold text-primary">{vendedor || "[Seu Nome]"}</div>
                     <div className="text-muted-foreground text-xs">{settings?.seller_role || "Vendedor"}</div>
-                    {sellerInfo.email && <div className="text-muted-foreground text-[10px]">{sellerInfo.email}</div>}
-                    {sellerInfo.phone && <div className="text-muted-foreground text-[10px]">{sellerInfo.phone}</div>}
+                    {settings?.seller_email && <div className="text-muted-foreground text-[10px]">{settings.seller_email}</div>}
+                    {settings?.seller_phone && <div className="text-muted-foreground text-[10px]">{settings.seller_phone}</div>}
                   </div>
                 </div>
               </div>
