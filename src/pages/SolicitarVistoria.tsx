@@ -213,7 +213,10 @@ export default function SolicitarVistoria() {
       const arrayBuffer = await res.arrayBuffer();
 
       const zip = new PizZip(arrayBuffer);
-      const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
+
+      // Docxtemplater: set nullGetter to return empty string for undefined tags
+      // and disable throwOnUndefined via nullGetter behavior to avoid hard failures
+      const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
 
       // Current form data in a standardized structure
       const formData = {
@@ -247,7 +250,7 @@ export default function SolicitarVistoria() {
           if (field === "none") return;
           renderData[token] = formData[field] || "";
         });
-        
+
         // Also include the original formData keys as fallback for tags that might match directly
         Object.keys(formData).forEach(key => {
           if (renderData[key] === undefined) {
@@ -259,14 +262,36 @@ export default function SolicitarVistoria() {
         Object.assign(renderData, formData);
       }
 
-      doc.render(renderData);
+      try {
+        // render may throw if template uses functions or unexpected tags;
+        // with nullGetter in place we should avoid missing-tag exceptions, but still guard.
+        doc.render(renderData);
+      } catch (renderErr: any) {
+        // Attempt to extract helpful details
+        try {
+          // Docxtemplater attaches .properties.errors with details in some error cases
+          const props = renderErr.properties;
+          const errors = props?.errors || props?.messages || null;
+          if (errors) {
+            console.error("Docx render errors:", errors);
+          }
+        } catch (_) {}
+        console.error("Docxtemplater render error:", renderErr);
+        // Show helpful message to user with minimal details
+        showError(
+          "Erro ao gerar o DOCX: o template contém tags inválidas ou incompatíveis. " +
+          "Verifique se as tags do template correspondem aos campos configurados."
+        );
+        setLoadingDoc(false);
+        return;
+      }
 
       const out = doc.getZip().generate({ type: "blob" });
       const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
       saveAs(out, `Solicitacao_vistoria_${safeName}.docx`);
       showSuccess("Documento DOCX gerado e baixado com sucesso.");
     } catch (err: any) {
-      console.error(err);
+      console.error("handleGenerateDocx unexpected error:", err);
       showError("Erro ao gerar o DOCX. Verifique se o template possui as tags corretas.");
     } finally {
       setLoadingDoc(false);
