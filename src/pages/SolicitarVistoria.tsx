@@ -10,6 +10,7 @@ import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
 import { getUserSettings } from "@/services/settingsService";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 export default function SolicitarVistoria() {
   // Seller / contact info
@@ -41,6 +42,9 @@ export default function SolicitarVistoria() {
   // Debounce refs
   const debounceCepRef = useRef<number | null>(null);
   const debounceCnpjRef = useRef<number | null>(null);
+
+  // Preview raw toggle
+  const [showRawPreview, setShowRawPreview] = useState(false);
 
   // Prefill seller info from user settings (non-destructive)
   useEffect(() => {
@@ -337,7 +341,6 @@ export default function SolicitarVistoria() {
   // Try to extract CEP from various shapes of CNPJ API responses
   function extractCepFromCnpjData(data: any): string | undefined {
     if (!data) return undefined;
-    // Common direct fields
     const candidates = [
       data.cep,
       data.CEP,
@@ -358,7 +361,6 @@ export default function SolicitarVistoria() {
       }
     }
 
-    // Some APIs include addresses in nested objects or arrays - try some common keys
     const possiblePaths = [
       ["estabelecimentos", 0, "cep"],
       ["estabelecimentos", 0, "endereco", "cep"],
@@ -379,7 +381,6 @@ export default function SolicitarVistoria() {
       } catch {}
     }
 
-    // Try to parse any string value that looks like a CEP anywhere in object values
     const stack: any[] = [data];
     while (stack.length) {
       const cur = stack.pop();
@@ -397,7 +398,7 @@ export default function SolicitarVistoria() {
     return undefined;
   }
 
-  // CNPJ fetch: populate numero, complemento, and auto-fill empresa with razão social when available; if CEP available, fill cep and auto-fetch ViaCEP
+  // CNPJ fetch: populate numero, complemento, and auto-fill empresa with razão social when available; if CEP available, set cep and auto-fetch ViaCEP
   async function tryApisForCnpj(rawDigits: string) {
     const endpoints = [
       `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
@@ -409,7 +410,6 @@ export default function SolicitarVistoria() {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
         const data = await res.json();
-        // Prefer returning data even if partial; calling code will decide what to use
         return data;
       } catch (err) {
         console.debug("CNPJ API failed:", url, err);
@@ -426,26 +426,20 @@ export default function SolicitarVistoria() {
     const id = showLoading("Buscando dados do CNPJ...");
     try {
       const data = await tryApisForCnpj(rawDigits);
-      // Only set number and complement from CNPJ response per requirement
       const number = data.numero || data.number || data.numero_endereco || data.numero || data.nro || "";
       const comp = data.complemento || data.complement || data.complemento_endereco || "";
       if (number) setNumero(String(number));
       if (comp) setComplemento(String(comp));
 
-      // Auto-fill company Razão Social (empresa) when available, but do not overwrite if user already filled it
       const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.social || "";
       if (companyName && (!empresa || String(empresa).trim() === "")) {
         setEmpresa(companyName);
       }
 
-      // Try to extract CEP from the returned CNPJ data; if found, set CEP (masked) and trigger ViaCEP fetch
       const cepDigits = extractCepFromCnpjData(data);
       if (cepDigits && cepDigits.length === 8) {
-        // Format as 00000-000
         const masked = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
         setCep(masked);
-        // Trigger ViaCEP fetch to populate rua/bairro/cidade/uf
-        // small timeout to ensure state updates are batched nicely
         setTimeout(() => fetchCepData(cepDigits), 50);
       }
 
@@ -495,6 +489,14 @@ export default function SolicitarVistoria() {
     }
     fetchCnpjData(digits);
   };
+
+  // Split the email body into logical sections for nicer rendering in the preview
+  function getEmailSections() {
+    const body = buildEmailBody();
+    // We'll split by double newlines to separate logical blocks, then group consecutive lines
+    const parts = body.split("\n\n").map((p) => p.trim()).filter(Boolean);
+    return parts;
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
@@ -611,10 +613,54 @@ export default function SolicitarVistoria() {
           <div className="text-sm text-muted-foreground">Assunto: <span className="font-medium">{subject}</span></div>
         </div>
 
-        <div>
-          <Label className="text-sm">Pré-visualização do corpo do e-mail</Label>
-          <Textarea value={buildEmailBody()} readOnly rows={12} />
-        </div>
+        {/* Improved preview card */}
+        <Card>
+          <CardHeader className="flex items-center justify-between">
+            <CardTitle>Pré-visualização do e-mail</CardTitle>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setShowRawPreview((s) => !s)}>
+                {showRawPreview ? "Ver formatado" : "Ver raw"}
+              </Button>
+              <Button variant="outline" size="sm" onClick={handleCopyBody}>Copiar</Button>
+              <Button size="sm" onClick={handleOpenMailClient}>Abrir</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Subject displayed separately for clarity */}
+            <div className="mb-4">
+              <div className="text-xs text-muted-foreground">Assunto</div>
+              <div className="font-semibold">{subject}</div>
+            </div>
+
+            {showRawPreview ? (
+              <Textarea readOnly value={buildEmailBody()} rows={12} />
+            ) : (
+              <div className="space-y-4">
+                {getEmailSections().map((section, idx) => (
+                  <div key={idx} className="bg-background/40 p-3 rounded">
+                    {/* preserve paragraphs inside section */}
+                    {section.split("\n").map((line, li) => (
+                      <p key={li} className={line.trim() === "" ? "my-2" : "text-sm leading-relaxed"}>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                ))}
+
+                {/* Signature / sender block */}
+                <div className="pt-2 border-t">
+                  <div className="text-xs text-muted-foreground mb-1">Assinatura</div>
+                  <div className="text-sm">
+                    <div className="font-medium">{vendedor || "[Vendedor]"}</div>
+                    {empresa && <div className="text-muted-foreground text-xs">{empresa}</div>}
+                    {empresaEmail && <div className="text-muted-foreground text-xs">{empresaEmail}</div>}
+                    {empresaPhone && <div className="text-muted-foreground text-xs">{empresaPhone}</div>}
+                  </div>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
