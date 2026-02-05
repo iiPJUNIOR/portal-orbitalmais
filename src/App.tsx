@@ -8,7 +8,6 @@ import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
 import TokenScanner from "./pages/TokenScanner";
-import DocxMapper from "./pages/DocxMapper";
 import Login from "./pages/Login";
 import AuthStatus from "./pages/AuthStatus";
 import ResetPassword from "./pages/ResetPassword";
@@ -96,7 +95,6 @@ const AppContent = () => {
                     <Route path="/history" element={<Index />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/token-scan" element={<TokenScanner />} />
-                    <Route path="/docx-mapper" element={<DocxMapper />} />
                     <Route path="/drafts" element={<DraftsPage />} />
                     <Route path="/wizard" element={<WizardPage />} />
                     <Route path="/solicitar-vistoria" element={<SolicitarVistoria />} />
