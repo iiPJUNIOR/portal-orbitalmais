@@ -1,142 +1,3 @@
-import { Toaster } from "@/components/ui/toaster";
-import { Toaster as Sonner } from "@/components/ui/sonner";
-import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route, useNavigate } from "react-router-dom";
-import React, { useEffect } from "react";
-import Index from "./pages/Index";
-import NotFound from "./pages/NotFound";
-import Settings from "./pages/Settings";
-import TokenScanner from "./pages/TokenScanner";
-import DocxTokenScanner from "./pages/DocxTokenScanner";
-import Login from "./pages/Login";
-import AuthStatus from "./pages/AuthStatus";
-import ResetPassword from "./pages/ResetPassword";
-import { SessionProvider, useSession } from "@/contexts/SessionProvider";
-import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/AppSidebar";
-import ThemeToggle from "@/components/ThemeToggle";
-import { getUserSettings } from "@/services/settingsService";
-import DraftsPage from "@/pages/Drafts";
-import WizardPage from "@/pages/WizardPage";
-import SolicitarVistoria from "@/pages/SolicitarVistoria";
-
-const queryClient = new QueryClient();
-
-const AppContent = () => {
-  const { user } = useSession();
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const applyFontSize = async () => {
-      try {
-        const s = await getUserSettings();
-        const size = s?.font_size || "medium";
-        const html = document.documentElement;
-
-        html.classList.remove("font-small", "font-medium", "font-large", "font-extra-large");
-        html.classList.add(`font-${size}`);
-      } catch (err) {
-        console.warn("Falha ao aplicar tamanho de fonte", err);
-      }
-    };
-
-    if (user) {
-      applyFontSize();
-    }
-
-    window.addEventListener("user_settings_changed", applyFontSize);
-    return () => window.removeEventListener("user_settings_changed", applyFontSize);
-  }, [user]);
-
-  // helper to open absolute url in new tab
-  const openInNewTab = (path: string) => {
-    const origin = window.location.origin;
-    const url = origin + path;
-    window.open(url, "_blank", "noopener,noreferrer");
-  };
-
-  return (
-    <Routes>
-      <Route path="/login" element={<Login />} />
-      <Route path="/auth-status" element={<AuthStatus />} />
-      <Route path="/reset-password" element={<ResetPassword />} />
-      <Route
-        path="/*"
-        element={
-          <div className="flex h-screen w-full bg-background overflow-hidden">
-            <AppSidebar />
-            <div className="flex-1 flex flex-col min-w-0">
-              <header className="h-14 flex items-center px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 sticky top-0 z-40">
-                <SidebarTrigger className="-ml-1" />
-                <div className="h-4 w-[1px] bg-border mx-4" />
-
-                <button
-                  onClick={() => navigate("/")}
-                  onAuxClick={(e: any) => {
-                    if (e?.button === 1) {
-                      e.preventDefault();
-                      openInNewTab("/");
-                    }
-                  }}
-                  className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 hover:text-primary transition-colors bg-transparent border-none p-0"
-                >
-                  Gerador de Propostas Control iD
-                </button>
-
-                <div className="ml-auto flex items-center gap-4">
-                  <ThemeToggle />
-                </div>
-              </header>
-
-              <main className="flex-1 overflow-auto bg-muted/20 dark:bg-background">
-                <div className="min-h-full">
-                  <Routes>
-                    <Route path="/" element={<Index />} />
-                    <Route path="/history" element={<Index />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/token-scan" element={<TokenScanner />} />
-                    <Route path="/docx-token-scan" element={<DocxTokenScanner />} />
-                    <Route path="/drafts" element={<DraftsPage />} />
-                    <Route path="/wizard" element={<WizardPage />} />
-                    <Route path="/solicitar-vistoria" element={<SolicitarVistoria />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Routes>
-                </div>
-              </main>
-            </div>
-          </div>
-        }
-      />
-    </Routes>
-  );
-};
-
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <SessionProvider>
-          <SidebarProvider>
-            <AppContent />
-          </SidebarProvider>
-        </SessionProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
-
-export default App;
-
-Resumo: Copiei a ferramenta de mapeamento do PPTX para criar uma página idêntica para DOCX (rota /docx-token-scan) que escaneia tokens DOCX e salva mapeamentos em localStorage como "docx_token_map". 
-
-<dyad-chat-summary>Adicionar scanner/mapeador DOCX</dyad-chat-summary>Certo — o problema é que o scanner DOCX que eu adicionei estava salvando o mapeamento em localStorage (docx_token_map), enquanto a geração do DOCX (SolicitarVistoria) lê os mapeamentos via getUserSettings/saveUserSettings (user_settings.docx_mappings). Vou alinhar isso: vou atualizar a página DocxTokenScanner para carregar os mapeamentos iniciais através de getUserSettings e salvar via saveUserSettings, garantindo que o mapeamento que você edita na UI seja efetivamente usado ao gerar o DOCX.
-
-Farei apenas essa alteração no scanner DOCX agora.
-
-<dyad-write path="src/pages/DocxTokenScanner.tsx" description="DOCX token scanner UI that loads/saves mappings via getUserSettings/saveUserSettings so SolicitarVistoria can use them.">
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
@@ -145,10 +6,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { getUserSettings, saveUserSettings } from "@/services/settingsService";
 
 /**
- * Replacement keys we expect to populate in DOCX templates (same as PPTX scanner).
+ * Replacement keys we expect to populate in DOCX templates (use same keys as PPTX scanner to keep format).
  */
 const KEYS = [
   "companyName",
@@ -174,39 +34,33 @@ const KEYS = [
 
 function normalizeForMatch(s?: string) {
   if (!s) return "";
+  // remove braces, punctuation we don't care about, lower case, remove accents
   const noBraces = s.replace(/[{}]/g, "");
   const lower = noBraces.toLowerCase();
   const noAccents = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  // keep only letters and numbers for robust substring checks
   return noAccents.replace(/[^a-z0-9]/g, "");
 }
 
 export default function DocxTokenScannerPage() {
   const [found, setFound] = useState<Array<{ text: string; count: number }>>([]);
   const [loading, setLoading] = useState(false);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
-  const autoMappedRef = useRef(false);
+  const [mapping, setMapping] = useState<Record<string, string>>(() => {
+    try {
+      const raw = localStorage.getItem("docx_token_map");
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
 
-  // Load initial mapping from user settings (or local fallback inside that function)
-  useEffect(() => {
-    (async () => {
-      try {
-        const s = await getUserSettings();
-        if (s && s.docx_mappings && typeof s.docx_mappings === "object") {
-          setMapping(s.docx_mappings as Record<string, string>);
-        } else {
-          setMapping({});
-        }
-      } catch (err) {
-        console.warn("DocxTokenScanner: failed to load user settings mapping", err);
-        setMapping({});
-      }
-    })();
-  }, []);
+  const autoMappedRef = useRef(false);
 
   const runScan = async () => {
     setLoading(true);
     try {
       const tokens = await scanDocxTemplate();
+      // convert to same shape as PPTX scanner: distinct tokens with count 1
       const arr = Array.from(new Set(tokens || [])).map((t) => ({ text: t, count: 1 }));
       setFound(arr);
     } catch (err: any) {
@@ -223,8 +77,7 @@ export default function DocxTokenScannerPage() {
     })();
   }, []);
 
-  // Automatic mapping (runs once) using same heuristics as PPTX scanner,
-  // but we persist mapped results to user settings (docx_mappings).
+  // Automatic mapping (runs once) -- same heuristics as PPTX scanner
   useEffect(() => {
     if (found.length === 0) return;
     if (autoMappedRef.current) return;
@@ -236,15 +89,19 @@ export default function DocxTokenScannerPage() {
       count: f.count,
     }));
 
+    // helper to find best match for a key
     function findMatchForKey(key: string): string | undefined {
       const keyNorm = normalizeForMatch(key);
 
+      // direct exact match (normalized)
       let match = foundByNormalized.find((f) => f.normalized === keyNorm);
       if (match) return match.raw;
 
+      // substring match where found contains key
       match = foundByNormalized.find((f) => f.normalized.includes(keyNorm));
       if (match) return match.raw;
 
+      // special heuristics for common synonyms / Portuguese words
       if (keyNorm.startsWith("items") || keyNorm.includes("descri") || keyNorm.includes("item")) {
         match = foundByNormalized.find((f) => f.normalized.includes("item") || f.normalized.includes("descri") || f.normalized.includes("descr"));
         if (match) return match.raw;
@@ -275,6 +132,7 @@ export default function DocxTokenScannerPage() {
         if (match) return match.raw;
       }
 
+      // fallback: pick the most frequent short text (likely a label)
       const shortCandidates = foundByNormalized.filter((f) => f.raw.length < 40).sort((a, b) => b.count - a.count);
       if (shortCandidates.length > 0) return shortCandidates[0].raw;
 
@@ -285,7 +143,7 @@ export default function DocxTokenScannerPage() {
     const newMapping = { ...existing };
 
     for (const key of KEYS) {
-      if (newMapping[key]) continue;
+      if (newMapping[key]) continue; // don't overwrite manual mapping
       const matched = findMatchForKey(key);
       if (matched) {
         newMapping[key] = matched;
@@ -295,15 +153,12 @@ export default function DocxTokenScannerPage() {
 
     if (anyMapped) {
       setMapping(newMapping);
-      (async () => {
-        try {
-          await saveUserSettings({ docx_mappings: newMapping });
-          toast.success("Mapeamento automático aplicado (você pode ajustar manualmente)");
-        } catch (err) {
-          console.warn("DocxTokenScanner: failed to persist automatic mapping", err);
-          // still keep mapping in UI
-        }
-      })();
+      try {
+        localStorage.setItem("docx_token_map", JSON.stringify(newMapping));
+        toast.success("Mapeamento automático aplicado (você pode ajustar manualmente)");
+      } catch (err) {
+        console.warn("failed to save automatic mapping", err);
+      }
     } else {
       console.debug("DocxTokenScanner: no automatic mapping candidates found");
     }
@@ -312,10 +167,10 @@ export default function DocxTokenScannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [found]);
 
-  const saveMapping = async () => {
+  const saveMapping = () => {
     try {
-      await saveUserSettings({ docx_mappings: mapping });
-      toast.success("Mapeamento salvo (docx_mappings)");
+      localStorage.setItem("docx_token_map", JSON.stringify(mapping));
+      toast.success("Mapeamento salvo em localStorage (docx_token_map)");
     } catch (err) {
       console.error("save mapping failed", err);
       toast.error("Falha ao salvar mapeamento");
@@ -324,16 +179,15 @@ export default function DocxTokenScannerPage() {
 
   const handleClearScannerCache = async () => {
     try {
-      // Clear persisted mapping (user settings fallback will remove remote row or local fallback)
-      await saveUserSettings({ docx_mappings: {} });
+      localStorage.removeItem("docx_token_map");
       setMapping({});
       autoMappedRef.current = false;
       setFound([]);
-      toast.success("Mapeamento DOCX limpo em user settings. Reescaneando...");
+      toast.success("Cache do scanner DOCX limpo (docx_token_map removido). Reescaneando...");
       await runScan();
     } catch (err) {
       console.error("failed to clear scanner cache", err);
-      toast.error("Falha ao limpar mapeamento DOCX");
+      toast.error("Falha ao limpar cache do scanner");
     }
   };
 
@@ -356,7 +210,7 @@ export default function DocxTokenScannerPage() {
             </Button>
 
             <Button variant="outline" onClick={handleClearScannerCache}>
-              Limpar mapeamento
+              Limpar cache do scanner
             </Button>
           </div>
         </div>
@@ -416,7 +270,7 @@ export default function DocxTokenScannerPage() {
 
           <div className="space-y-4">
             <div className="bg-white p-4 rounded border">
-              <h3 className="font-semibold mb-2">Mapeamento (salvo em user settings)</h3>
+              <h3 className="font-semibold mb-2">Mapeamento (salvo em localStorage)</h3>
               <p className="text-sm text-muted-foreground mb-2">Escolha o texto exato do template que representa cada campo ou cole um texto personalizado.</p>
 
               <div className="space-y-2">
