@@ -48,7 +48,7 @@ export default function SolicitarVistoria() {
   // Track last fetched CEP to avoid repeated requests
   const lastFetchedCepRef = useRef<string | null>(null);
 
-  // Prefill seller info from user settings (non-destructive)
+  // Prefill seller info from user settings
   useEffect(() => {
     (async () => {
       try {
@@ -64,20 +64,29 @@ export default function SolicitarVistoria() {
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
-  // Helper: compose a full address for legacy template fields
-  function composeFullAddress(breakLines = false) {
+  // Helper: compose a full single-line address: Street, Number - Neighborhood - City/UF - CEP: 00000-000
+  function composeFullAddress() {
     const parts: string[] = [];
-    if (rua) {
-      let r = rua;
-      if (numero) r += `, ${numero}`;
-      if (complemento) r += ` ${complemento}`;
-      parts.push(r);
-    }
-    if (bairro) parts.push(bairro);
-    if (cidade || uf) parts.push([cidade, uf].filter(Boolean).join("/"));
-    if (cep) parts.push(cep);
     
-    return parts.filter(Boolean).join(breakLines ? "\n" : " - ");
+    // 1. Street and Number
+    if (rua) {
+      let main = rua;
+      if (numero) main += `, ${numero}`;
+      if (complemento) main += ` ${complemento}`;
+      parts.push(main);
+    }
+    
+    // 2. Neighborhood
+    if (bairro) parts.push(bairro);
+    
+    // 3. City/UF
+    const cityState = [cidade, uf].filter(Boolean).join("/");
+    if (cityState) parts.push(cityState);
+    
+    // 4. CEP
+    if (cep) parts.push(`CEP: ${cep}`);
+    
+    return parts.filter(Boolean).join(" - ");
   }
 
   const buildEmailBody = () => {
@@ -90,15 +99,9 @@ export default function SolicitarVistoria() {
     if (cnpj) lines.push(`• CNPJ: ${cnpj}`);
     if (contatoNome) lines.push(`• Contato: ${contatoNome}${contatoTelefone ? ` (${contatoTelefone})` : ""}`);
     
-    const parts = [];
-    if (rua) parts.push(`${rua}${numero ? `, ${numero}` : ""}${complemento ? ` (${complemento})` : ""}`);
-    if (bairro) parts.push(bairro);
-    const cityState = [cidade, uf].filter(Boolean).join("/");
-    if (cityState) parts.push(cityState);
-    if (cep) parts.push(`CEP: ${cep}`);
-    const addr = parts.join(" - ");
-    
+    const addr = composeFullAddress();
     if (addr) lines.push(`• Endereço: ${addr}`);
+    
     if (produto) lines.push(`• Produto/Solicitação: ${produto}${quantidade ? ` (${quantidade} un)` : ""}`);
     if (observacoes) lines.push(`\nObservações: ${observacoes}`);
 
@@ -111,7 +114,6 @@ export default function SolicitarVistoria() {
 
   /**
    * Robust healing of fragmented tokens in docx XML.
-   * Scans each <w:p> and joins text content into a single <w:t> node.
    */
   function healDocxTokens(xml: string): string {
     if (!xml) return xml;
@@ -144,19 +146,17 @@ export default function SolicitarVistoria() {
     const toastId = showLoading("Gerando documento...");
     try {
       const res = await fetch(encodeURI("/Solicitação de vistoria.docx"));
-      if (!res.ok) throw new Error("Template DOCX não encontrado no servidor.");
+      if (!res.ok) throw new Error("Template DOCX não encontrado.");
       const arrayBuffer = await res.arrayBuffer();
       
-      // PizZip works synchronously with binary data
+      // PizZip works synchronously
       const zip = new PizZip(arrayBuffer);
 
-      // Clean multiple XML files in the docx where tags might reside
       const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"];
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
         if (file) {
-          // PizZip .file(name).asText() is synchronous
-          const content = file.asText();
+          const content = file.asText(); // Corrected synchronous method
           zip.file(fileName, healDocxTokens(content));
         }
       }
@@ -167,7 +167,7 @@ export default function SolicitarVistoria() {
         delimiters: { start: "{{", end: "}}" }
       });
 
-      // Prepare data for DOCX with the requested \n before labels to match user template
+      // Prepare data for DOCX with the requested \n after labels
       const docxData = {
         vendedor: vendedor ? `\n${vendedor}` : "",
         empresa: empresa ? `\n${empresa}` : "",
@@ -183,7 +183,7 @@ export default function SolicitarVistoria() {
         bairro: bairro ? `\n${bairro}` : "",
         cidade: cidade ? `\n${cidade}` : "",
         uf: uf ? `\n${uf}` : "",
-        endereco: `\n${composeFullAddress(true)}`,
+        endereco: `\n${composeFullAddress()}`,
         quantidade: quantidade ? `\n${quantidade}` : "",
         produto: produto ? `\n${produto}` : "",
         observacoes: observacoes ? `\n${observacoes}` : "",
