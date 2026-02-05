@@ -54,157 +54,30 @@ export default function SolicitarVistoria() {
   // Helper: produce a nicely formatted address for email / docx
   function formatAddressNice(raw: string) {
     if (!raw) return "";
-
-    // Normalize whitespace and common separators
+    // Normalize whitespace
     let s = String(raw).trim().replace(/\s+/g, " ");
-    // Replace various separators with comma to help splitting
-    s = s.replace(/\s*-\s*/g, ", ").replace(/\s*\/\s*/g, ", ").replace(/\s*;\s*/g, ", ");
-
-    // Extract CEP if present (xxxxx-xxx or xxxxxxxx)
-    let cep = "";
-    const cepMatch = s.match(/(\d{5}-\d{3}|\d{8})/);
-    if (cepMatch) {
-      cep = cepMatch[1];
-      s = s.replace(cepMatch[0], "").replace(/\s*,\s*,/g, ",").trim();
+    // If the address already contains commas, split and present on separate lines
+    if (s.includes(",")) {
+      const parts = s.split(",").map(p => p.trim()).filter(Boolean);
+      // If parts include postal code at the end, keep as is; join smaller groups into lines
+      // Prefer a multi-line representation for readability
+      return parts.join("\n");
     }
-
-    // Try to extract city and UF patterns at the end like "Cidade - UF" or "Cidade, UF" or "Cidade/UF"
-    let city = "";
-    let uf = "";
-    const cityUfMatch = s.match(/,\s*([^,]+?)\s*[, ]+\s*([A-Za-z]{2})$/);
-    if (cityUfMatch) {
-      city = cityUfMatch[1].trim();
-      uf = cityUfMatch[2].trim().toUpperCase();
-      s = s.replace(cityUfMatch[0], "").trim();
-    } else {
-      // alternative pattern: "Cidade - UF"
-      const altMatch = s.match(/([^,-]+?)\s*[-\/]\s*([A-Za-z]{2})$/);
-      if (altMatch) {
-        city = altMatch[1].trim();
-        uf = altMatch[2].trim().toUpperCase();
-        s = s.replace(altMatch[0], "").trim();
-      }
+    // If no commas, attempt to split on dashes or multiple spaces
+    if (s.includes(" - ")) {
+      return s.split(" - ").map(p => p.trim()).join("\n");
     }
-
-    // Split into parts by commas and trim
-    const parts = s.split(",").map(p => p.trim()).filter(Boolean);
-
-    // Identify street line (first part that contains letters) and try to parse type/name/number
-    const streetTypes = [
-      "rua", "r\\.?","avenida", "av\\.?","alameda","travessa","tv\\.?","trav\\.?","praça","praca","rodovia","estrada","estr\\.?","largo"
-    ];
-    const streetTypeRegex = new RegExp(`^(${streetTypes.join("|")})\\b`, "i");
-
-    let streetLine = "";
-    let number = "";
-    let complement = "";
-    let neighborhood = "";
-
-    // If first part looks like street, parse it; otherwise try to find a part that looks like street
-    let candidateIndex = -1;
-    for (let i = 0; i < parts.length; i++) {
-      if (streetTypeRegex.test(parts[i].toLowerCase()) || /\d+/.test(parts[i])) {
-        candidateIndex = i;
-        break;
-      }
+    // Fallback: try to chunk into logical pieces (street + rest)
+    // Split by numbers (house number)
+    const m = s.match(/(.+?\d+\b)(.*)/);
+    if (m) {
+      const left = m[1].trim();
+      const right = (m[2] || "").trim();
+      if (right) return `${left}\n${right}`;
+      return left;
     }
-    if (candidateIndex === -1 && parts.length > 0) candidateIndex = 0;
-
-    if (candidateIndex !== -1) {
-      const cand = parts[candidateIndex];
-      // Try to extract type (rua/avenida/etc), name and number
-      const m = cand.match(/^((?:(?:[Rr]ua|R\.|[Aa]venida|Av\.?|[Aa]lameda|[Tt]ravessa|[Tt]v\.?|[Pp]raça|[Pp]raca|[Rr]odovia|[Ee]strada|[Ll]argo)\b)[\s.:,-]*)?(.*)$/);
-      let typePart = "";
-      let rest = cand;
-      if (m) {
-        typePart = (m[1] || "").trim();
-        rest = (m[2] || "").trim();
-      }
-
-      // Now try to pull number from rest (e.g., "General Osório 123 Apto 12")
-      const numMatch = rest.match(/(.*?)\b(\d{1,5}[A-Za-z\-]?)\b(.*)$/);
-      if (numMatch) {
-        const namePart = numMatch[1].trim();
-        number = numMatch[2].trim();
-        const afterNum = numMatch[3].trim();
-        streetLine = `${typePart ? capitalize(typePart) + " " : ""}${capitalizeWords(namePart)}`;
-        if (number) streetLine = `${streetLine}, ${number}`;
-        if (afterNum) complement = capitalizeWords(afterNum);
-      } else {
-        // No explicit number found
-        streetLine = `${typePart ? capitalize(typePart) + " " : ""}${capitalizeWords(rest)}`;
-      }
-
-      // Neighborhood may be next part (if exists)
-      if (parts.length > candidateIndex + 1) {
-        // prefer parts that are short and not city/uf
-        const next = parts[candidateIndex + 1];
-        if (next && next.length < 40 && !/^\d{1,5}/.test(next) && !/^[A-Za-z\s]+,\s*[A-Za-z]{2}$/.test(next)) {
-          neighborhood = capitalizeWords(next);
-        }
-      }
-
-      // Complement may also be in following parts (contains apt/andar/bloco)
-      for (let j = candidateIndex + 1; j < parts.length; j++) {
-        const p = parts[j];
-        if (/(apto|apto\.|apartamento|bloco|sala|andar|complemento|complemento:|cj|conjunto)/i.test(p)) {
-          complement = complement ? `${complement} • ${capitalizeWords(p)}` : capitalizeWords(p);
-        } else if (!neighborhood) {
-          // small heuristic: if short and doesn't look like city, use as neighborhood
-          if (p.length < 40 && !/^[A-Za-z\s]+,\s*[A-Za-z]{2}$/.test(p)) {
-            neighborhood = capitalizeWords(p);
-          } else {
-            // otherwise append to complement
-            complement = complement ? `${complement} • ${capitalizeWords(p)}` : capitalizeWords(p);
-          }
-        } else {
-          // append to complement
-          complement = complement ? `${complement} • ${capitalizeWords(p)}` : capitalizeWords(p);
-        }
-      }
-    }
-
-    // If we still have no streetLine but parts length > 0, use first part as streetLine
-    if (!streetLine && parts.length > 0) {
-      streetLine = capitalizeWords(parts[0]);
-      if (parts.length > 1) complement = capitalizeWords(parts.slice(1).join(", "));
-    }
-
-    // Build pretty multiline output
-    const lines: string[] = [];
-    if (streetLine) lines.push(streetLine);
-    if (complement) lines.push(complement);
-    if (neighborhood) lines.push(neighborhood);
-
-    const cityUf = [city, uf].filter(Boolean).join(city && uf ? " / " : "");
-    if (cityUf) lines.push(cityUf);
-    if (cep) lines.push(cep);
-
-    // If nothing useful was extracted, fall back to the raw input
-    if (lines.length === 0) return capitalizeWords(raw);
-
-    return lines.join("\n");
-  }
-
-  // small helpers
-  function capitalize(str: string) {
-    if (!str) return "";
-    const s = str.replace(/\.$/, "");
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }
-
-  function capitalizeWords(input: string) {
-    return input
-      .split(/\s+/)
-      .map((w) => {
-        if (w.length === 0) return "";
-        // keep case for common abbreviations like 'R.' or 'Av.'
-        if (/^[A-Za-z]\.$/.test(w)) return w.toUpperCase();
-        return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
-      })
-      .join(" ")
-      .replace(/\s+,/g, ",")
-      .trim();
+    // Last resort: return as single line
+    return s;
   }
 
   const buildEmailBody = () => {
