@@ -51,8 +51,95 @@ export default function SolicitarVistoria() {
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
+  // Helper: produce a nicely formatted address for email / docx
+  function formatAddressNice(raw: string) {
+    if (!raw) return "";
+    // Normalize whitespace
+    let s = String(raw).trim().replace(/\s+/g, " ");
+    // If the address already contains commas, split and present on separate lines
+    if (s.includes(",")) {
+      const parts = s.split(",").map(p => p.trim()).filter(Boolean);
+      // If parts include postal code at the end, keep as is; join smaller groups into lines
+      // Prefer a multi-line representation for readability
+      return parts.join("\n");
+    }
+    // If no commas, attempt to split on dashes or multiple spaces
+    if (s.includes(" - ")) {
+      return s.split(" - ").map(p => p.trim()).join("\n");
+    }
+    // Fallback: try to chunk into logical pieces (street + rest)
+    // Split by numbers (house number)
+    const m = s.match(/(.+?\d+\b)(.*)/);
+    if (m) {
+      const left = m[1].trim();
+      const right = (m[2] || "").trim();
+      if (right) return `${left}\n${right}`;
+      return left;
+    }
+    // Last resort: return as single line
+    return s;
+  }
+
   const buildEmailBody = () => {
-    return `Olá Evelem,\n\nPoderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n\nVendedor responsável:\n${vendedor || "NOME_DO_VENDEDOR"}\n\nEmpresa:\n${empresa || "NOME_DA_EMPRESA"}\n\nCNPJ:\n${cnpj || ""}\n\nTelefone da empresa:\n${empresaPhone || ""}\n\nE-mail da empresa:\n${empresaEmail || ""}\n\nContato responsável:\n\nNome: ${contatoNome || ""}\n\nTelefone: ${contatoTelefone || ""}\n\nEndereço para vistoria:\n${endereco || ""}\n\nNecessidade do cliente / Produto:\n\nQuantidade: ${quantidade || ""}\n\nProduto: ${produto || ""}\n\nObservações:\n\n${observacoes || ""}\n\nAgradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n\nAtenciosamente,\n\n${vendedor || ""}`;
+    const lines: string[] = [];
+
+    lines.push(`Olá Evelem,\n`);
+    lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n`);
+
+    // Vendedor
+    if (vendedor) {
+      lines.push(`Vendedor responsável:\n${vendedor}\n`);
+    }
+
+    // Empresa block (include only fields that exist)
+    if (empresa || cnpj || empresaPhone || empresaEmail) {
+      lines.push(`Empresa:`);
+      if (empresa) lines.push(`${empresa}`);
+      if (cnpj) lines.push(`CNPJ: ${cnpj}`);
+      if (empresaPhone) lines.push(`Telefone: ${empresaPhone}`);
+      if (empresaEmail) lines.push(`E-mail: ${empresaEmail}`);
+      lines.push(""); // empty line
+    }
+
+    // Contato responsável block — show only if at least one exists
+    if (contatoNome || contatoTelefone) {
+      lines.push(`Contato responsável:`);
+      if (contatoNome) lines.push(`Nome: ${contatoNome}`);
+      if (contatoTelefone) lines.push(`Telefone: ${contatoTelefone}`);
+      lines.push("");
+    }
+
+    // Endereço bem arrumadinho
+    if (endereco) {
+      const pretty = formatAddressNice(endereco);
+      lines.push(`Endereço para vistoria:`);
+      lines.push(pretty);
+      lines.push("");
+    }
+
+    // Produto e quantidade (quantidade vem depois do produto)
+    if (produto) {
+      lines.push(`Produto:\n${produto}`);
+      if (quantidade) {
+        lines.push(`Quantidade: ${quantidade}`);
+      }
+      lines.push("");
+    } else if (quantidade) {
+      // If product missing but quantity present, still show quantity
+      lines.push(`Quantidade: ${quantidade}`);
+      lines.push("");
+    }
+
+    // Observações — only show when provided (non-empty after trimming)
+    if (observacoes && String(observacoes).trim().length > 0) {
+      lines.push(`Observações:\n${observacoes}`);
+      lines.push("");
+    }
+
+    lines.push(`Agradeço desde já o suporte e fico à disposição para qualquer esclarecimento adicional.\n`);
+    lines.push(`Atenciosamente,\n${vendedor || ""}`);
+
+    return lines.filter(Boolean).join("\n");
   };
 
   const handleCopyBody = async () => {
@@ -94,6 +181,9 @@ export default function SolicitarVistoria() {
       const zip = new PizZip(arrayBuffer);
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
+      // Prepare a nicely formatted address for the DOCX as well
+      const prettyAddress = formatAddressNice(endereco);
+
       // map template variables - ensure your DOCX template has matching tags, for example: {{vendedor}}, {{empresa}}, etc.
       const data = {
         vendedor,
@@ -103,7 +193,7 @@ export default function SolicitarVistoria() {
         empresa_email: empresaEmail,
         contato_nome: contatoNome,
         contato_telefone: contatoTelefone,
-        endereco,
+        endereco: prettyAddress,
         quantidade,
         produto,
         observacoes,
