@@ -12,37 +12,45 @@ import { saveAs } from "file-saver";
 import { getUserSettings } from "@/services/settingsService";
 
 export default function SolicitarVistoria() {
-  // Removed destinatario and cc states as requested
+  // Seller / contact info
   const [vendedor, setVendedor] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
   const [empresaPhone, setEmpresaPhone] = useState("");
   const [contatoNome, setContatoNome] = useState("");
   const [contatoTelefone, setContatoTelefone] = useState("");
-  const [endereco, setEndereco] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [produto, setProduto] = useState("");
   const [observacoes, setObservacoes] = useState("");
   const [loadingDoc, setLoadingDoc] = useState(false);
 
+  // Address split fields
+  const [cep, setCep] = useState("");
+  const [rua, setRua] = useState("");
+  const [numero, setNumero] = useState("");
+  const [complemento, setComplemento] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [cidade, setCidade] = useState("");
+  const [uf, setUf] = useState("");
+
   // CNPJ related
   const [cnpj, setCnpj] = useState("");
   const [fetchingCnpj, setFetchingCnpj] = useState(false);
   const lastFetchedCnpj = useRef<string | null>(null);
-  const debounceRef = useRef<number | null>(null);
 
-  // On mount: try to prefill seller info from user settings (if present).
+  // Debounce refs
+  const debounceCepRef = useRef<number | null>(null);
+  const debounceCnpjRef = useRef<number | null>(null);
+
+  // Prefill seller info from user settings (non-destructive)
   useEffect(() => {
     (async () => {
       try {
         const s = await getUserSettings();
         if (!s) return;
-        // Only set fields when they're currently empty so the user can override later
         if (!vendedor && s.seller_name) setVendedor(s.seller_name);
-        // NOTE: empresaEmail is client email and should NOT be prefilled with seller email
-        // NOTE: contatoTelefone is client contact and should NOT be prefilled with seller phone
       } catch (err) {
-        // non-blocking; keep form blank if fetch fails
+        // non-blocking
         console.warn("SolicitarVistoria: falha ao obter seller settings", err);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -51,33 +59,37 @@ export default function SolicitarVistoria() {
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
-  // Helper: produce a nicely formatted address for email / docx
-  function formatAddressNice(raw: string) {
-    if (!raw) return "";
-    // Normalize whitespace
-    let s = String(raw).trim().replace(/\s+/g, " ");
-    // If the address already contains commas, split and present on separate lines
-    if (s.includes(",")) {
-      const parts = s.split(",").map(p => p.trim()).filter(Boolean);
-      // If parts include postal code at the end, keep as is; join smaller groups into lines
-      // Prefer a multi-line representation for readability
-      return parts.join("\n");
+  // Helper: compose a full address for previews and legacy template fields
+  function composeFullAddress() {
+    const parts: string[] = [];
+    if (rua) {
+      let r = rua;
+      if (numero) r += `, ${numero}`;
+      if (complemento) r += ` ${complemento}`;
+      parts.push(r);
     }
-    // If no commas, attempt to split on dashes or multiple spaces
-    if (s.includes(" - ")) {
-      return s.split(" - ").map(p => p.trim()).join("\n");
+    if (bairro) parts.push(bairro);
+    if (cidade || uf) parts.push([cidade, uf].filter(Boolean).join("/"));
+    if (cep) parts.push(cep);
+    return parts.filter(Boolean).join(" - ");
+  }
+
+  // Build a nicely formatted address for email / docx
+  function formatAddressNiceFromFields() {
+    const lines: string[] = [];
+    if (rua) {
+      let line = rua;
+      if (numero) line += `, ${numero}`;
+      if (complemento) line += ` ${complemento}`;
+      lines.push(line);
     }
-    // Fallback: try to chunk into logical pieces (street + rest)
-    // Split by numbers (house number)
-    const m = s.match(/(.+?\d+\b)(.*)/);
-    if (m) {
-      const left = m[1].trim();
-      const right = (m[2] || "").trim();
-      if (right) return `${left}\n${right}`;
-      return left;
-    }
-    // Last resort: return as single line
-    return s;
+    const cityLineParts: string[] = [];
+    if (bairro) cityLineParts.push(bairro);
+    if (cidade) cityLineParts.push(cidade);
+    if (uf) cityLineParts.push(uf);
+    if (cityLineParts.length) lines.push(cityLineParts.join(" - "));
+    if (cep) lines.push(`CEP: ${cep}`);
+    return lines.join("\n");
   }
 
   const buildEmailBody = () => {
@@ -86,22 +98,19 @@ export default function SolicitarVistoria() {
     lines.push(`Olá Evelem,\n`);
     lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "NOME_DA_EMPRESA"}, conforme informações abaixo.\n`);
 
-    // Vendedor
     if (vendedor) {
       lines.push(`Vendedor responsável:\n${vendedor}\n`);
     }
 
-    // Empresa block (include only fields that exist)
     if (empresa || cnpj || empresaPhone || empresaEmail) {
       lines.push(`Empresa:`);
       if (empresa) lines.push(`${empresa}`);
       if (cnpj) lines.push(`CNPJ: ${cnpj}`);
       if (empresaPhone) lines.push(`Telefone: ${empresaPhone}`);
       if (empresaEmail) lines.push(`E-mail: ${empresaEmail}`);
-      lines.push(""); // empty line
+      lines.push("");
     }
 
-    // Contato responsável block — show only if at least one exists
     if (contatoNome || contatoTelefone) {
       lines.push(`Contato responsável:`);
       if (contatoNome) lines.push(`Nome: ${contatoNome}`);
@@ -109,15 +118,12 @@ export default function SolicitarVistoria() {
       lines.push("");
     }
 
-    // Endereço bem arrumadinho
-    if (endereco) {
-      const pretty = formatAddressNice(endereco);
+    if (rua || numero || bairro || cidade || uf || cep) {
       lines.push(`Endereço para vistoria:`);
-      lines.push(pretty);
+      lines.push(formatAddressNiceFromFields());
       lines.push("");
     }
 
-    // Produto e quantidade (quantidade vem depois do produto)
     if (produto) {
       lines.push(`Produto:\n${produto}`);
       if (quantidade) {
@@ -125,12 +131,10 @@ export default function SolicitarVistoria() {
       }
       lines.push("");
     } else if (quantidade) {
-      // If product missing but quantity present, still show quantity
       lines.push(`Quantidade: ${quantidade}`);
       lines.push("");
     }
 
-    // Observações — only show when provided (non-empty after trimming)
     if (observacoes && String(observacoes).trim().length > 0) {
       lines.push(`Observações:\n${observacoes}`);
       lines.push("");
@@ -152,16 +156,11 @@ export default function SolicitarVistoria() {
     }
   };
 
-  // Open mail client without prefilled 'to' or 'cc' per request
   const handleOpenMailClient = () => {
     try {
       const subjectEnc = encodeURIComponent(subject);
       const bodyEnc = encodeURIComponent(buildEmailBody());
-
-      // No recipient and no CC included here
       const mailto = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
-
-      // open mail client
       window.location.href = mailto;
     } catch (err) {
       console.error(err);
@@ -172,7 +171,6 @@ export default function SolicitarVistoria() {
   const handleGenerateDocx = async () => {
     setLoadingDoc(true);
     try {
-      // Fetch the template from public folder
       const templatePath = encodeURI("/Solicitação de vistoria.docx");
       const res = await fetch(templatePath);
       if (!res.ok) throw new Error("Não foi possível baixar o template DOCX.");
@@ -181,22 +179,28 @@ export default function SolicitarVistoria() {
       const zip = new PizZip(arrayBuffer);
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
 
-      // Prepare a nicely formatted address for the DOCX as well
-      const prettyAddress = formatAddressNice(endereco);
-
-      // map template variables - ensure your DOCX template has matching tags, for example: {{vendedor}}, {{empresa}}, etc.
+      // Data object includes both split fields and legacy 'endereco'
       const data = {
-        vendedor,
-        empresa,
-        cnpj,
-        empresa_phone: empresaPhone,
-        empresa_email: empresaEmail,
-        contato_nome: contatoNome,
-        contato_telefone: contatoTelefone,
-        endereco: prettyAddress,
-        quantidade,
-        produto,
-        observacoes,
+        vendedor: vendedor || "",
+        empresa: empresa || "",
+        cnpj: cnpj || "",
+        empresa_phone: empresaPhone || "",
+        empresa_email: empresaEmail || "",
+        contato_nome: contatoNome || "",
+        contato_telefone: contatoTelefone || "",
+        // split address fields
+        cep: cep || "",
+        rua: rua || "",
+        numero: numero || "",
+        complemento: complemento || "",
+        bairro: bairro || "",
+        cidade: cidade || "",
+        uf: uf || "",
+        // legacy full address field for templates that expect a single variable
+        endereco: composeFullAddress(),
+        quantidade: quantidade || "",
+        produto: produto || "",
+        observacoes: observacoes || "",
       } as any;
 
       doc.render(data);
@@ -229,14 +233,13 @@ export default function SolicitarVistoria() {
     setCnpj(formatted);
   };
 
-  // Phone formatting helper for Brazilian numbers (works on type and paste)
+  // Phone formatting helpers
   function formatPhoneDigits(digits: string) {
-    const d = digits.replace(/\D/g, "").slice(0, 11); // max 11
+    const d = digits.replace(/\D/g, "").slice(0, 11);
     if (d.length === 0) return "";
     if (d.length <= 2) return `(${d}`;
     if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
     if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-    // 11 digits (9xxxx-xxxx)
     return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
   }
 
@@ -252,7 +255,6 @@ export default function SolicitarVistoria() {
     setContatoTelefone(formatPhoneDigits(digits));
   };
 
-  // Paste handlers to normalize pasted phone numbers
   const handlePhonePaste = (setter: (val: string) => void) => async (e: React.ClipboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     const text = e.clipboardData.getData("text").trim();
@@ -260,89 +262,116 @@ export default function SolicitarVistoria() {
     setter(formatPhoneDigits(digits));
   };
 
-  // Build address string from API response
-  function buildAddressFromApi(data: any) {
-    const parts: string[] = [];
-    const street = data.logradouro || data.street || data.address || data.rua || "";
-    const number = data.numero || data.number || data.numero_endereco || "";
-    const complement = data.complemento || data.complement || "";
-    const neighborhood = data.bairro || data.neighborhood || "";
-    const city = data.municipio || data.municipio_nome || data.city || data.nome_cidade || "";
-    const uf = data.uf || data.estado || data.state || "";
-    const cep = data.cep || data.CEP || "";
+  // CEP handling: format as 00000-000 and fetch via ViaCEP when complete (8 digits)
+  const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    let value = e.target.value.replace(/\D/g, "");
+    if (value.length > 8) value = value.substring(0, 8);
 
-    if (street) {
-      const s = `${street}${number ? `, ${number}` : ""}${complement ? ` ${complement}` : ""}`;
-      parts.push(s);
+    let formatted = "";
+    for (let i = 0; i < value.length; i++) {
+      if (i === 5) formatted += "-";
+      formatted += value[i];
     }
-    if (neighborhood) parts.push(neighborhood);
-    if (city || uf) parts.push([city, uf].filter(Boolean).join("/"));
-    if (cep) parts.push(cep);
+    setCep(formatted);
 
-    return parts.filter(Boolean).join(" - ");
+    // debounce fetch
+    if (debounceCepRef.current) {
+      window.clearTimeout(debounceCepRef.current);
+      debounceCepRef.current = null;
+    }
+    if (value.length === 8) {
+      debounceCepRef.current = window.setTimeout(() => {
+        fetchCepData(value);
+        debounceCepRef.current = null;
+      }, 500);
+    } else {
+      // if cleared, clear fetched address parts (but keep numero/complemento)
+      if (value.length === 0) {
+        setRua("");
+        setBairro("");
+        setCidade("");
+        setUf("");
+      }
+    }
+  };
+
+  async function fetchCepData(digits: string) {
+    if (!digits || digits.length !== 8) return;
+    const id = showLoading("Buscando dados do CEP...");
+    try {
+      const url = `https://viacep.com.br/ws/${digits}/json/`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`ViaCEP retornou ${res.status}`);
+      const data = await res.json();
+      if (data.erro) throw new Error("CEP não encontrado");
+      // ViaCEP fields: logradouro, complemento, bairro, localidade, uf
+      setRua(data.logradouro || "");
+      // Do not override numero (it's from CNPJ or manual)
+      if (!complemento && data.complemento) setComplemento(data.complemento);
+      setBairro(data.bairro || "");
+      setCidade(data.localidade || "");
+      setUf(data.uf || "");
+      setCep((c) => {
+        // ensure masked format
+        const d = digits;
+        return `${d.slice(0, 5)}-${d.slice(5)}`;
+      });
+      dismissToast(id as any);
+      showSuccess("Dados do CEP carregados");
+    } catch (err) {
+      console.error("fetchCepData error", err);
+      dismissToast(id as any);
+      showError("Não foi possível obter dados do CEP informado.");
+    }
   }
 
-  // Try multiple APIs in order until one returns usable data
-  const tryApisForCnpj = async (rawDigits: string) => {
+  // Manual CEP lookup button
+  const handleManualCepLookup = () => {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length !== 8) {
+      showError("Informe um CEP válido (8 dígitos) para buscar");
+      return;
+    }
+    fetchCepData(digits);
+  };
+
+  // CNPJ fetch: only populate numero and complemento from CNPJ data
+  async function tryApisForCnpj(rawDigits: string) {
     const endpoints = [
       `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`,
       `https://publica.cnpj.ws/cnpj/${rawDigits}`,
       `https://receitaws.com.br/v1/cnpj/${rawDigits}`,
     ];
-
     for (const url of endpoints) {
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
         const data = await res.json();
-        // basic validation: must have some company name or address
-        const hasName = Boolean(
-          data.razao_social ||
-            data.nome ||
-            data.nome_fantasia ||
-            data.fantasia ||
-            data.company ||
-            data.nome,
-        );
-        const hasAny = hasName || Boolean(data.logradouro || data.address || data.street);
-        if (hasAny) return data;
+        const hasNumber = Boolean(data.numero || data.number || data.numero_endereco);
+        const hasAny = hasNumber || Boolean(data.complemento || data.complement);
+        if (hasNumber || hasAny) return data;
       } catch (err) {
-        // continue to next
         console.debug("CNPJ API failed:", url, err);
       }
     }
+    throw new Error("Nenhuma API retornou dados úteis para o CNPJ");
+  }
 
-    throw new Error("Nenhuma API retornou dados válidos para o CNPJ");
-  };
-
-  // Fetch CNPJ data and populate fields with fallback support
   const fetchCnpjData = async (rawDigits: string) => {
     if (!rawDigits || rawDigits.length !== 14) return;
     if (lastFetchedCnpj.current === rawDigits) return;
-
     lastFetchedCnpj.current = rawDigits;
     setFetchingCnpj(true);
     const id = showLoading("Buscando dados do CNPJ...");
-
     try {
       const data = await tryApisForCnpj(rawDigits);
-
-      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.company || "";
-      const email = data.email || data.e_mail || data.contato_email || data.contato || "";
-      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || data.phone || "";
-      const address = buildAddressFromApi(data);
-
-      if (companyName) setEmpresa(companyName);
-      if (email) setEmpresaEmail(email);
-      if (phone) {
-        // format phone before setting
-        const digits = String(phone || "").replace(/\D/g, "");
-        setEmpresaPhone(formatPhoneDigits(digits));
-      }
-      if (address) setEndereco(address);
-
+      // Only set number and complement from CNPJ response per requirement
+      const number = data.numero || data.number || data.numero_endereco || "";
+      const comp = data.complemento || data.complement || "";
+      if (number) setNumero(String(number));
+      if (comp) setComplemento(String(comp));
       dismissToast(id as any);
-      showSuccess("Dados do CNPJ preenchidos automaticamente");
+      showSuccess("Número e complemento do CNPJ preenchidos (se disponíveis)");
     } catch (err) {
       console.error("fetchCnpjData error", err);
       dismissToast(id as any);
@@ -356,32 +385,30 @@ export default function SolicitarVistoria() {
   // Auto-trigger fetch when CNPJ reaches 14 digits (debounced)
   useEffect(() => {
     const digits = (cnpj || "").replace(/\D/g, "");
-
-    if (debounceRef.current) {
-      window.clearTimeout(debounceRef.current);
-      debounceRef.current = null;
+    if (debounceCnpjRef.current) {
+      window.clearTimeout(debounceCnpjRef.current);
+      debounceCnpjRef.current = null;
     }
-
     if (digits.length === 14) {
-      debounceRef.current = window.setTimeout(() => {
+      debounceCnpjRef.current = window.setTimeout(() => {
         fetchCnpjData(digits);
-        debounceRef.current = null;
+        debounceCnpjRef.current = null;
       }, 600);
     } else {
       if (digits.length === 0) {
         lastFetchedCnpj.current = null;
       }
     }
-
     return () => {
-      if (debounceRef.current) {
-        window.clearTimeout(debounceRef.current);
-        debounceRef.current = null;
+      if (debounceCnpjRef.current) {
+        window.clearTimeout(debounceCnpjRef.current);
+        debounceCnpjRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpj]);
 
-  const handleManualLookup = () => {
+  const handleManualCnpjLookup = () => {
     const digits = (cnpj || "").replace(/\D/g, "");
     if (digits.length !== 14) {
       showError("Informe um CNPJ válido (14 dígitos) para buscar");
@@ -406,9 +433,9 @@ export default function SolicitarVistoria() {
             <Label className="text-sm">CNPJ</Label>
             <div className="flex gap-2">
               <Input placeholder="00.000.000/0000-00" value={cnpj} onChange={handleCnpjChange} />
-              <Button type="button" onClick={handleManualLookup} disabled={fetchingCnpj}>{fetchingCnpj ? "Buscando..." : "Buscar"}</Button>
+              <Button type="button" onClick={handleManualCnpjLookup} disabled={fetchingCnpj}>{fetchingCnpj ? "Buscando..." : "Buscar"}</Button>
             </div>
-            <div className="text-sm text-muted-foreground">Ao digitar o CNPJ completo o sistema tentará preencher automaticamente os dados.</div>
+            <div className="text-sm text-muted-foreground">O sistema preencherá número e complemento (se disponíveis) a partir do CNPJ.</div>
           </div>
 
           <div className="space-y-2">
@@ -450,9 +477,44 @@ export default function SolicitarVistoria() {
           />
         </div>
 
-        <div>
-          <Label className="text-sm">Endereço para vistoria</Label>
-          <Textarea value={endereco} onChange={(e) => setEndereco(e.target.value)} rows={4} placeholder="Rua, número, bairro, cidade, CEP" />
+        <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
+          <div className="md:col-span-2">
+            <Label className="text-sm">CEP</Label>
+            <div className="flex gap-2">
+              <Input placeholder="00000-000" value={cep} onChange={handleCepChange} />
+              <Button type="button" onClick={handleManualCepLookup}>Buscar</Button>
+            </div>
+          </div>
+
+          <div className="md:col-span-4">
+            <Label className="text-sm">Rua</Label>
+            <Input value={rua} onChange={(e) => setRua(e.target.value)} placeholder="Logradouro / Rua" />
+          </div>
+
+          <div>
+            <Label className="text-sm">Número</Label>
+            <Input value={numero} onChange={(e) => setNumero(e.target.value)} placeholder="Número" />
+          </div>
+
+          <div>
+            <Label className="text-sm">Complemento</Label>
+            <Input value={complemento} onChange={(e) => setComplemento(e.target.value)} placeholder="Complemento" />
+          </div>
+
+          <div>
+            <Label className="text-sm">Bairro</Label>
+            <Input value={bairro} onChange={(e) => setBairro(e.target.value)} placeholder="Bairro" />
+          </div>
+
+          <div>
+            <Label className="text-sm">Cidade</Label>
+            <Input value={cidade} onChange={(e) => setCidade(e.target.value)} placeholder="Cidade" />
+          </div>
+
+          <div>
+            <Label className="text-sm">UF</Label>
+            <Input value={uf} onChange={(e) => setUf(e.target.value)} placeholder="UF" />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
