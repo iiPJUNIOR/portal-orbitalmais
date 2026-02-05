@@ -18,6 +18,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { getUserSettings } from "@/services/settingsService";
 import DraftsPage from "@/pages/Drafts";
 import WizardPage from "@/pages/WizardPage";
+import SolicitarVistoria from "@/pages/SolicitarVistoria";
 
 const queryClient = new QueryClient();
 
@@ -96,6 +97,7 @@ const AppContent = () => {
                     <Route path="/token-scan" element={<TokenScanner />} />
                     <Route path="/drafts" element={<DraftsPage />} />
                     <Route path="/wizard" element={<WizardPage />} />
+                    <Route path="/solicitar-vistoria" element={<SolicitarVistoria />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </div>

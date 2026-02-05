@@ -7,7 +7,8 @@ import {
   LogOut,
   User,
   FileText,
-  History as HistoryIcon
+  History as HistoryIcon,
+  MapPin
 } from "lucide-react";
 import {
   Sidebar,
@@ -102,6 +103,12 @@ export function AppSidebar() {
       show: canViewHistory,
     },
     {
+      title: "Solicitar Vistoria",
+      url: "/solicitar-vistoria",
+      icon: MapPin,
+      show: true,
+    },
+    {
       title: "Rascunhos",
       url: "/drafts",
       icon: FileText,
@@ -188,7 +195,7 @@ export function AppSidebar() {
           {user ? (
             <div className="flex items-center gap-2 overflow-hidden">
               <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-3 w-3 text-primary" />
+                <User className="h-3.5 w-3.5 text-primary" />
               </div>
               <span className="text-xs font-medium text-muted-foreground truncate">{user.email}</span>
             </div>
