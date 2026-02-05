@@ -525,30 +525,20 @@ export default function SolicitarVistoria() {
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label className="text-sm">Telefone da empresa</Label>
-            <Input
-              value={empresaPhone}
-              onChange={handleEmpresaPhoneChange}
-              onPaste={handlePhonePaste(setEmpresaPhone)}
-              placeholder="(00) 00000-0000"
-            />
-          </div>
-
-          <div>
             <Label className="text-sm">Contato responsável - Nome</Label>
             <Input value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome do contato" />
           </div>
-        </div>
 
-        <div>
-          <Label className="text-sm">Contato responsável - Telefone</Label>
-          <Input
-            value={contatoTelefone}
-            onChange={handleContatoTelefoneChange}
-            onPaste={handlePhonePaste(setContatoTelefone)}
-            placeholder="(00) 00000-0000"
-            rows={1}
-          />
+          <div>
+            <Label className="text-sm">Contato responsável - Telefone</Label>
+            <Input
+              value={contatoTelefone}
+              onChange={handleContatoTelefoneChange}
+              onPaste={handlePhonePaste(setContatoTelefone)}
+              placeholder="(00) 00000-0000"
+              rows={1}
+            />
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-6 gap-4">
