@@ -43,8 +43,10 @@ export default function SolicitarVistoria() {
   const debounceCepRef = useRef<number | null>(null);
   const debounceCnpjRef = useRef<number | null>(null);
 
-  // Preview raw toggle
+  // Preview raw toggle & editing
   const [showRawPreview, setShowRawPreview] = useState(false);
+  const [editingPreview, setEditingPreview] = useState(false);
+  const [previewText, setPreviewText] = useState<string | null>(null);
 
   // Prefill seller info from user settings (non-destructive)
   useEffect(() => {
@@ -150,9 +152,15 @@ export default function SolicitarVistoria() {
     return lines.filter(Boolean).join("\n");
   };
 
+  const getEffectivePreviewText = () => {
+    // If user edited preview, prefer that. Otherwise build from current form.
+    return previewText ?? buildEmailBody();
+  };
+
   const handleCopyBody = async () => {
     try {
-      await navigator.clipboard.writeText(buildEmailBody());
+      const textToCopy = getEffectivePreviewText();
+      await navigator.clipboard.writeText(textToCopy);
       showSuccess("Corpo do email copiado para a área de transferência.");
     } catch (err) {
       console.error(err);
@@ -162,14 +170,32 @@ export default function SolicitarVistoria() {
 
   const handleOpenMailClient = () => {
     try {
+      const textToUse = getEffectivePreviewText();
       const subjectEnc = encodeURIComponent(subject);
-      const bodyEnc = encodeURIComponent(buildEmailBody());
+      const bodyEnc = encodeURIComponent(textToUse);
       const mailto = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
       window.location.href = mailto;
     } catch (err) {
       console.error(err);
       showError("Falha ao abrir cliente de e-mail.");
     }
+  };
+
+  const startEditPreview = () => {
+    setPreviewText(getEffectivePreviewText());
+    setEditingPreview(true);
+    setShowRawPreview(false);
+  };
+
+  const saveEditPreview = () => {
+    setEditingPreview(false);
+    showSuccess("Alterações salvas na pré-visualização.");
+  };
+
+  const cancelEditPreview = () => {
+    setPreviewText(null);
+    setEditingPreview(false);
+    showSuccess("Edição cancelada.");
   };
 
   const handleGenerateDocx = async () => {
@@ -491,8 +517,8 @@ export default function SolicitarVistoria() {
   };
 
   // Split the email body into logical sections for nicer rendering in the preview
-  function getEmailSections() {
-    const body = buildEmailBody();
+  function getEmailSections(fromText?: string) {
+    const body = (typeof fromText === "string" ? fromText : getEffectivePreviewText()) || "";
     // We'll split by double newlines to separate logical blocks, then group consecutive lines
     const parts = body.split("\n\n").map((p) => p.trim()).filter(Boolean);
     return parts;
@@ -607,20 +633,36 @@ export default function SolicitarVistoria() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div className="flex gap-2">
             <Button onClick={handleGenerateDocx} disabled={loadingDoc}>{loadingDoc ? "Gerando..." : "Gerar DOCX preenchido"}</Button>
-            <Button variant="outline" onClick={handleCopyBody}>Copiar corpo do e-mail</Button>
+
+            <Button variant="outline" onClick={handleCopyBody}>
+              Copiar corpo do e-mail
+            </Button>
+
             <Button variant="outline" onClick={handleOpenMailClient}>Abrir no cliente de e-mail</Button>
           </div>
           <div className="text-sm text-muted-foreground">Assunto: <span className="font-medium">{subject}</span></div>
         </div>
 
-        {/* Improved preview card */}
+        {/* Improved preview card with edit capability */}
         <Card>
           <CardHeader className="flex items-center justify-between">
             <CardTitle>Pré-visualização do e-mail</CardTitle>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setShowRawPreview((s) => !s)}>
+              {!editingPreview ? (
+                <Button variant="ghost" size="sm" onClick={() => startEditPreview()}>
+                  Editar
+                </Button>
+              ) : (
+                <>
+                  <Button size="sm" onClick={() => saveEditPreview()}>Salvar</Button>
+                  <Button variant="outline" size="sm" onClick={() => cancelEditPreview()}>Cancelar</Button>
+                </>
+              )}
+
+              <Button variant="ghost" size="sm" onClick={() => { setShowRawPreview((s) => !s); setEditingPreview(false); }}>
                 {showRawPreview ? "Ver formatado" : "Ver raw"}
               </Button>
+
               <Button variant="outline" size="sm" onClick={handleCopyBody}>Copiar</Button>
               <Button size="sm" onClick={handleOpenMailClient}>Abrir</Button>
             </div>
@@ -632,8 +674,17 @@ export default function SolicitarVistoria() {
               <div className="font-semibold">{subject}</div>
             </div>
 
-            {showRawPreview ? (
-              <Textarea readOnly value={buildEmailBody()} rows={12} />
+            {editingPreview ? (
+              <div>
+                <div className="text-xs text-muted-foreground mb-2">Editar texto (o que você digitar aqui será usado ao copiar/abrir):</div>
+                <Textarea
+                  value={previewText ?? ""}
+                  onChange={(e) => setPreviewText(e.target.value)}
+                  rows={12}
+                />
+              </div>
+            ) : showRawPreview ? (
+              <Textarea readOnly value={getEffectivePreviewText()} rows={12} />
             ) : (
               <div className="space-y-4">
                 {getEmailSections().map((section, idx) => (
