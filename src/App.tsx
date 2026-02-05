@@ -7,10 +7,10 @@ import React, { useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
-import TokenScanner from "@/pages/TokenScanner";
+import TokenScanner from "./pages/TokenScanner";
 import Login from "./pages/Login";
-import AuthStatus from "@/pages/AuthStatus";
-import ResetPassword from "@/pages/ResetPassword";
+import AuthStatus from "./pages/AuthStatus";
+import ResetPassword from "./pages/ResetPassword";
 import { SessionProvider, useSession } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
@@ -18,7 +18,6 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { getUserSettings } from "@/services/settingsService";
 import DraftsPage from "@/pages/Drafts";
 import WizardPage from "@/pages/WizardPage";
-import InspectionRequest from "@/pages/InspectionRequest";
 
 const queryClient = new QueryClient();
 
@@ -97,7 +96,6 @@ const AppContent = () => {
                     <Route path="/token-scan" element={<TokenScanner />} />
                     <Route path="/drafts" element={<DraftsPage />} />
                     <Route path="/wizard" element={<WizardPage />} />
-                    <Route path="/solicitar-vistoria" element={<InspectionRequest />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </div>
