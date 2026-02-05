@@ -294,7 +294,8 @@ export default function SolicitarVistoria() {
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
         if (file) {
-          const content = await file.async("string");
+          // PizZip.file(name) returns a file object. Use .asText() to get content (sync)
+          const content = file.asText();
           const healed = healDocxTokens(content);
           zip.file(fileName, healed);
         }
