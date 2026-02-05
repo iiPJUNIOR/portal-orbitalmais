@@ -105,6 +105,14 @@ export default function Settings() {
         setFontSize(s.font_size || "medium");
         setSlideMappings(s.slide_mappings || {});
         setDocxMappings(s.docx_mappings || {});
+        // IMPORTANT: if there are saved docx mappings, show them as tokens so the UI displays them
+        const savedDocx = s.docx_mappings || {};
+        const savedKeys = Object.keys(savedDocx || {});
+        if (savedKeys.length > 0) {
+          setDocxTokens(savedKeys);
+        } else {
+          setDocxTokens([]);
+        }
         setCanAccessSettings(!!s?.can_access_settings || isSuperAdmin);
       } else if (isSuperAdmin) {
         setCanAccessSettings(true);
@@ -296,6 +304,11 @@ export default function Settings() {
       // but ensure we don't lose user edits by not overwriting unrelated keys.
 
       setDocxMappings(nextMappings);
+      setDocxTokens((prev) => {
+        // ensure tokens list contains both scanned tokens and any mapping keys
+        const merged = Array.from(new Set([...(tokens || []), ...Object.keys(nextMappings || {})]));
+        return merged;
+      });
 
       // Persist merged mapping so rescans keep the association
       try {
@@ -320,6 +333,8 @@ export default function Settings() {
   const handleUpdateDocxMapping = async (token: string, field: string) => {
     const next = { ...docxMappings, [token]: field };
     setDocxMappings(next);
+    // keep tokens list in sync so UI shows it immediately
+    setDocxTokens((prev) => Array.from(new Set([...prev, token])));
     try {
       await saveUserSettings({ docx_mappings: next });
       toast.success("Mapeamento salvo!");
