@@ -11,7 +11,7 @@ import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
 import { getUserSettings, UserSettings } from "@/services/settingsService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ScanText, Mail, FileText, ArrowLeft, CheckCircle2, Copy } from "lucide-react";
+import { Loader2, Mail, FileText, Copy, FileText as FileTextIcon } from "lucide-react";
 
 export default function SolicitarVistoria() {
   // Seller / contact info
@@ -204,8 +204,34 @@ export default function SolicitarVistoria() {
     showSuccess("Edição cancelada.");
   };
 
+  /**
+   * Helper that extracts readable explanations from a Docxtemplater render error
+   */
+  function extractDocxRenderErrorDetails(err: any): string | null {
+    try {
+      const props = err.properties;
+      if (!props) return null;
+      const errors = props.errors || props.messages || null;
+      if (Array.isArray(errors) && errors.length > 0) {
+        const explanations = errors.map((part: any) => {
+          try {
+            return part.properties?.explanation || JSON.stringify(part);
+          } catch {
+            return String(part);
+          }
+        });
+        return explanations.join(" | ");
+      }
+      if (props.explanation) return props.explanation;
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   const handleGenerateDocx = async () => {
     setLoadingDoc(true);
+    const toastId = showLoading("Gerando documento...");
     try {
       const templatePath = encodeURI("/Solicitação de vistoria.docx");
       const res = await fetch(templatePath);
@@ -214,8 +240,7 @@ export default function SolicitarVistoria() {
 
       const zip = new PizZip(arrayBuffer);
 
-      // Docxtemplater: set nullGetter to return empty string for undefined tags
-      // and disable throwOnUndefined via nullGetter behavior to avoid hard failures
+      // Docxtemplater: return empty string for undefined tags so missing tags don't throw
       const doc = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true, nullGetter: () => "" });
 
       // Current form data in a standardized structure
@@ -245,42 +270,33 @@ export default function SolicitarVistoria() {
       const renderData: Record<string, any> = {};
 
       if (Object.keys(mappings).length > 0) {
-        // If mappings exist, populate the object for Docxtemplater using the mapping keys
         Object.entries(mappings).forEach(([token, field]) => {
           if (field === "none") return;
-          renderData[token] = formData[field] || "";
+          renderData[token] = formData[field] ?? "";
         });
 
-        // Also include the original formData keys as fallback for tags that might match directly
-        Object.keys(formData).forEach(key => {
-          if (renderData[key] === undefined) {
-            renderData[key] = formData[key];
-          }
+        // fallback: ensure original keys exist too
+        Object.keys(formData).forEach((k) => {
+          if (renderData[k] === undefined) renderData[k] = formData[k];
         });
       } else {
-        // No mappings saved, use original formData
         Object.assign(renderData, formData);
       }
 
       try {
-        // render may throw if template uses functions or unexpected tags;
-        // with nullGetter in place we should avoid missing-tag exceptions, but still guard.
         doc.render(renderData);
       } catch (renderErr: any) {
-        // Attempt to extract helpful details
-        try {
-          // Docxtemplater attaches .properties.errors with details in some error cases
-          const props = renderErr.properties;
-          const errors = props?.errors || props?.messages || null;
-          if (errors) {
-            console.error("Docx render errors:", errors);
-          }
-        } catch (_) {}
-        console.error("Docxtemplater render error:", renderErr);
-        // Show helpful message to user with minimal details
+        // Extract detailed explanations when available
+        const details = extractDocxRenderErrorDetails(renderErr);
+        console.error("Docxtemplater render error (detailed):", renderErr);
+        const shortMsg = details
+          ? `Erro ao processar o template: ${details}`
+          : `Erro ao processar o template: ${renderErr.message || String(renderErr)}`;
+
+        // Suggest next steps
         showError(
-          "Erro ao gerar o DOCX: o template contém tags inválidas ou incompatíveis. " +
-          "Verifique se as tags do template correspondem aos campos configurados."
+          `${shortMsg}\nVerifique as tags do template e o mapeamento em Configurações → Mapeamento DOCX. Detalhes no console.`,
+          { id: toastId }
         );
         setLoadingDoc(false);
         return;
@@ -289,10 +305,15 @@ export default function SolicitarVistoria() {
       const out = doc.getZip().generate({ type: "blob" });
       const safeName = (empresa || "solicitacao_vistoria").replace(/[^a-z0-9]/gi, "_");
       saveAs(out, `Solicitacao_vistoria_${safeName}.docx`);
+      dismissToast(toastId as any);
       showSuccess("Documento DOCX gerado e baixado com sucesso.");
     } catch (err: any) {
       console.error("handleGenerateDocx unexpected error:", err);
-      showError("Erro ao gerar o DOCX. Verifique se o template possui as tags corretas.");
+      const details = extractDocxRenderErrorDetails(err);
+      const message = details
+        ? `Erro ao gerar DOCX: ${details}`
+        : `Erro ao gerar o DOCX. Verifique se o template possui as tags corretas. (${err?.message || String(err)})`;
+      showError(message, { id: toastId });
     } finally {
       setLoadingDoc(false);
     }
@@ -606,7 +627,7 @@ export default function SolicitarVistoria() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       <div className="flex items-center gap-2 mb-2">
-        <FileText className="h-6 w-6 text-primary" />
+        <FileTextIcon className="h-6 w-6 text-primary" />
         <h1 className="text-2xl font-bold">Solicitar Vistoria</h1>
       </div>
       <p className="text-sm text-muted-foreground mb-6">Preencha os dados abaixo. O sistema usará o mapeamento de tokens configurado para preencher o DOCX.</p>
@@ -714,7 +735,7 @@ export default function SolicitarVistoria() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 pt-4 border-t">
           <div className="flex gap-2">
             <Button onClick={handleGenerateDocx} disabled={loadingDoc} className="font-bold">
-              {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileText className="h-4 w-4 mr-2" />}
+              {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileTextIcon className="h-4 w-4 mr-2" />}
               Baixar DOCX
             </Button>
 
