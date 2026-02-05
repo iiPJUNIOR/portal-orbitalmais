@@ -45,6 +45,9 @@ export default function SolicitarVistoria() {
   const debounceCepRef = useRef<number | null>(null);
   const debounceCnpjRef = useRef<number | null>(null);
 
+  // Track last fetched CEP to avoid repeated requests
+  const lastFetchedCepRef = useRef<string | null>(null);
+
   // Preview raw toggle & editing
   const [showRawPreview, setShowRawPreview] = useState(false);
   const [editingPreview, setEditingPreview] = useState(false);
@@ -327,7 +330,7 @@ export default function SolicitarVistoria() {
     }
     setCep(formatted);
 
-    // debounce fetch
+    // debounce fetch (user-typing path)
     if (debounceCepRef.current) {
       window.clearTimeout(debounceCepRef.current);
       debounceCepRef.current = null;
@@ -344,12 +347,32 @@ export default function SolicitarVistoria() {
         setBairro("");
         setCidade("");
         setUf("");
+        lastFetchedCepRef.current = null;
       }
     }
   };
 
+  // Also auto-trigger fetch whenever cep state reaches 8 digits (covers paste/programmatic set)
+  useEffect(() => {
+    const digits = cep.replace(/\D/g, "");
+    if (digits.length === 8 && lastFetchedCepRef.current !== digits) {
+      // clear any existing debounce to avoid duplicate timers
+      if (debounceCepRef.current) {
+        window.clearTimeout(debounceCepRef.current);
+        debounceCepRef.current = null;
+      }
+      debounceCepRef.current = window.setTimeout(() => {
+        fetchCepData(digits);
+        debounceCepRef.current = null;
+      }, 300);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cep]);
+
   async function fetchCepData(digits: string) {
     if (!digits || digits.length !== 8) return;
+    // Avoid repeated identical lookups
+    if (lastFetchedCepRef.current === digits) return;
     const id = showLoading("Buscando dados do CEP...");
     try {
       const url = `https://viacep.com.br/ws/${digits}/json/`;
@@ -360,6 +383,10 @@ export default function SolicitarVistoria() {
       // ViaCEP fields: logradouro, complemento, bairro, localidade, uf
       setRua(data.logradouro || "");
       // IMPORTANT: do NOT overwrite complemento with CEP data — complemento must come from CNPJ only
+      // but if complemento missing we can fill it
+      if (!complemento && data.complemento) {
+        setComplemento(data.complemento || "");
+      }
       setBairro(data.bairro || "");
       setCidade(data.localidade || "");
       setUf(data.uf || "");
@@ -368,12 +395,14 @@ export default function SolicitarVistoria() {
         const d = digits;
         return `${d.slice(0, 5)}-${d.slice(5)}`;
       });
+      lastFetchedCepRef.current = digits;
       dismissToast(id as any);
       showSuccess("Dados do CEP carregados");
     } catch (err) {
       console.error("fetchCepData error", err);
       dismissToast(id as any);
       showError("Não foi possível obter dados do CEP informado.");
+      lastFetchedCepRef.current = null;
     }
   }
 
@@ -489,6 +518,7 @@ export default function SolicitarVistoria() {
       if (cepDigits && cepDigits.length === 8) {
         const masked = `${cepDigits.slice(0, 5)}-${cepDigits.slice(5)}`;
         setCep(masked);
+        // Trigger fetchCepData after setting cep so the address fields fill automatically
         setTimeout(() => fetchCepData(cepDigits), 50);
       }
 
@@ -530,6 +560,7 @@ export default function SolicitarVistoria() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cnpj]);
 
+  // Manual CNPJ lookup button
   const handleManualCnpjLookup = () => {
     const digits = (cnpj || "").replace(/\D/g, "");
     if (digits.length !== 14) {
