@@ -48,11 +48,6 @@ export default function SolicitarVistoria() {
   // Track last fetched CEP to avoid repeated requests
   const lastFetchedCepRef = useRef<string | null>(null);
 
-  // Preview raw toggle & editing
-  const [showRawPreview, setShowRawPreview] = useState(false);
-  const [editingPreview, setEditingPreview] = useState(false);
-  const [previewText, setPreviewText] = useState<string | null>(null);
-
   // Prefill seller info from user settings (non-destructive)
   useEffect(() => {
     (async () => {
@@ -62,16 +57,14 @@ export default function SolicitarVistoria() {
         setSettings(s);
         if (!vendedor && s.seller_name) setVendedor(s.seller_name);
       } catch (err) {
-        // non-blocking
         console.warn("SolicitarVistoria: falha ao obter seller settings", err);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
-  // Helper: compose a full address for previews and legacy template fields
+  // Helper: compose a full address for legacy template fields
   function composeFullAddress(breakLines = false) {
     const parts: string[] = [];
     if (rua) {
@@ -87,23 +80,8 @@ export default function SolicitarVistoria() {
     return parts.filter(Boolean).join(breakLines ? "\n" : " - ");
   }
 
-  // Formatting for EMAIL (Professional/Inline)
-  function formatEmailAddress() {
-    const parts = [];
-    if (rua) {
-      let line = `${rua}${numero ? `, ${numero}` : ""}${complemento ? ` (${complemento})` : ""}`;
-      parts.push(line);
-    }
-    if (bairro) parts.push(bairro);
-    const cityState = [cidade, uf].filter(Boolean).join("/");
-    if (cityState) parts.push(cityState);
-    if (cep) parts.push(`CEP: ${cep}`);
-    return parts.join(" - ");
-  }
-
   const buildEmailBody = () => {
     const lines: string[] = [];
-
     lines.push(`Olá Evelem,\n`);
     lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "[Razão Social]"}, conforme informações abaixo:\n`);
 
@@ -112,14 +90,17 @@ export default function SolicitarVistoria() {
     if (cnpj) lines.push(`• CNPJ: ${cnpj}`);
     if (contatoNome) lines.push(`• Contato: ${contatoNome}${contatoTelefone ? ` (${contatoTelefone})` : ""}`);
     
-    const addr = formatEmailAddress();
-    if (addr) lines.push(`• Endereço: ${addr}`);
+    const parts = [];
+    if (rua) parts.push(`${rua}${numero ? `, ${numero}` : ""}${complemento ? ` (${complemento})` : ""}`);
+    if (bairro) parts.push(bairro);
+    const cityState = [cidade, uf].filter(Boolean).join("/");
+    if (cityState) parts.push(cityState);
+    if (cep) parts.push(`CEP: ${cep}`);
+    const addr = parts.join(" - ");
     
+    if (addr) lines.push(`• Endereço: ${addr}`);
     if (produto) lines.push(`• Produto/Solicitação: ${produto}${quantidade ? ` (${quantidade} un)` : ""}`);
-
-    if (observacoes && String(observacoes).trim().length > 0) {
-      lines.push(`\nObservações: ${observacoes}`);
-    }
+    if (observacoes) lines.push(`\nObservações: ${observacoes}`);
 
     lines.push(`\nAgradeço desde já o suporte e fico à disposição.\n`);
     lines.push(`Atenciosamente,`);
@@ -128,33 +109,9 @@ export default function SolicitarVistoria() {
     return lines.filter(Boolean).join("\n");
   };
 
-  const getEffectivePreviewText = () => {
-    return previewText ?? buildEmailBody();
-  };
-
-  const handleCopyBody = async () => {
-    try {
-      const textToCopy = getEffectivePreviewText();
-      await navigator.clipboard.writeText(textToCopy);
-      showSuccess("Corpo do email copiado.");
-    } catch (err) {
-      showError("Falha ao copiar o e-mail.");
-    }
-  };
-
-  const handleOpenMailClient = () => {
-    try {
-      const textToUse = getEffectivePreviewText();
-      const subjectEnc = encodeURIComponent(subject);
-      const bodyEnc = encodeURIComponent(textToUse);
-      window.location.href = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
-    } catch (err) {
-      showError("Falha ao abrir cliente de e-mail.");
-    }
-  };
-
   /**
    * Robust healing of fragmented tokens in docx XML.
+   * Scans each <w:p> and joins text content into a single <w:t> node.
    */
   function healDocxTokens(xml: string): string {
     if (!xml) return xml;
@@ -187,15 +144,19 @@ export default function SolicitarVistoria() {
     const toastId = showLoading("Gerando documento...");
     try {
       const res = await fetch(encodeURI("/Solicitação de vistoria.docx"));
-      if (!res.ok) throw new Error("Template DOCX não encontrado.");
+      if (!res.ok) throw new Error("Template DOCX não encontrado no servidor.");
       const arrayBuffer = await res.arrayBuffer();
+      
+      // PizZip works synchronously with binary data
       const zip = new PizZip(arrayBuffer);
 
+      // Clean multiple XML files in the docx where tags might reside
       const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"];
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
         if (file) {
-          const content = await file.async("string");
+          // PizZip .file(name).asText() is synchronous
+          const content = file.asText();
           zip.file(fileName, healDocxTokens(content));
         }
       }
@@ -206,7 +167,7 @@ export default function SolicitarVistoria() {
         delimiters: { start: "{{", end: "}}" }
       });
 
-      // Prepare data specifically for DOCX with the requested \n after labels
+      // Prepare data for DOCX with the requested \n before labels to match user template
       const docxData = {
         vendedor: vendedor ? `\n${vendedor}` : "",
         empresa: empresa ? `\n${empresa}` : "",
@@ -241,7 +202,11 @@ export default function SolicitarVistoria() {
 
       doc.render(renderData);
 
-      const out = doc.getZip().generate({ type: "blob", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+      const out = doc.getZip().generate({ 
+        type: "blob", 
+        mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" 
+      });
+      
       saveAs(out, `Vistoria_${(empresa || "cliente").replace(/\s/g, "_")}.docx`);
       
       dismissToast(toastId as any);
@@ -254,7 +219,6 @@ export default function SolicitarVistoria() {
     }
   };
 
-  // CNPJ and formatting handlers remain the same for functionality
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     let value = e.target.value.replace(/\D/g, "").substring(0, 14);
     let formatted = "";
@@ -267,16 +231,13 @@ export default function SolicitarVistoria() {
     setCnpj(formatted);
   };
 
-  function formatPhoneDigits(digits: string) {
-    const d = digits.replace(/\D/g, "").slice(0, 11);
-    if (d.length <= 2) return d ? `(${d}` : "";
-    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
-    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
-    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
-  }
-
   const handleContatoTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setContatoTelefone(formatPhoneDigits(e.target.value));
+    const d = e.target.value.replace(/\D/g, "").slice(0, 11);
+    let f = "";
+    if (d.length > 0) f = "(" + d.slice(0, 2);
+    if (d.length > 2) f += ") " + d.slice(2, d.length > 10 ? 7 : 6);
+    if (d.length > 6) f += "-" + d.slice(d.length > 10 ? 7 : 6);
+    setContatoTelefone(f);
   };
 
   const handleCepChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -302,32 +263,27 @@ export default function SolicitarVistoria() {
     } catch {}
   }
 
-  const fetchCnpjData = async (rawDigits: string) => {
-    if (lastFetchedCnpj.current === rawDigits) return;
-    lastFetchedCnpj.current = rawDigits;
-    const id = showLoading("Buscando CNPJ...");
-    try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`);
-      const data = await res.json();
-      if (data) {
-        setNumero(String(data.numero || ""));
-        setComplemento(String(data.complemento || ""));
-        if (!empresa) setEmpresa(data.razao_social || "");
-        if (data.cep) setCep(`${data.cep.slice(0,5)}-${data.cep.slice(5)}`);
-        fetchCepData(data.cep?.replace(/\D/g, "") || "");
-        showSuccess("CNPJ carregado");
-      }
-    } catch {
-      showError("Falha ao buscar CNPJ");
-    } finally {
-      dismissToast(id as any);
-    }
-  };
-
   useEffect(() => {
     const digits = cnpj.replace(/\D/g, "");
     if (digits.length === 14) {
-      const timer = setTimeout(() => fetchCnpjData(digits), 600);
+      const timer = setTimeout(async () => {
+        if (lastFetchedCnpj.current === digits) return;
+        lastFetchedCnpj.current = digits;
+        try {
+          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
+          const data = await res.json();
+          if (data) {
+            setNumero(String(data.numero || ""));
+            setComplemento(String(data.complemento || ""));
+            if (!empresa) setEmpresa(data.razao_social || "");
+            if (data.cep) {
+              const c = data.cep.replace(/\D/g, "");
+              setCep(`${c.slice(0,5)}-${c.slice(5)}`);
+              fetchCepData(c);
+            }
+          }
+        } catch {}
+      }, 600);
       return () => clearTimeout(timer);
     }
   }, [cnpj]);
@@ -413,19 +369,24 @@ export default function SolicitarVistoria() {
             {loadingDoc ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileTextIcon className="h-4 w-4 mr-2" />}
             Gerar Documento (Word)
           </Button>
-          <Button variant="outline" onClick={handleCopyBody} className="flex-1 md:flex-none">
+          <Button variant="outline" onClick={() => {
+            navigator.clipboard.writeText(buildEmailBody());
+            showSuccess("Corpo do email copiado.");
+          }} className="flex-1 md:flex-none">
             <Copy className="h-4 w-4 mr-2" /> Copiar E-mail
           </Button>
-          <Button variant="secondary" onClick={handleOpenMailClient} className="flex-1 md:flex-none">
+          <Button variant="secondary" onClick={() => {
+            const body = encodeURIComponent(buildEmailBody());
+            const sub = encodeURIComponent(subject);
+            window.location.href = `mailto:?subject=${sub}&body=${body}`;
+          }} className="flex-1 md:flex-none">
             <Mail className="h-4 w-4 mr-2" /> Abrir E-mail
           </Button>
         </div>
 
-        {/* Professional Preview */}
         <Card className="mt-8 border-none bg-muted/30 shadow-inner rounded-2xl overflow-hidden">
-          <CardHeader className="py-3 px-6 border-b flex flex-row items-center justify-between">
+          <CardHeader className="py-3 px-6 border-b">
             <CardTitle className="text-xs font-black uppercase tracking-widest text-muted-foreground">Pré-visualização do E-mail</CardTitle>
-            <div className="text-[10px] text-muted-foreground italic">O documento Word usará a formatação de quebra de linha.</div>
           </CardHeader>
           <CardContent className="p-8 space-y-6">
             <div className="bg-white dark:bg-neutral-900 p-6 rounded-xl border shadow-sm font-sans text-sm leading-relaxed text-neutral-800 dark:text-neutral-200">
