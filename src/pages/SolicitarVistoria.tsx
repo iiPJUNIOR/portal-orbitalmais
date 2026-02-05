@@ -125,18 +125,49 @@ export default function SolicitarVistoria() {
 
   // Helper: format CNPJ as user types
   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let value = e.target.value.replace(/\D/g, '');
+    let value = e.target.value.replace(/\D/g, "");
     if (value.length > 14) value = value.substring(0, 14);
-    
-    let formatted = '';
+
+    let formatted = "";
     for (let i = 0; i < value.length; i++) {
-      if (i === 2 || i === 5) formatted += '.';
-      if (i === 8) formatted += '/';
-      if (i === 12) formatted += '-';
+      if (i === 2 || i === 5) formatted += ".";
+      if (i === 8) formatted += "/";
+      if (i === 12) formatted += "-";
       formatted += value[i];
     }
 
     setCnpj(formatted);
+  };
+
+  // Phone formatting helper for Brazilian numbers (works on type and paste)
+  function formatPhoneDigits(digits: string) {
+    const d = digits.replace(/\D/g, "").slice(0, 11); // max 11
+    if (d.length === 0) return "";
+    if (d.length <= 2) return `(${d}`;
+    if (d.length <= 6) return `(${d.slice(0, 2)}) ${d.slice(2)}`;
+    if (d.length <= 10) return `(${d.slice(0, 2)}) ${d.slice(2, 6)}-${d.slice(6)}`;
+    // 11 digits (9xxxx-xxxx)
+    return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`;
+  }
+
+  const handleEmpresaPhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digits = raw.replace(/\D/g, "");
+    setEmpresaPhone(formatPhoneDigits(digits));
+  };
+
+  const handleContatoTelefoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const digits = raw.replace(/\D/g, "");
+    setContatoTelefone(formatPhoneDigits(digits));
+  };
+
+  // Paste handlers to normalize pasted phone numbers
+  const handlePhonePaste = (setter: (val: string) => void) => async (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData("text").trim();
+    const digits = text.replace(/\D/g, "");
+    setter(formatPhoneDigits(digits));
   };
 
   // Build address string from API response
@@ -175,7 +206,14 @@ export default function SolicitarVistoria() {
         if (!res.ok) throw new Error(`API ${url} retornou ${res.status}`);
         const data = await res.json();
         // basic validation: must have some company name or address
-        const hasName = Boolean(data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.company || data.nome);
+        const hasName = Boolean(
+          data.razao_social ||
+            data.nome ||
+            data.nome_fantasia ||
+            data.fantasia ||
+            data.company ||
+            data.nome,
+        );
         const hasAny = hasName || Boolean(data.logradouro || data.address || data.street);
         if (hasAny) return data;
       } catch (err) {
@@ -206,7 +244,11 @@ export default function SolicitarVistoria() {
 
       if (companyName) setEmpresa(companyName);
       if (email) setEmpresaEmail(email);
-      if (phone) setEmpresaPhone(phone);
+      if (phone) {
+        // format phone before setting
+        const digits = String(phone || "").replace(/\D/g, "");
+        setEmpresaPhone(formatPhoneDigits(digits));
+      }
       if (address) setEndereco(address);
 
       dismissToast(id as any);
@@ -293,7 +335,12 @@ export default function SolicitarVistoria() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <Label className="text-sm">Telefone da empresa</Label>
-            <Input value={empresaPhone} onChange={(e) => setEmpresaPhone(e.target.value)} placeholder="(00) 0000-0000" />
+            <Input
+              value={empresaPhone}
+              onChange={handleEmpresaPhoneChange}
+              onPaste={handlePhonePaste(setEmpresaPhone)}
+              placeholder="(00) 00000-0000"
+            />
           </div>
 
           <div>
@@ -304,7 +351,13 @@ export default function SolicitarVistoria() {
 
         <div>
           <Label className="text-sm">Contato responsável - Telefone</Label>
-          <Input value={contatoTelefone} onChange={(e) => setContatoTelefone(e.target.value)} rows={1} placeholder="(00) 0 0000-0000" />
+          <Input
+            value={contatoTelefone}
+            onChange={handleContatoTelefoneChange}
+            onPaste={handlePhonePaste(setContatoTelefone)}
+            placeholder="(00) 00000-0000"
+            rows={1}
+          />
         </div>
 
         <div>
