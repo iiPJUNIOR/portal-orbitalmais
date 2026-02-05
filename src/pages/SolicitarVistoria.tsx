@@ -11,8 +11,7 @@ import Docxtemplater from "docxtemplater";
 import { saveAs } from "file-saver";
 
 export default function SolicitarVistoria() {
-  const [destinatario, setDestinatario] = useState("");
-  const [cc, setCc] = useState("");
+  // Removed destinatario and cc states as requested
   const [vendedor, setVendedor] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
@@ -40,15 +39,14 @@ export default function SolicitarVistoria() {
     }
   };
 
+  // Open mail client without prefilled 'to' or 'cc' per request
   const handleOpenMailClient = () => {
     try {
-      const to = encodeURIComponent(destinatario);
-      const ccEnc = encodeURIComponent(cc || "");
       const subjectEnc = encodeURIComponent(subject);
       const bodyEnc = encodeURIComponent(buildEmailBody());
 
-      let mailto = `mailto:${to}?subject=${subjectEnc}&body=${bodyEnc}`;
-      if (cc) mailto += `&cc=${ccEnc}`;
+      // No recipient and no CC included here
+      const mailto = `mailto:?subject=${subjectEnc}&body=${bodyEnc}`;
 
       // open mail client
       window.location.href = mailto;
@@ -103,16 +101,6 @@ export default function SolicitarVistoria() {
       <p className="text-sm text-muted-foreground mb-6">Preencha os dados abaixo. Você pode gerar um DOCX preenchido a partir do template ou preparar o e-mail automaticamente.</p>
 
       <div className="space-y-4 bg-card p-6 rounded-lg shadow-sm">
-        <div>
-          <Label className="text-sm">Destinatário (Para)</Label>
-          <Input value={destinatario} onChange={(e) => setDestinatario(e.target.value)} placeholder="email@exemplo.com" />
-        </div>
-
-        <div>
-          <Label className="text-sm">CC</Label>
-          <Input value={cc} onChange={(e) => setCc(e.target.value)} placeholder="cc@empresa.com.br (opcional)" />
-        </div>
-
         <div>
           <Label className="text-sm">Vendedor responsável</Label>
           <Input value={vendedor} onChange={(e) => setVendedor(e.target.value)} placeholder="Nome do vendedor" />
