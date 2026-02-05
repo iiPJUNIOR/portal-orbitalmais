@@ -362,7 +362,7 @@ export default function Settings() {
                   <div className="p-4 border rounded-xl bg-muted/30 border-dashed flex items-center justify-between">
                     <div>
                       <p className="font-bold text-sm">Escanear Template</p>
-                      <p className="text-xs text-muted-foreground">Identifica todos os {{campos}} dentro do arquivo DOCX.</p>
+                      <p className="text-xs text-muted-foreground">Identifica todos os {"{{campos}}"} dentro do arquivo DOCX.</p>
                     </div>
                     <Button onClick={handleScanDocx} disabled={scanningDocx}>
                       {scanningDocx ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <ScanText className="h-4 w-4 mr-2" />}
