@@ -166,7 +166,7 @@ export default function Login() {
           ref={containerRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
-          className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white overflow-hidden perspective-1000"
+          className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-black text-white overflow-hidden perspective-1000"
         >
           {/* Imagem centralizada e menor */}
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
