@@ -161,26 +161,29 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full relative bg-background overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
-        {/* Lado Esquerdo - Branding com efeito 3D Parallax */}
+        {/* Lado Esquerdo - Branding com efeito 3D Parallax sutil */}
         <div 
           ref={containerRef}
           onMouseMove={handleMouseMove}
           onMouseLeave={handleMouseLeave}
           className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white overflow-hidden perspective-1000"
         >
-          <div 
-            className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-300 ease-out"
-            style={{ 
-              backgroundImage: "url('/[IDFMAX-FP-M] IDFMAX-FP-M.jfif')",
-              transform: `
-                scale(1.1) 
-                translate3d(${mousePos.x * 20}px, ${mousePos.y * 20}px, 0)
-                rotateY(${mousePos.x * 5}deg)
-                rotateX(${mousePos.y * -5}deg)
-              `,
-              opacity: 0.6
-            }}
-          />
+          {/* Imagem centralizada e menor */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div 
+              className="w-[320px] h-[320px] bg-contain bg-no-repeat bg-center transition-transform duration-300 ease-out"
+              style={{ 
+                backgroundImage: "url('/[IDFMAX-FP-M] IDFMAX-FP-M.jfif')",
+                transform: `
+                  translate3d(${mousePos.x * 30}px, ${mousePos.y * 30}px, 0)
+                  rotateY(${mousePos.x * 10}deg)
+                  rotateX(${mousePos.y * -10}deg)
+                `,
+                opacity: 0.35
+              }}
+            />
+          </div>
+
           <div className="relative z-10">
             <div className="inline-block p-4 rounded-xl">
               <Logo forceWhite className="h-8 w-auto" />
