@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Input } from "@/components/ui/input";
@@ -25,15 +25,18 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
+  // Parallax state
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
+  const containerRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     let mounted = true;
 
     const checkSession = async () => {
       try {
         const resp = await supabase.auth.getSession?.();
-        const currentSession = (resp as any)?.data?.session ?? (resp as any)?.session ?? null; // compatible access for different supabase SDK return shapes
+        const currentSession = (resp as any)?.data?.session ?? (resp as any)?.session ?? null;
         if (currentSession && mounted) {
-
           navigate("/", { replace: true });
         }
       } catch {
@@ -57,6 +60,18 @@ export default function Login() {
       } catch {}
     };
   }, [navigate]);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = (e.clientX - rect.left) / rect.width - 0.5;
+    const y = (e.clientY - rect.top) / rect.height - 0.5;
+    setMousePos({ x, y });
+  };
+
+  const handleMouseLeave = () => {
+    setMousePos({ x: 0, y: 0 });
+  };
 
   const handleSignIn = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -87,9 +102,7 @@ export default function Login() {
     if (e) e.preventDefault();
     setLoading(true);
     try {
-      // Usamos a URL de produção fixa para o link de confirmação no e-mail
       const redirectTo = `${PROD_URL}/auth-status`;
-      
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -120,7 +133,6 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      // Usamos a URL de produção fixa para o link de redefinição no e-mail
       const redirectTo = `${PROD_URL}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
@@ -149,12 +161,24 @@ export default function Login() {
   return (
     <div className="min-h-screen w-full relative bg-background overflow-hidden">
       <div className="grid grid-cols-1 lg:grid-cols-2 min-h-screen">
-        {/* Lado Esquerdo - Branding */}
-        <div className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white">
+        {/* Lado Esquerdo - Branding com efeito 3D Parallax */}
+        <div 
+          ref={containerRef}
+          onMouseMove={handleMouseMove}
+          onMouseLeave={handleMouseLeave}
+          className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-neutral-900 text-white overflow-hidden perspective-1000"
+        >
           <div 
-            className="absolute inset-0 z-0 bg-cover bg-center opacity-40"
+            className="absolute inset-0 z-0 bg-cover bg-center transition-transform duration-300 ease-out"
             style={{ 
-              backgroundImage: "url('https://www.controlid.com.br/assets/img/og-image.jpg')",
+              backgroundImage: "url('/[IDFMAX-FP-M] IDFMAX-FP-M.jfif')",
+              transform: `
+                scale(1.1) 
+                translate3d(${mousePos.x * 20}px, ${mousePos.y * 20}px, 0)
+                rotateY(${mousePos.x * 5}deg)
+                rotateX(${mousePos.y * -5}deg)
+              `,
+              opacity: 0.6
             }}
           />
           <div className="relative z-10">
@@ -163,8 +187,8 @@ export default function Login() {
             </div>
           </div>
           <div className="relative z-10">
-            <h2 className="text-5xl font-extrabold mb-6 leading-tight">Segurança e agilidade em um só lugar.</h2>
-            <p className="text-xl text-gray-300 max-w-lg leading-relaxed">
+            <h2 className="text-5xl font-extrabold mb-6 leading-tight drop-shadow-lg">Segurança e agilidade em um só lugar.</h2>
+            <p className="text-xl text-gray-300 max-w-lg leading-relaxed drop-shadow-md">
               {mode === "reset-password" 
                 ? "Não se preocupe, vamos ajudar você a recuperar o acesso à sua conta rapidamente."
                 : "A plataforma definitiva para automação de orçamentos e controle de acesso profissional."}
@@ -173,7 +197,7 @@ export default function Login() {
           <div className="relative z-10 text-sm text-gray-500">&copy; {new Date().getFullYear()} Control iD. Inovação Brasileira.</div>
         </div>
 
-        {/* Lado Direito - Formuário */}
+        {/* Lado Direito - Formulário */}
         <div className="flex items-center justify-center p-8 bg-background overflow-y-auto">
           <div className="w-full max-w-[480px]">
             <Card className="proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl">
