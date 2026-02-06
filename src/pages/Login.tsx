@@ -173,7 +173,7 @@ export default function Login() {
             <div 
               className="w-[320px] h-[320px] bg-contain bg-no-repeat bg-center transition-transform duration-300 ease-out"
               style={{ 
-                backgroundImage: "url('/[IDFMAX-FP-M] IDFMAX-FP-M.jfif')",
+                backgroundImage: "url('/slide-3.jpg')",
                 transform: `
                   translate3d(${mousePos.x * 30}px, ${mousePos.y * 30}px, 0)
                   rotateY(${mousePos.x * 10}deg)
