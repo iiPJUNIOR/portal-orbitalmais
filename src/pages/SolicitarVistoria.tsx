@@ -163,28 +163,44 @@ export default function SolicitarVistoria() {
         delimiters: { start: "{{", end: "}}" }
       });
 
-      // Dados para o DOCX sem prefixo \n para evitar quebras indesejadas
+      // Mapeamento exaustivo de dados para cobrir camelCase e snake_case e variações PT-BR
+      const fullAddress = composeFullAddress();
       const docxData = {
+        // Snake Case
         vendedor: vendedor || "",
         empresa: empresa || "",
         cnpj: cnpj || "",
+        CNPJ: cnpj || "",
         empresa_phone: empresaPhone || "",
         empresa_email: empresaEmail || "",
         contato_nome: contatoNome || "",
         contato_telefone: contatoTelefone || "",
         cep: cep || "",
+        CEP: cep || "",
         rua: rua || "",
         numero: numero || "",
         complemento: complemento || "",
         bairro: bairro || "",
         cidade: cidade || "",
         uf: uf || "",
-        endereco: composeFullAddress(), // Única linha: Rua, Nº - Bairro - Cidade/UF - CEP
+        UF: uf || "",
+        endereco: fullAddress,
+        endereço: fullAddress,
         quantidade: quantidade || "",
+        qtd: quantidade || "",
         produto: produto || "",
         observacoes: observacoes || "",
+        observação: observacoes || "",
+
+        // Camel Case (alguns templates podem usar)
+        empresaEmail: empresaEmail || "",
+        empresaPhone: empresaPhone || "",
+        contatoNome: contatoNome || "",
+        contatoTelefone: contatoTelefone || "",
+        fullAddress: fullAddress,
       } as any;
 
+      // Se houver mapeamentos customizados salvos em Configurações, eles têm prioridade
       const mappings = settings?.docx_mappings || {};
       const renderData: Record<string, any> = { ...docxData };
 
@@ -196,7 +212,9 @@ export default function SolicitarVistoria() {
         });
       }
 
-      doc.render(renderData);
+      // Aplica os dados e renderiza
+      doc.setData(renderData);
+      doc.render();
 
       const out = doc.getZip().generate({ 
         type: "blob", 
