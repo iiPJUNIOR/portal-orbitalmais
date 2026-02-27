@@ -139,63 +139,37 @@ export default function SolicitarVistoria() {
       const doc = new Docxtemplater(zip, { 
         paragraphLoop: true, 
         linebreaks: true,
-        nullGetter: () => "", // Mantém vazio em vez de "undefined"
+        nullGetter: () => "",
         delimiters: { start: "{{", end: "}}" }
       });
 
-      const fullAddress = composeFullAddress();
-      
-      // Objeto base com todas as variações possíveis para evitar erros de Case-Sensitivity no Word
-      const baseData: Record<string, any> = {
-        vendedor: vendedor || "",
+      // Mapeamento EXATO baseado no template fornecido pelo usuário
+      const renderData: Record<string, any> = {
+        nomevendedor: vendedor || "",
         empresa: empresa || "",
-        cnpj: cnpj || "",
-        email: empresaEmail || "",
-        telefone: empresaPhone || "",
-        contato: contatoNome || "",
-        contato_telefone: contatoTelefone || "",
-        cep: cep || "",
-        rua: rua || "",
-        numero: numero || "",
-        complemento: complemento || "",
-        bairro: bairro || "",
-        cidade: cidade || "",
-        uf: uf || "",
-        endereco: fullAddress,
-        quantidade: quantidade || "",
+        emailcliente: empresaEmail || "",
+        Rua: rua || "",
+        Numero: numero || "",
+        Complemento: complemento || "",
+        Bairro: bairro || "",
+        Cidade: cidade || "",
+        UF: uf || "",
+        nomecliente: contatoNome || "",
+        telcliente: contatoTelefone || "",
         produto: produto || "",
-        observacoes: observacoes || ""
+        qtd: quantidade || "",
+        obs: observacoes || ""
       };
 
-      // Mapeamento Mega-Robusto: Cada chave é enviada em minúsculo, maiúsculo e Capitalizado
-      const docxData: Record<string, any> = {};
-      Object.entries(baseData).forEach(([key, val]) => {
-        docxData[key.toLowerCase()] = val;
-        docxData[key.toUpperCase()] = val;
-        docxData[key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()] = val;
-        
-        // Variações específicas comuns
-        if (key === 'empresa') docxData['razao_social'] = val;
-        if (key === 'cnpj') docxData['CNPJ'] = val;
-        if (key === 'endereco') docxData['endereço'] = val;
-        if (key === 'vendedor') docxData['consultor'] = val;
-        if (key === 'contato') docxData['responsavel'] = val;
+      // Adiciona variações em minúsculo/maiúsculo por segurança para as chaves exatas
+      const finalData: Record<string, any> = {};
+      Object.entries(renderData).forEach(([key, val]) => {
+        finalData[key] = val;
+        finalData[key.toLowerCase()] = val;
+        finalData[key.toUpperCase()] = val;
       });
 
-      // Se houver mapeamentos customizados no Settings (docx_mappings)
-      const mappings = settings?.docx_mappings || {};
-      const renderData: Record<string, any> = { ...docxData };
-
-      if (Object.keys(mappings).length > 0) {
-        Object.entries(mappings).forEach(([token, field]) => {
-          if (field === "none") return;
-          const cleanToken = token.replace(/[{}]/g, "").trim();
-          // Prioriza o campo mapeado
-          renderData[cleanToken] = docxData[field] ?? "";
-        });
-      }
-
-      doc.setData(renderData);
+      doc.setData(finalData);
       doc.render();
 
       const out = doc.getZip().generate({ 
