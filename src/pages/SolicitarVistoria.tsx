@@ -14,7 +14,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Mail, FileText, Copy, FileText as FileTextIcon } from "lucide-react";
 
 export default function SolicitarVistoria() {
-  // Seller / contact info
   const [vendedor, setVendedor] = useState("");
   const [empresa, setEmpresa] = useState("");
   const [empresaEmail, setEmpresaEmail] = useState("");
@@ -27,7 +26,6 @@ export default function SolicitarVistoria() {
   const [loadingDoc, setLoadingDoc] = useState(false);
   const [settings, setSettings] = useState<UserSettings | null>(null);
 
-  // Address split fields
   const [cep, setCep] = useState("");
   const [rua, setRua] = useState("");
   const [numero, setNumero] = useState("");
@@ -36,22 +34,17 @@ export default function SolicitarVistoria() {
   const [cidade, setCidade] = useState("");
   const [uf, setUf] = useState("");
 
-  // CNPJ related
   const [cnpj, setCnpj] = useState("");
-  const [fetchingCnpj, setFetchingCnpj] = useState(false);
   const lastFetchedCnpj = useRef<string | null>(null);
-
-  // Track last fetched CEP to avoid repeated requests
   const lastFetchedCepRef = useRef<string | null>(null);
 
-  // Prefill seller info from user settings
   useEffect(() => {
     (async () => {
       try {
         const s = await getUserSettings();
         if (!s) return;
         setSettings(s);
-        if (!vendedor && s.seller_name) setVendedor(s.seller_name);
+        if (s.seller_name) setVendedor(s.seller_name);
       } catch (err) {
         console.warn("SolicitarVistoria: falha ao obter seller settings", err);
       }
@@ -60,7 +53,6 @@ export default function SolicitarVistoria() {
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
-  // Helper: compose a full single-line address
   function composeFullAddress() {
     const parts: string[] = [];
     if (rua) {
@@ -99,9 +91,6 @@ export default function SolicitarVistoria() {
     return lines.filter(Boolean).join("\n");
   };
 
-  /**
-   * Robust healing of fragmented tokens in docx XML.
-   */
   function healDocxTokens(xml: string): string {
     if (!xml) return xml;
     const paragraphRegex = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
@@ -150,88 +139,50 @@ export default function SolicitarVistoria() {
       const doc = new Docxtemplater(zip, { 
         paragraphLoop: true, 
         linebreaks: true,
-        // Garante que campos não encontrados fiquem vazios em vez de "undefined"
-        nullGetter: () => "",
+        nullGetter: () => "", // Mantém vazio em vez de "undefined"
         delimiters: { start: "{{", end: "}}" }
       });
 
       const fullAddress = composeFullAddress();
       
-      // Mapeamento exaustivo para cobrir todas as variações de tags comuns no Word
-      const docxData: Record<string, any> = {
-        // Vendedor
+      // Objeto base com todas as variações possíveis para evitar erros de Case-Sensitivity no Word
+      const baseData: Record<string, any> = {
         vendedor: vendedor || "",
-        vendedor_nome: vendedor || "",
-        vendedorNome: vendedor || "",
-        consultor: vendedor || "",
-        
-        // Empresa
         empresa: empresa || "",
-        razao_social: empresa || "",
-        razaoSocial: empresa || "",
-        cliente: empresa || "",
-        
-        // Documentos
         cnpj: cnpj || "",
-        CNPJ: cnpj || "",
-        
-        // Contato e E-mail
         email: empresaEmail || "",
-        empresa_email: empresaEmail || "",
-        empresaEmail: empresaEmail || "",
-        contato_email: empresaEmail || "",
-        
         telefone: empresaPhone || "",
-        empresa_phone: empresaPhone || "",
-        empresa_telefone: empresaPhone || "",
-        empresaPhone: empresaPhone || "",
-        
-        contato_nome: contatoNome || "",
-        contatoNome: contatoNome || "",
         contato: contatoNome || "",
-        responsavel: contatoNome || "",
-        contato_responsavel: contatoNome || "",
-        
         contato_telefone: contatoTelefone || "",
-        contatoTelefone: contatoTelefone || "",
-        contato_celular: contatoTelefone || "",
-        
-        // Endereço (Partes)
         cep: cep || "",
-        CEP: cep || "",
         rua: rua || "",
-        logradouro: rua || "",
         numero: numero || "",
-        n: numero || "",
         complemento: complemento || "",
         bairro: bairro || "",
         cidade: cidade || "",
-        municipio: cidade || "",
         uf: uf || "",
-        UF: uf || "",
-        estado: uf || "",
-        
-        // Endereço (Completo)
         endereco: fullAddress,
-        endereço: fullAddress,
-        endereco_completo: fullAddress,
-        
-        // Projeto
         quantidade: quantidade || "",
-        qtd: quantidade || "",
-        unidades: quantidade || "",
         produto: produto || "",
-        equipamento: produto || "",
-        solicitacao: produto || "",
-        
-        // Observações
-        observacoes: observacoes || "",
-        observação: observacoes || "",
-        obs: observacoes || "",
-        comentarios: observacoes || ""
+        observacoes: observacoes || ""
       };
 
-      // Aplica mapeamentos customizados do Settings se existirem
+      // Mapeamento Mega-Robusto: Cada chave é enviada em minúsculo, maiúsculo e Capitalizado
+      const docxData: Record<string, any> = {};
+      Object.entries(baseData).forEach(([key, val]) => {
+        docxData[key.toLowerCase()] = val;
+        docxData[key.toUpperCase()] = val;
+        docxData[key.charAt(0).toUpperCase() + key.slice(1).toLowerCase()] = val;
+        
+        // Variações específicas comuns
+        if (key === 'empresa') docxData['razao_social'] = val;
+        if (key === 'cnpj') docxData['CNPJ'] = val;
+        if (key === 'endereco') docxData['endereço'] = val;
+        if (key === 'vendedor') docxData['consultor'] = val;
+        if (key === 'contato') docxData['responsavel'] = val;
+      });
+
+      // Se houver mapeamentos customizados no Settings (docx_mappings)
       const mappings = settings?.docx_mappings || {};
       const renderData: Record<string, any> = { ...docxData };
 
@@ -239,7 +190,7 @@ export default function SolicitarVistoria() {
         Object.entries(mappings).forEach(([token, field]) => {
           if (field === "none") return;
           const cleanToken = token.replace(/[{}]/g, "").trim();
-          // Se o campo mapeado existe no nosso docxData, usa ele. Se não, tenta o valor direto do formulário.
+          // Prioriza o campo mapeado
           renderData[cleanToken] = docxData[field] ?? "";
         });
       }
