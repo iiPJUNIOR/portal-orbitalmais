@@ -60,28 +60,19 @@ export default function SolicitarVistoria() {
 
   const subject = empresa ? `Solicitação de vistoria técnica presencial – ${empresa}` : "Solicitação de vistoria técnica presencial";
 
-  // Helper: compose a full single-line address: Street, Number - Neighborhood - City/UF - CEP: 00000-000
+  // Helper: compose a full single-line address
   function composeFullAddress() {
     const parts: string[] = [];
-    
-    // Part 1: Street and Number
     if (rua) {
       let main = rua;
       if (numero) main += `, ${numero}`;
       if (complemento) main += ` ${complemento}`;
       parts.push(main);
     }
-    
-    // Part 2: Neighborhood
     if (bairro) parts.push(bairro);
-    
-    // Part 3: City/UF
     const cityState = [cidade, uf].filter(Boolean).join("/");
     if (cityState) parts.push(cityState);
-    
-    // Part 4: CEP
     if (cep) parts.push(`CEP: ${cep}`);
-    
     return parts.filter(Boolean).join(" - ");
   }
 
@@ -147,7 +138,6 @@ export default function SolicitarVistoria() {
       
       const zip = new PizZip(arrayBuffer);
 
-      // Limpa fragmentação de tags XML
       const filesToHeal = ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"];
       for (const fileName of filesToHeal) {
         const file = zip.file(fileName);
@@ -159,48 +149,89 @@ export default function SolicitarVistoria() {
 
       const doc = new Docxtemplater(zip, { 
         paragraphLoop: true, 
-        linebreaks: true, 
+        linebreaks: true,
+        // Garante que campos não encontrados fiquem vazios em vez de "undefined"
+        nullGetter: () => "",
         delimiters: { start: "{{", end: "}}" }
       });
 
-      // Mapeamento exaustivo de dados para cobrir camelCase e snake_case e variações PT-BR
       const fullAddress = composeFullAddress();
-      const docxData = {
-        // Snake Case
+      
+      // Mapeamento exaustivo para cobrir todas as variações de tags comuns no Word
+      const docxData: Record<string, any> = {
+        // Vendedor
         vendedor: vendedor || "",
+        vendedor_nome: vendedor || "",
+        vendedorNome: vendedor || "",
+        consultor: vendedor || "",
+        
+        // Empresa
         empresa: empresa || "",
+        razao_social: empresa || "",
+        razaoSocial: empresa || "",
+        cliente: empresa || "",
+        
+        // Documentos
         cnpj: cnpj || "",
         CNPJ: cnpj || "",
-        empresa_phone: empresaPhone || "",
+        
+        // Contato e E-mail
+        email: empresaEmail || "",
         empresa_email: empresaEmail || "",
+        empresaEmail: empresaEmail || "",
+        contato_email: empresaEmail || "",
+        
+        telefone: empresaPhone || "",
+        empresa_phone: empresaPhone || "",
+        empresa_telefone: empresaPhone || "",
+        empresaPhone: empresaPhone || "",
+        
         contato_nome: contatoNome || "",
+        contatoNome: contatoNome || "",
+        contato: contatoNome || "",
+        responsavel: contatoNome || "",
+        contato_responsavel: contatoNome || "",
+        
         contato_telefone: contatoTelefone || "",
+        contatoTelefone: contatoTelefone || "",
+        contato_celular: contatoTelefone || "",
+        
+        // Endereço (Partes)
         cep: cep || "",
         CEP: cep || "",
         rua: rua || "",
+        logradouro: rua || "",
         numero: numero || "",
+        n: numero || "",
         complemento: complemento || "",
         bairro: bairro || "",
         cidade: cidade || "",
+        municipio: cidade || "",
         uf: uf || "",
         UF: uf || "",
+        estado: uf || "",
+        
+        // Endereço (Completo)
         endereco: fullAddress,
         endereço: fullAddress,
+        endereco_completo: fullAddress,
+        
+        // Projeto
         quantidade: quantidade || "",
         qtd: quantidade || "",
+        unidades: quantidade || "",
         produto: produto || "",
+        equipamento: produto || "",
+        solicitacao: produto || "",
+        
+        // Observações
         observacoes: observacoes || "",
         observação: observacoes || "",
+        obs: observacoes || "",
+        comentarios: observacoes || ""
+      };
 
-        // Camel Case (alguns templates podem usar)
-        empresaEmail: empresaEmail || "",
-        empresaPhone: empresaPhone || "",
-        contatoNome: contatoNome || "",
-        contatoTelefone: contatoTelefone || "",
-        fullAddress: fullAddress,
-      } as any;
-
-      // Se houver mapeamentos customizados salvos em Configurações, eles têm prioridade
+      // Aplica mapeamentos customizados do Settings se existirem
       const mappings = settings?.docx_mappings || {};
       const renderData: Record<string, any> = { ...docxData };
 
@@ -208,11 +239,11 @@ export default function SolicitarVistoria() {
         Object.entries(mappings).forEach(([token, field]) => {
           if (field === "none") return;
           const cleanToken = token.replace(/[{}]/g, "").trim();
+          // Se o campo mapeado existe no nosso docxData, usa ele. Se não, tenta o valor direto do formulário.
           renderData[cleanToken] = docxData[field] ?? "";
         });
       }
 
-      // Aplica os dados e renderiza
       doc.setData(renderData);
       doc.render();
 
