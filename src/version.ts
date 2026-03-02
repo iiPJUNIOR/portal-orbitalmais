@@ -1,0 +1,1 @@
+export const APP_VERSION = "02032025.132845"; // Este valor será atualizado automaticamente em cada deploy

@@ -27,6 +27,7 @@ import { useSession } from "@/contexts/SessionProvider";
 import { supabase } from "@/integrations/supabase/client";
 import Logo from "@/components/Logo";
 import { getUserSettings } from "@/services/settingsService";
+import { APP_VERSION } from "@/version";
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -193,11 +194,16 @@ export function AppSidebar() {
       <SidebarFooter className="p-3 border-t bg-muted/10">
         <div className="mb-2 px-2">
           {user ? (
-            <div className="flex items-center gap-2 overflow-hidden">
-              <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                <User className="h-3.5 w-3.5 text-primary" />
+            <div className="flex flex-col gap-1 overflow-hidden">
+              <div className="flex items-center gap-2 overflow-hidden">
+                <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                  <User className="h-3.5 w-3.5 text-primary" />
+                </div>
+                <span className="text-xs font-medium text-muted-foreground truncate">{user.email}</span>
               </div>
-              <span className="text-xs font-medium text-muted-foreground truncate">{user.email}</span>
+              <div className="pl-8 text-[9px] font-mono text-muted-foreground/50">
+                v{APP_VERSION}
+              </div>
             </div>
           ) : (
             <div className="text-xs text-muted-foreground">Não autenticado</div>
