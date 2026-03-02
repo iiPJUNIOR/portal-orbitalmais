@@ -23,7 +23,6 @@ interface WizardProps {
   };
   onComplete: (data: any) => void;
   onCancel: () => void;
-  // New optional props for continuing from a draft
   initialData?: any;
   initialStep?: number;
   draftId?: string;
@@ -36,7 +35,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const [productSearch, setProductSearch] = useState("");
   const lastFetchedCnpj = useRef<string>("");
 
-  const initialFormState = {
+  const [formData, setFormData] = useState<any>({
     pipedriveUrl: "",
     dealId: "",
     version: "1",
@@ -58,9 +57,21 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     totalPrice: 0,
     includeApprovalPage: true,
     approvalLink: ""
-  };
+  });
 
-  const [formData, setFormData] = useState<any>(initialFormState);
+  // Sync seller data if it arrives late (prevents "sometimes empty" issue)
+  useEffect(() => {
+    if (initialSellerData) {
+      setFormData((prev: any) => ({
+        ...prev,
+        // Only fill if current value is empty to avoid overwriting user typing
+        sellerName: prev.sellerName || initialSellerData.name || "",
+        sellerRole: prev.sellerRole || initialSellerData.role || "",
+        sellerEmail: prev.sellerEmail || initialSellerData.email || "",
+        sellerPhone: prev.sellerPhone || initialSellerData.phone || "",
+      }));
+    }
+  }, [initialSellerData]);
 
   // If initialData is provided (continuing a draft), initialize state accordingly
   useEffect(() => {
@@ -113,7 +124,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       const headers = base.headers;
       const nameCol = base.name_column?.toLowerCase();
       const descCol = base.description_column?.toLowerCase();
-      const extraCols = (base.extra_columns || []).map(c => c.toLowerCase());
 
       return base.rows.map((row, idx) => {
         const p: any = {};
@@ -207,7 +217,29 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   };
 
   const handleReset = () => {
-    setFormData(initialFormState);
+    setFormData({
+      pipedriveUrl: "",
+      dealId: "",
+      version: "1",
+      date: new Date().toISOString().split('T')[0],
+      companyName: "",
+      contactName: "",
+      cnpj: "",
+      address: "",
+      sellerName: initialSellerData.name || "",
+      sellerRole: initialSellerData.role || "",
+      sellerEmail: initialSellerData.email || "",
+      sellerPhone: initialSellerData.phone || "",
+      users: "",
+      devices: 0,
+      qtd: "0",
+      qtd1: "0",
+      qtd2: "0",
+      selectedProducts: [] as any[],
+      totalPrice: 0,
+      includeApprovalPage: true,
+      approvalLink: ""
+    });
     setCurrentStep(1);
     lastFetchedCnpj.current = "";
     toast.info("Iniciando novo orçamento.");
@@ -234,7 +266,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice
     });
 
-    // If this wizard was opened from a draft, update the draft with latest data
     if (draftId) {
       try {
         updateDraft(draftId, { data: formData, step: currentStep });
@@ -246,12 +277,10 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   };
 
-  // New: save draft action (visible after step 4)
   const handleSaveDraft = async () => {
     try {
       const tId = toast.loading("Salvando rascunho...");
       if (draftId) {
-        // update existing draft
         const ok = updateDraft(draftId, { data: formData, step: currentStep });
         if (ok) {
           toast.success("Rascunho atualizado", { id: tId });
@@ -269,7 +298,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   };
 
-  // Append a suffix (e.g., 'ASK') to the selected product's name, avoiding duplicates
   const appendToName = (baseId: string, suffix: string) => {
     if (!suffix) return;
     setFormData((prev: any) => {
@@ -277,7 +305,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         if (sp.baseId !== baseId) return sp;
         const currentName = String(sp.name || "").trim();
         const parts = currentName.split(" - ").map((s: string) => s.trim()).filter(Boolean);
-        // If suffix already included, do nothing
         if (parts.includes(suffix)) return sp;
         const newName = currentName ? `${currentName} - ${suffix}` : suffix;
         return { ...sp, name: newName };
@@ -286,10 +313,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     });
   };
 
-  // New handler: when clicking Next, if on step 2 and seller info present, auto-save it to user settings
   const handleNext = async () => {
     if (currentStep === 2) {
-      // If seller fields filled, persist to user settings (first-time save)
       const sellerPayload: any = {
         seller_name: formData.sellerName || undefined,
         seller_role: formData.sellerRole || undefined,
@@ -301,10 +326,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       if (anyFilled) {
         try {
           await saveUserSettings(sellerPayload);
-          toast.success("Perfil do vendedor salvo automaticamente");
         } catch (err) {
           console.warn("Falha ao salvar perfil automaticamente", err);
-          toast.error("Não foi possível salvar o perfil automaticamente");
         }
       }
     }
@@ -337,24 +360,24 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 onChange={(e) => setFormData((prev: any) => ({ ...prev, cnpj: (e.target.value) }))}
               />
             </div>
-            <div className="space-y-2"><Label>Razão Social (companyName)</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Nome do Contato (contactName)</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Razão Social</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} /></div>
           </div>
         );
       case 2:
         return (
           <div className="space-y-4">
-            <div className="space-y-2"><Label>Vendedor (sellerName)</Label><Input value={formData.sellerName} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Cargo (sellerRole)</Label><Input value={formData.sellerRole} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerRole: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>E-mail (sellerEmail)</Label><Input value={formData.sellerEmail} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerEmail: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Telefone (sellerPhone)</Label><Input value={formData.sellerPhone} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerPhone: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Vendedor</Label><Input value={formData.sellerName} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerName: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Cargo</Label><Input value={formData.sellerRole} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerRole: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>E-mail</Label><Input value={formData.sellerEmail} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerEmail: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Telefone</Label><Input value={formData.sellerPhone} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerPhone: e.target.value }))} /></div>
           </div>
         );
       case 3:
         return (
           <div className="space-y-4">
-            <Label>Usuários do Sistema (users)</Label>
+            <Label>Usuários do Sistema</Label>
             <Input type="number" value={formData.users} onChange={(e) => setFormData((prev: any) => ({ ...prev, users: e.target.value }))} />
           </div>
         );
@@ -455,7 +478,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         return (
           <div className="space-y-6">
             <div className="p-6 bg-primary text-white rounded-2xl">
-              <Label>VALOR TOTAL DA PROPOSTA (totalPrice)</Label>
+              <Label>VALOR TOTAL DA PROPOSTA</Label>
               <div className="flex items-center gap-2 mt-2">
                 <span className="text-2xl opacity-70">R$</span>
                 <Input
@@ -498,12 +521,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                     onChange={(e) => setFormData((prev: any) => ({ ...prev, approvalLink: e.target.value }))}
                     className="bg-card"
                   />
-                  <p className="text-[10px] text-muted-foreground">O link inserido será incorporado no botão de aprovação da proposta.</p>
                 </div>
               )}
             </div>
-
-            <p className="text-sm text-muted-foreground text-center">Clique no botão abaixo para gerar e baixar sua proposta.</p>
           </div>
         );
       case 6:
@@ -579,7 +599,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 {currentStep === 1 ? "Cancelar" : "Voltar"}
               </Button>
 
-              {/* Save draft button visible after step 4 */}
               {currentStep >= 4 ? (
                 <Button variant="outline" onClick={handleSaveDraft}>
                   <Save className="mr-2 h-4 w-4" /> Salvar rascunho
