@@ -12,6 +12,7 @@ import { saveAs } from "file-saver";
 import { getUserSettings, UserSettings } from "@/services/settingsService";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, Mail, FileText, Copy, FileText as FileTextIcon } from "lucide-react";
+import { fetchCnpjData } from "@/services/cnpjService";
 
 export default function SolicitarVistoria() {
   const [vendedor, setVendedor] = useState("");
@@ -183,7 +184,7 @@ export default function SolicitarVistoria() {
       showSuccess("DOCX gerado!");
     } catch (err: any) {
       console.error(err);
-      showError(`Erro: ${err.message || String(err)}`, { id: toastId });
+      showError(`Erro: ${err.message || String(err)}`);
     } finally {
       setLoadingDoc(false);
     }
@@ -240,17 +241,11 @@ export default function SolicitarVistoria() {
         if (lastFetchedCnpj.current === digits) return;
         lastFetchedCnpj.current = digits;
         try {
-          const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${digits}`);
-          const data = await res.json();
+          const data = await fetchCnpjData(digits);
           if (data) {
-            setNumero(String(data.numero || ""));
-            setComplemento(String(data.complemento || ""));
-            if (!empresa) setEmpresa(data.razao_social || "");
-            if (data.cep) {
-              const c = data.cep.replace(/\D/g, "");
-              setCep(`${c.slice(0,5)}-${c.slice(5)}`);
-              fetchCepData(c);
-            }
+            setNumero(String(data.address ? data.address.split(",")[0] || "" : ""));
+            if (!empresa) setEmpresa(data.companyName || "");
+            if (data.address) setRua(data.address);
           }
         } catch {}
       }, 600);

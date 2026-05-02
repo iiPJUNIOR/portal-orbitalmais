@@ -182,29 +182,57 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     return arr;
   }, [allProducts, productSearch, selectedMap]);
 
-  const fetchCnpjData = async (rawCnpj: string) => {
-    if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
-    lastFetchedCnpj.current = rawCnpj;
-    const toastId = toast.loading("Buscando CNPJ...");
-    try {
-      const res = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${rawCnpj}`);
-      if (!res.ok) throw new Error();
-      const data = await res.json();
-      setFormData((prev: any) => ({
-        ...prev,
-        companyName: data.razao_social || data.nome_fantasia || prev.companyName,
-        address: [data.logradouro, data.numero, data.bairro, data.municipio].filter(Boolean).join(", ")
-      }));
-      toast.success("Dados preenchidos!", { id: toastId });
-    } catch {
-      toast.error("Erro ao carregar CNPJ.", { id: toastId });
-    }
-  };
-
-  useEffect(() => {
-    const digits = String(formData.cnpj || "").replace(/\D/g, "");
-    if (digits.length === 14) fetchCnpjData(digits);
-  }, [formData.cnpj]);
+   const cnpjDebounce = useRef<NodeJS.Timeout | null>(null);
+  
+    const fetchCnpjData = async (rawCnpj: string) => {
+      if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
+      lastFetchedCnpj.current = rawCnpj;
+      const toastId = toast.loading("Buscando CNPJ...");
+      try {
+        const { fetchCnpjData: lookupCnpj } = await import("@/services/cnpjService");
+        const data = await lookupCnpj(rawCnpj);
+        setFormData((prev: any) => ({
+          ...prev,
+          companyName: data.companyName || prev.companyName,
+          address: data.address || prev.address
+        }));
+        toast.success("Dados preenchidos!", { id: toastId });
+      } catch (error) {
+        console.error("CNPJ fetch error:", error);
+        toast.error("Erro ao buscar CNPJ. Tente novamente.", { id: toastId });
+      }
+    };
+ 
+   const handleCnpjChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+     let value = e.target.value.replace(/\D/g, "");
+     if (value.length > 14) value = value.slice(0, 14);
+     // Apply mask
+     if (value.length >= 3) value = value.replace(/^(\d{2})(\d)/, "$1.$2");
+     if (value.length >= 7) value = value.replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3");
+     if (value.length >= 11) value = value.replace(/^(\d{2})\.(\d{3})\.(\d{3})(\d)/, "$1.$2.$3/$4");
+     if (value.length >= 16) value = value.replace(/^(\d{2})\.(\d{3})\.(\d{3})\/(\d{4})(\d)/, "$1.$2.$3/$4-$5");
+     setFormData((prev: any) => ({ ...prev, cnpj: value }));
+   };
+ 
+   const handleManualCnpjLookup = () => {
+     const digits = String(formData.cnpj || "").replace(/\D/g, "");
+     if (digits.length === 14) {
+       fetchCnpjData(digits);
+     } else {
+       toast.error("CNPJ deve ter 14 dígitos.");
+     }
+   };
+ 
+   useEffect(() => {
+     if (cnpjDebounce.current) clearTimeout(cnpjDebounce.current);
+     const digits = String(formData.cnpj || "").replace(/\D/g, "");
+     if (digits.length === 14) {
+       cnpjDebounce.current = setTimeout(() => {
+         fetchCnpjData(digits);
+       }, 600);
+     }
+     return () => { if (cnpjDebounce.current) clearTimeout(cnpjDebounce.current); };
+   }, [formData.cnpj]);
 
   const handleProductToggle = (product: any) => {
     setFormData((prev: any) => {
@@ -352,14 +380,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               <div className="space-y-2"><Label>Versão</Label><Input value={formData.version} onChange={(e) => setFormData((prev: any) => ({ ...prev, version: e.target.value }))} /></div>
               <div className="space-y-2"><Label>Data</Label><Input type="date" value={formData.date} onChange={(e) => setFormData((prev: any) => ({ ...prev, date: e.target.value }))} /></div>
             </div>
-            <div className="space-y-2">
-              <Label>CNPJ</Label>
-              <Input
-                placeholder="00.000.000/0000-00"
-                value={formData.cnpj}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, cnpj: (e.target.value) }))}
-              />
-            </div>
+             <div className="space-y-2">
+               <Label>CNPJ</Label>
+               <div className="flex gap-2">
+                 <Input
+                   placeholder="00.000.000/0000-00"
+                   value={formData.cnpj}
+                   onChange={handleCnpjChange}
+                 />
+                 <Button type="button" variant="outline" onClick={handleManualCnpjLookup}>
+                   <Search className="w-4 h-4" />
+                 </Button>
+               </div>
+             </div>
             <div className="space-y-2"><Label>Razão Social</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} /></div>

@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/select";
 import { format } from "date-fns";
 import { toast } from "sonner";
+import { fetchCnpjData, CnpjData } from "@/services/cnpjService";
 
 export interface ProposalFormData {
   cnpj: string;
@@ -120,31 +121,8 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     setFormData(prev => ({ ...prev, phone: formatted }));
   };
 
-  // Helper: build an address string from multiple possible fields returned by APIs
-  function buildAddressFromApi(data: any) {
-    // Common fields: logradouro, numero, complemento, bairro, municipio, uf, cep
-    const parts: string[] = [];
-    const street = data.logradouro || data.street || data.address || data.rua || "";
-    const number = data.numero || data.number || data.numero_endereco || "";
-    const complement = data.complemento || data.complement || "";
-    const neighborhood = data.bairro || data.neighborhood || "";
-    const city = data.municipio || data.municipio_nome || data.city || data.nome_cidade || "";
-    const uf = data.uf || data.estado || data.state || "";
-    const cep = data.cep || data.CEP || "";
-
-    if (street) {
-      const s = `${street}${number ? `, ${number}` : ""}${complement ? ` ${complement}` : ""}`;
-      parts.push(s);
-    }
-    if (neighborhood) parts.push(neighborhood);
-    if (city || uf) parts.push([city, uf].filter(Boolean).join("/"));
-    if (cep) parts.push(cep);
-
-    return parts.filter(Boolean).join(" - ");
-  }
-
-  // Fetch CNPJ data from Brasil API (fallbacks handled)
-  async function fetchCnpjData(rawDigits: string) {
+  // Fetch CNPJ data using multiple API providers with fallback
+  async function handleCnpjLookup(rawDigits: string) {
     if (!rawDigits || rawDigits.length !== 14) return;
     // Avoid refetching the same CNPJ repeatedly
     if (lastFetchedCnpj === rawDigits) {
@@ -156,26 +134,14 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     const toastId = toast.loading("Buscando dados do CNPJ...");
 
     try {
-      // Try Brasil API endpoint
-      const url = `https://brasilapi.com.br/api/cnpj/v1/${rawDigits}`;
-      const res = await fetch(url);
-      if (!res.ok) {
-        throw new Error(`API retornou ${res.status}`);
-      }
-      const data = await res.json();
-
-      // Map various possible fields to our form
-      const companyName = data.razao_social || data.nome || data.nome_fantasia || data.fantasia || data.social || "";
-      const email = data.email || data.e_mail || data.contato_email || "";
-      const phone = data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || "";
-      const address = buildAddressFromApi(data);
+      const data = await fetchCnpjData(rawDigits);
 
       setFormData(prev => ({
         ...prev,
-        companyName: companyName || prev.companyName,
-        email: email || prev.email,
-        phone: phone || prev.phone,
-        address: address || prev.address,
+        companyName: data.companyName || prev.companyName,
+        email: data.email || prev.email,
+        phone: data.phone || prev.phone,
+        address: data.address || prev.address,
       }));
 
       toast.dismiss(toastId);
@@ -183,8 +149,7 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     } catch (err: any) {
       console.error("fetchCnpjData error", err);
       toast.dismiss(toastId);
-      // If Brasil API fails, show a helpful error but don't block user
-      toast.error("Não foi possível obter dados para o CNPJ informado.");
+      toast.error("Não foi possível obter dados para o CNPJ informado. Tente novamente.");
       setLastFetchedCnpj(null); // allow retry later
     } finally {
       setFetchingCnpj(false);
@@ -203,7 +168,7 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     // If user typed full CNPJ, wait a short delay and then fetch
     if (digits.length === 14) {
       debounceRef.current = window.setTimeout(() => {
-        fetchCnpjData(digits);
+        handleCnpjLookup(digits);
         debounceRef.current = null;
       }, 600);
     } else {
@@ -229,7 +194,7 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
       toast.error("Informe um CNPJ válido (14 dígitos) para buscar");
       return;
     }
-    fetchCnpjData(digits);
+    handleCnpjLookup(digits);
   };
 
   return (
