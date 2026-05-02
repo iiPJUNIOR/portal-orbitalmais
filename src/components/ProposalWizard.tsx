@@ -13,6 +13,13 @@ import { Switch } from "@/components/ui/switch";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
 import { saveUserSettings } from "@/services/settingsService";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 interface WizardProps {
   initialSellerData: {
@@ -33,6 +40,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const [loadingBases, setLoadingBases] = useState(true);
   const [availableBases, setAvailableBases] = useState<StoredBase[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [filterFacial, setFilterFacial] = useState<string>("ALL"); // "ALL" | "1" | "2"
+  const [filterSeries, setFilterSeries] = useState<string>("ALL"); // "ALL" | "Pro" | "Max"
   const lastFetchedCnpj = useRef<string>("");
 
   const [formData, setFormData] = useState<any>({
@@ -137,6 +146,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           return val !== undefined && val !== null ? { label: col, value: String(val).trim() } : null;
         }).filter(Boolean);
 
+        const facialVal = p.facial || p["Facial"] || p["facial"] || "None";
         return {
           id: `${base.id}-${idx}`,
           name: String(name || "Produto sem nome").trim(),
@@ -144,6 +154,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           extras: extras,
           sku: p.sku || p["part number"] || p.pn || "",
           category: p.categoria || p.category || "",
+          facial: facialVal,
           baseName: base.name
         };
       });
@@ -162,11 +173,22 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const filteredProducts = React.useMemo(() => {
     const q = productSearch.toLowerCase();
     const arr = allProducts.filter((p) => {
-      return (
-        p.name.toLowerCase().includes(q) ||
-        p.sku.toLowerCase().includes(q) ||
-        p.extras.some((ex: any) => ex.value.toLowerCase().includes(q))
-      );
+      if (q) {
+        const matchesSearch =
+          p.name.toLowerCase().includes(q) ||
+          p.sku.toLowerCase().includes(q) ||
+          p.extras.some((ex: any) => ex.value.toLowerCase().includes(q));
+        if (!matchesSearch) return false;
+      }
+      if (filterFacial !== "ALL" && p.facial !== filterFacial) return false;
+      if (filterSeries !== "ALL") {
+        if (filterSeries === "Max") {
+          if (p.facial !== "Max") return false;
+        } else if (filterSeries === "Pro") {
+          if (p.facial === "Max" || p.facial === "Lite") return false;
+        }
+      }
+      return true;
     });
 
     arr.sort((a, b) => {
@@ -417,9 +439,37 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       case 4:
         return (
           <div className="space-y-6">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="relative md:col-span-1">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="filterFacial">Facial (IDFace)</Label>
+                <Select value={filterFacial} onValueChange={setFilterFacial}>
+                  <SelectTrigger id="filterFacial">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todos</SelectItem>
+                    <SelectItem value="1">1 IDFace</SelectItem>
+                    <SelectItem value="2">2 IDFace</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="filterSeries">Série</Label>
+                <Select value={filterSeries} onValueChange={setFilterSeries}>
+                  <SelectTrigger id="filterSeries">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">Todas</SelectItem>
+                    <SelectItem value="Pro">Pro (1 ou 2)</SelectItem>
+                    <SelectItem value="Max">Max</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-card">
               {filteredProducts.map(p => {
