@@ -146,7 +146,17 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           return val !== undefined && val !== null ? { label: col, value: String(val).trim() } : null;
         }).filter(Boolean);
 
-        const facialVal = p.facial || p["Facial"] || p["facial"] || "None";
+        const raw = Object.keys(p).find(k => /facial|idface/i.test(k)) ? p[Object.keys(p).find(k => /facial|idface/i.test(k))!] : "";
+        const facialRaw = String(raw || "").trim();
+        let facialQty: string = "None";
+        let facialSeries: string = "None";
+        if (facialRaw) {
+          const lower = facialRaw.toLowerCase();
+          if (/^1/.test(lower)) facialQty = "1";
+          else if (/^2/.test(lower)) facialQty = "2";
+          if (/lite/.test(lower)) facialSeries = "Lite";
+          else if (/max/.test(lower)) facialSeries = "Max";
+        }
         return {
           id: `${base.id}-${idx}`,
           name: String(name || "Produto sem nome").trim(),
@@ -154,7 +164,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           extras: extras,
           sku: p.sku || p["part number"] || p.pn || "",
           category: p.categoria || p.category || "",
-          facial: facialVal,
+          facialQty: facialQty,
+          facialSeries: facialSeries,
           baseName: base.name
         };
       });
@@ -180,14 +191,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           p.extras.some((ex: any) => ex.value.toLowerCase().includes(q));
         if (!matchesSearch) return false;
       }
-      if (filterFacial !== "ALL" && p.facial !== filterFacial) return false;
-      if (filterSeries !== "ALL") {
-        if (filterSeries === "Max") {
-          if (p.facial !== "Max") return false;
-        } else if (filterSeries === "Pro") {
-          if (p.facial === "Max" || p.facial === "Lite") return false;
-        }
-      }
+      if (filterFacial !== "ALL" && p.facialQty !== filterFacial) return false;
+      if (filterSeries !== "ALL" && p.facialSeries !== filterSeries) return false;
       return true;
     });
 
@@ -202,7 +207,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     });
 
     return arr;
-  }, [allProducts, productSearch, selectedMap]);
+  }, [allProducts, productSearch, filterFacial, filterSeries, selectedMap]);
 
    const cnpjDebounce = useRef<NodeJS.Timeout | null>(null);
   
@@ -445,7 +450,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="filterFacial">Facial (IDFace)</Label>
+                <Label htmlFor="filterFacial">Quantidade</Label>
                 <Select value={filterFacial} onValueChange={setFilterFacial}>
                   <SelectTrigger id="filterFacial">
                     <SelectValue placeholder="Todos" />
@@ -458,14 +463,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="filterSeries">Série</Label>
-                <Select value={filterSeries} onValueChange={setFilterSeries}>
+                <Label htmlFor="filterSeries">Dispositivo</Label>
+                <Select value={filterSeries} onValueChange={(val) => { setFilterSeries(val); setFilterFacial("ALL"); }}>
                   <SelectTrigger id="filterSeries">
-                    <SelectValue placeholder="Todos" />
+                    <SelectValue placeholder="Todas" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="ALL">Todas</SelectItem>
-                    <SelectItem value="Pro">Pro (1 ou 2)</SelectItem>
+                    <SelectItem value="Lite">Lite</SelectItem>
                     <SelectItem value="Max">Max</SelectItem>
                   </SelectContent>
                 </Select>
