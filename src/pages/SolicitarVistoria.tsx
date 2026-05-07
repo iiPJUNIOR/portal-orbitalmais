@@ -71,7 +71,7 @@ export default function SolicitarVistoria() {
 
   const buildEmailBody = () => {
     const lines: string[] = [];
-    lines.push(`Olá Evelem,\n`);
+    lines.push(`Olá,\n`);
     lines.push(`Poderia, por gentileza, agendar uma vistoria técnica para atendimento à empresa ${empresa || "[Razão Social]"}, conforme informações abaixo:\n`);
 
     if (vendedor) lines.push(`• Vendedor: ${vendedor}`);
@@ -343,7 +343,7 @@ export default function SolicitarVistoria() {
           <Button variant="secondary" onClick={() => {
             const body = encodeURIComponent(buildEmailBody());
             const sub = encodeURIComponent(subject);
-            window.location.href = `mailto:?subject=${sub}&body=${body}`;
+            window.location.href = `mailto:vistoria@controlid.com.br?subject=${sub}&body=${body}`;
           }} className="flex-1 md:flex-none">
             <Mail className="h-4 w-4 mr-2" /> Abrir E-mail
           </Button>
