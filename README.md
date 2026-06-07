@@ -1,133 +1,67 @@
-# Plataforma de Cotação Control iD
+# Portal Orbitalmais - Orçamentos e Propostas
 
-Uma plataforma web completa para cotação e geração de propostas de produtos de controle de acesso da Control iD.
+Uma plataforma web completa para cotação, precificação e geração de propostas comerciais de equipamentos e serviços para a **Orbitalmais - Tecnologia em Soldagem**.
 
 ## 📋 Funcionalidades
 
-### 1. Gerenciamento de Catálogo
-- Base de dados com 300+ SKUs de produtos
-- Filtros avançados por categoria, modelo e características
-- Busca textual e por faixa de preço
-- Tabela paginada com resultados
+### 1. Gerenciamento de Catálogo de Produtos e Serviços
+- Cadastro unificado e dinâmico de equipamentos de soldagem e serviços de suporte
+- Controle flexível de atributos e campos base (SKU, Modelo, Categoria, Valores)
+- Criação de campos customizados (dropdowns de seleção, booleanos, valores monetários)
+- Ocultação inteligente de atributos vazios ou inativos nas listagens
 
-### 2. Construtor de Orçamento
-- Adição de produtos ao orçamento com quantidade
-- Edição de quantidades e modelos de preço (12m/24m)
-- Cálculo automático de totais
-- Resumo do orçamento em tempo real
+### 2. Construtor de Orçamento Comercial
+- Fluxo simplificado em 4 etapas (Vendedor, Dados do Cliente, Itens e Resumo)
+- Validação automática de dados do cliente por meio de consulta integrada de CNPJ
+- Seleção e edição de quantidade por produto
+- Marcação de itens bonificados (com valor zerado no documento de proposta)
+- Pergunta global configurável sobre inclusão de ensaios de laboratório
 
-### 3. Geração de Propostas
-- Formulário de dados da empresa (CNPJ, razão social, etc.)
-- Resumo da proposta antes da geração
-- Geração dinâmica de apresentação em PPTX
-- Download automático da proposta
+### 3. Geração de Propostas Dinâmicas
+- Geração automática e exportação direta em formato Word (`.docx`)
+- Scanner inteligente de tokens em tempo real do arquivo de template carregado
+- Preenchimento plano de atributos de até 10 itens (`sku` a `sku9`, `qtd` a `qtd9` e `valor_item` a `valor_item9`)
+- Duplicação automatizada de linhas de tabela no Word baseada no loop de repetição de produtos selecionados
 
-### 4. Histórico de Orçamentos
-- Armazenamento de cotações no Supabase
-- Busca por CNPJ
-- Visualização de orçamentos anteriores
-- Controle de status (rascunho, enviada, aceita, recusada)
+### 4. Gestão de Histórico e Rascunhos
+- Armazenamento em nuvem no Supabase e backup de segurança local
+- Busca otimizada de orçamentos emitidos por Razão Social ou CNPJ
+- Salvamento de rascunhos para continuação posterior e recuperação adaptativa de etapas
+- Controle de status de cotação (rascunho, enviada, aceita, recusada)
 
 ## 🛠️ Tecnologias Utilizadas
 
-- **Frontend**: React com TypeScript
-- **UI Framework**: ShadCN UI + Tailwind CSS
+- **Frontend**: React + TypeScript
+- **Bundler & Server**: Vite
+- **UI Framework**: Shadcn UI + Tailwind CSS
 - **Gerenciamento de Estado**: React Context API
-- **Roteamento**: React Router
-- **Validação**: Zod
-- **Geração de PPTX**: PptxGenJS
-- **Backend**: Supabase (PostgreSQL + Storage)
+- **Validação de Formulários**: Zod
+- **Geração de Documentos**: Pizzip + Docxtemplater
+- **Backend & Banco de Dados**: Supabase (PostgreSQL + RLS)
 - **Deploy**: Vercel
 
-## 📊 Estrutura do Projeto
+## 🚀 Como Executar Localmente
 
-```
-src/
-├── components/          # Componentes reutilizáveis
-├── pages/              # Páginas da aplicação
-├── services/            # Serviços e integrações
-├── types/               # Definições de tipos TypeScript
-├── utils/               # Funções utilitárias
-└── lib/                 # Bibliotecas e configurações
-```
-
-## 🚀 Como Executar
-
-1. Instale as dependências:
+1. Certifique-se de ter o **Node.js** instalado em sua máquina.
+2. Instale as dependências do projeto:
 ```bash
 npm install
 ```
-
-2. Inicie o servidor de desenvolvimento:
+3. Inicie o servidor de desenvolvimento local:
 ```bash
 npm run dev
 ```
+4. Abra a URL informada no terminal (normalmente `http://localhost:8080`) no seu navegador.
 
-3. Acesse `http://localhost:8080` no seu navegador
+## 📦 Variáveis de Ambiente (.env)
 
-## 📦 Estrutura de Dados
-
-### Produto
-```typescript
-interface Product {
-  id: string;
-  sku: string;
-  category: 'Catraca Pedestal' | 'Catraca Balcão' | 'Torniquete' | 'Controladores Porta';
-  model: string;
-  colors: string[];
-  biometrics: boolean;
-  facial: '1' | '2' | 'Lite' | 'Max' | 'None';
-  proximity: 'ASK' | 'Mifare' | 'None';
-  urn: boolean;
-  qr: boolean;
-  description: string;
-  value_12m: number;
-  value_24m: number;
-  part_number: string;
-  status: 'Ativo' | 'Inativo';
-}
-```
-
-### Orçamento
-```typescript
-interface Quote {
-  id: string;
-  cnpj: string;
-  companyName: string;
-  contactName: string;
-  email: string;
-  phone: string;
-  address: string;
-  proposalDate: string;
-  proposalNumber: string;
-  priceModel: '12m' | '24m';
-  totalPrice: number;
-  status: 'rascunho' | 'enviada' | 'aceita' | 'recusada';
-  observations: string;
-  createdAt: string;
-  updatedAt: string;
-  pptxUrl?: string;
-}
-```
-
-## 🔧 Configuração do Supabase
-
-Para utilizar o armazenamento de orçamentos, configure as variáveis de ambiente:
+Para conectar à base de dados Supabase do cliente, configure as seguintes variáveis no arquivo `.env` do diretório raiz:
 
 ```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_anon_key
+VITE_SUPABASE_URL=url_do_seu_supabase
+VITE_SUPABASE_ANON_KEY=chave_anonima_do_seu_supabase
 ```
-
-## 🎯 Próximos Passos
-
-1. Integração completa com Supabase
-2. Implementação da geração real de PPTX
-3. Sistema de autenticação de usuários
-4. Envio de propostas por e-mail
-5. Controle de versões de propostas
-6. Dashboard administrativo
 
 ## 📝 Licença
 
-Este projeto é parte da plataforma Dyad e segue os termos de uso da mesma.
+Este projeto é de uso exclusivo da Orbitalmais e seus revendedores autorizados.
