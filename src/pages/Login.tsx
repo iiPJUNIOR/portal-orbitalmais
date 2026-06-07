@@ -13,8 +13,10 @@ import Logo from "@/components/Logo";
 
 type AuthMode = "sign-in" | "sign-up" | "reset-password";
 
-// URL de produção definida para garantir redirecionamentos corretos via e-mail
-const PROD_URL = "https://orcamentosacesso.vercel.app";
+// URL de redirecionamento dinâmica para garantir funcionamento local e em produção
+const getRedirectUrl = () => {
+  return import.meta.env.VITE_AUTH_REDIRECT_URL || window.location.origin;
+};
 
 export default function Login() {
   const navigate = useNavigate();
@@ -102,7 +104,7 @@ export default function Login() {
     if (e) e.preventDefault();
     setLoading(true);
     try {
-      const redirectTo = `${PROD_URL}/auth-status`;
+      const redirectTo = `${getRedirectUrl()}/auth-status`;
       const { error } = await supabase.auth.signUp({
         email: email.trim(),
         password,
@@ -133,7 +135,7 @@ export default function Login() {
     }
     setLoading(true);
     try {
-      const redirectTo = `${PROD_URL}/reset-password`;
+      const redirectTo = `${getRedirectUrl()}/reset-password`;
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
         redirectTo,
       });

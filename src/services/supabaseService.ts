@@ -125,7 +125,9 @@ export const saveQuote = async (
 
 export const getQuotesByCnpj = async (query: string): Promise<QuoteType[]> => {
   try {
-    const searchTerm = query.trim();
+    const rawSearch = query.trim();
+    // Sanitizar o termo de busca removendo caracteres de controle do PostgREST (como vírgula e parênteses)
+    const searchTerm = rawSearch.replace(/[,()]/g, "");
     
     // Build the query to search in both CNPJ and Company Name
     let builder = supabase
