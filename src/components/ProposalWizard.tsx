@@ -541,17 +541,17 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     switch (currentStep) {
       case 1:
         return (
-          <div className="space-y-2.5">
+          <div className="space-y-4">
             {/* Editable Filename / Orçamento Number */}
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <div className="flex justify-between items-center">
-                <Label className="font-semibold text-[11px] text-muted-foreground uppercase tracking-wider">Nome do arquivo / Nº do Orçamento</Label>
+                <Label className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Nome do arquivo / Nº do Orçamento</Label>
                 {isProposalNumberEdited && (
                   <Button 
                     type="button" 
                     variant="ghost" 
                     size="sm" 
-                    className="h-5 text-[9px] text-primary hover:text-primary/80 px-2 py-0 font-bold flex items-center gap-1 hover:bg-primary/5 rounded-lg"
+                    className="h-6 text-[10px] text-primary hover:text-primary/80 px-2 py-0 font-bold flex items-center gap-1 hover:bg-primary/5 rounded-lg"
                     onClick={() => {
                       setIsProposalNumberEdited(false);
                       const formattedSeq = String(todaySequence).padStart(3, "0");
@@ -562,7 +562,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                       }));
                     }}
                   >
-                    <RefreshCw className="h-2.5 w-2.5" /> Restaurar Automático
+                    <RefreshCw className="h-3 w-3" /> Restaurar Automático
                   </Button>
                 )}
               </div>
@@ -574,101 +574,101 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                     setFormData((prev: any) => ({ ...prev, proposalNumber: e.target.value }));
                   }}
                   placeholder="Razão Social - OBM-001 - REV0"
-                  className="pr-16 font-mono text-xs h-9 border-primary/25 focus-visible:ring-primary rounded-xl"
+                  className="pr-16 font-mono text-sm border-primary/25 focus-visible:ring-primary rounded-xl"
                 />
-                <span className="absolute right-4 top-2 text-xs text-muted-foreground font-bold pointer-events-none select-none">
+                <span className="absolute right-4 top-2.5 text-xs text-muted-foreground font-bold pointer-events-none select-none">
                   .docx
                 </span>
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">REV (Versão)</Label>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>REV (Versão)</Label>
                 <Input 
                   type="number" 
                   min="0" 
                   value={formData.version} 
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, version: e.target.value }))} 
-                  className="rounded-xl h-9 text-xs"
+                  className="rounded-xl"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Data</Label>
+              <div className="space-y-1.5">
+                <Label>Data</Label>
                 <Input 
                   type="date" 
                   value={formData.date} 
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, date: e.target.value }))} 
-                  className="rounded-xl h-9 text-xs"
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">CNPJ</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>CNPJ</Label>
                 <div className="flex gap-2">
                   <Input
                     placeholder="00.000.000/0000-00"
                     value={formData.cnpj}
                     onChange={handleCnpjChange}
-                    className="rounded-xl h-9 text-xs"
+                    className="rounded-xl"
                   />
-                  <Button type="button" variant="outline" onClick={handleManualCnpjLookup} className="rounded-xl h-9 px-3">
+                  <Button type="button" variant="outline" onClick={handleManualCnpjLookup} className="rounded-xl px-3">
                     <Search className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
-              <div className="space-y-1 md:col-span-2">
-                <Label className="text-xs">Razão Social</Label>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Razão Social</Label>
                 <Input 
                   placeholder="Nome da Empresa" 
                   value={formData.companyName} 
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} 
-                  className="rounded-xl h-9 text-xs"
+                  className="rounded-xl"
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Nome do Contato</Label>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1.5">
+                <Label>Nome do Contato</Label>
                 <Input 
                   placeholder="A/C: Nome" 
                   value={formData.contactName} 
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} 
-                  className="rounded-xl h-9 text-xs" 
+                  className="rounded-xl" 
                 />
               </div>
-              <div className="space-y-1 md:col-span-2">
-                <Label className="text-xs">Endereço</Label>
+              <div className="space-y-1.5 md:col-span-2">
+                <Label>Endereço</Label>
                 <Input 
                   value={formData.address} 
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} 
-                  className="rounded-xl h-9 text-xs" 
+                  className="rounded-xl" 
                 />
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-xs">E-mail do Cliente</Label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>E-mail do Cliente</Label>
                 <Input
                   type="email"
                   placeholder="cliente@email.com"
                   value={formData.email || ""}
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, email: e.target.value }))}
-                  className="rounded-xl h-9 text-xs"
+                  className="rounded-xl"
                 />
               </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Telefone do Cliente</Label>
+              <div className="space-y-1.5">
+                <Label>Telefone do Cliente</Label>
                 <Input
                   type="text"
                   placeholder="(00) 00000-0000"
                   value={formData.phone || ""}
                   onChange={(e) => setFormData((prev: any) => ({ ...prev, phone: e.target.value }))}
-                  className="rounded-xl h-9 text-xs"
+                  className="rounded-xl"
                 />
               </div>
             </div>
@@ -1003,7 +1003,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
   return (
     <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl border-none shadow-md w-full">
-      <CardHeader className="bg-primary text-white p-4 md:p-5">
+      <CardHeader className="bg-primary text-white p-5 md:p-6">
         <div className="flex justify-between items-center">
           <div>
             <CardTitle className="text-xl md:text-2xl font-black">
@@ -1020,11 +1020,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-4 md:p-5">
+      <CardContent className="p-5 md:p-6">
         {renderStep()}
 
         {currentStep < 5 && (
-          <div className="flex justify-between mt-4 pt-3 border-t">
+          <div className="flex justify-between mt-5 pt-4 border-t">
             <div className="flex gap-2">
               <Button variant="ghost" className="rounded-xl" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
                 {currentStep === 1 ? "Cancelar" : "Voltar"}
