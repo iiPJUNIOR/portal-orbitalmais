@@ -84,7 +84,6 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
               <div className="space-y-1">
                 <p><strong>Data:</strong> {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}</p>
                 <p><strong>Status:</strong> {getStatusBadge(quote.status)}</p>
-                <p><strong>Modelo de Preço:</strong> {quote.priceModel === '12m' ? '12 meses' : '24 meses'}</p>
                 <p><strong>Valor Total:</strong> {formatCurrencyBRL(quote.totalPrice)}</p>
                 <p><strong>Observações:</strong> {quote.observations || 'Nenhuma'}</p>
               </div>
@@ -97,7 +96,6 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
                 <TableRow>
                   <TableHead>Descrição</TableHead>
                   <TableHead>SKU</TableHead>
-                  <TableHead>Modelo</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
                   <TableHead className="text-right">Valor Unitário</TableHead>
                   <TableHead className="text-right">Subtotal</TableHead>
@@ -108,7 +106,6 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
                   <TableRow key={item.id}>
                     <TableCell>{item.productDescription}</TableCell>
                     <TableCell>{item.sku}</TableCell>
-                    <TableCell>{item.priceModel === '12m' ? '12 meses' : '24 meses'}</TableCell>
                     <TableCell className="text-right">{item.quantity}</TableCell>
                     <TableCell className="text-right">{formatCurrencyBRL(item.unitPrice)}</TableCell>
                     <TableCell className="text-right">{formatCurrencyBRL(item.subtotal)}</TableCell>
