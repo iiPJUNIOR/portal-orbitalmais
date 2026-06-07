@@ -199,12 +199,16 @@ export default function Login() {
         </div>
 
         {/* Lado Direito - Formulário */}
-        <div className="flex items-center justify-center p-8 bg-background overflow-y-auto">
-          <div className="w-full max-w-[480px]">
-            <Card className="proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl">
-              <CardHeader className="bg-primary text-white p-8">
-                <div className="flex items-start justify-between">
-                  <div>
+        <div className="flex items-center justify-center p-4 sm:p-8 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-zinc-900 dark:to-black overflow-y-auto relative">
+          {/* Subtle glow effect for mobile */}
+          <div className="absolute top-1/4 left-1/4 w-[250px] h-[250px] rounded-full bg-primary/5 blur-[80px] pointer-events-none lg:hidden" />
+          
+          <div className="w-full max-w-[480px] relative z-10">
+            <Card className="proposal-highlight rounded-3xl overflow-hidden border-none shadow-2xl w-full">
+              <CardHeader className="bg-primary text-white p-6 sm:p-8">
+                {/* Logo visible on mobile at the top, and on desktop aligned on the right */}
+                <div className="flex flex-col-reverse sm:flex-row sm:items-start justify-between gap-4">
+                  <div className="space-y-1">
                     {mode === "reset-password" && (
                       <button 
                         onClick={() => { setMode("sign-in"); setResetSent(false); }}
@@ -220,13 +224,13 @@ export default function Login() {
                       {mode === "sign-in" ? "Bem-vindo de volta à Orbital Mais" : mode === "sign-up" ? "Junte-se a nós hoje mesmo" : "Enviaremos um link de acesso"}
                     </CardDescription>
                   </div>
-                  <div className="hidden sm:block">
+                  <div className="flex items-center sm:self-start">
                     <Logo forceWhite className="h-8 w-auto opacity-90" />
                   </div>
                 </div>
               </CardHeader>
 
-              <CardContent className="p-8">
+              <CardContent className="p-6 sm:p-8">
                 {mode === "reset-password" && resetSent ? (
                   <div className="text-center space-y-6 py-4 animate-in fade-in zoom-in-95">
                     <div className="flex justify-center">

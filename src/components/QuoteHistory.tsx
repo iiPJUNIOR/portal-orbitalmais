@@ -21,9 +21,10 @@ import { formatCurrencyBRL } from "@/lib/formatters";
 interface QuoteHistoryProps {
   onQuoteSelect: (quote: Quote) => void;
   onRegenerateFromHistory?: (quote: Quote) => void;
+  onRegeneratePDFFromHistory?: (quote: Quote) => void;
 }
 
-export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHistoryProps) {
+export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory, onRegeneratePDFFromHistory }: QuoteHistoryProps) {
   const [cnpj, setCnpj] = useState("");
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
@@ -175,12 +176,26 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
                       </Button>
 
                       {onRegenerateFromHistory ? (
-                        <Button 
-                          size="sm"
-                          onClick={() => onRegenerateFromHistory(quote)}
-                        >
-                          Gerar
-                        </Button>
+                        <div className="flex gap-1.5">
+                          <Button 
+                            variant="outline"
+                            size="sm"
+                            title="Baixar DOCX"
+                            onClick={() => onRegenerateFromHistory(quote)}
+                          >
+                            DOCX
+                          </Button>
+                          {onRegeneratePDFFromHistory ? (
+                            <Button 
+                              size="sm"
+                              title="Baixar PDF"
+                              className="bg-orange-500 hover:bg-orange-600 text-white border-none font-semibold"
+                              onClick={() => onRegeneratePDFFromHistory(quote)}
+                            >
+                              PDF
+                            </Button>
+                          ) : null}
+                        </div>
                       ) : null}
                     </div>
                   </TableCell>

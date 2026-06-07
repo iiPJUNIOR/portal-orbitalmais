@@ -20,10 +20,11 @@ interface QuoteDetailsProps {
   items: QuoteItem[];
   onBack: () => void;
   onRegenerate: () => void;
+  onRegeneratePDF: () => void;
   onEdit?: () => void;
 }
 
-export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: QuoteDetailsProps) {
+export function QuoteDetails({ quote, items, onBack, onRegenerate, onRegeneratePDF, onEdit }: QuoteDetailsProps) {
   const getStatusBadge = (status: Quote['status']) => {
     switch (status) {
       case 'rascunho':
@@ -59,8 +60,12 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
                 </Button>
               ) : null}
 
-              <Button onClick={onRegenerate}>
-                Regenerar Proposta
+              <Button variant="outline" onClick={onRegenerate}>
+                Baixar DOCX
+              </Button>
+
+              <Button className="bg-orange-500 hover:bg-orange-600 text-white border-none font-bold" onClick={onRegeneratePDF}>
+                Baixar PDF
               </Button>
             </div>
           </div>

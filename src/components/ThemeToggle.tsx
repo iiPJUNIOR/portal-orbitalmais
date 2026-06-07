@@ -11,10 +11,10 @@ export default function ThemeToggle() {
       const stored = localStorage.getItem(THEME_KEY);
       if (stored === "dark") return true;
       if (stored === "light") return false;
-      // Default: dark
-      return true;
+      // Default: light
+      return false;
     } catch {
-      return true;
+      return false;
     }
   });
 

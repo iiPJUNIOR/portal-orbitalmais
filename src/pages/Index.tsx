@@ -8,7 +8,7 @@ import { ProposalTypePicker } from "@/components/ProposalTypePicker";
 import { QualificationWizard } from "@/components/QualificationWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
 import { QuoteDetails } from "@/components/QuoteDetails";
-import { generateProposalDOCX } from "@/services/proposalService";
+import { generateProposalDOCX, generateProposalPDF } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote, getQuoteItems } from "@/services/supabaseService";
@@ -271,6 +271,85 @@ export default function Index() {
     }
   };
 
+  const handleRegeneratePDF = async () => {
+    if (!selectedQuote || !selectedQuote.settings) {
+      toast.error("Configurações originais não encontradas para este orçamento.");
+      return;
+    }
+
+    const loadToastId = toast.loading("Regenerando arquivo PDF...");
+    try {
+      const sellerInfo = {
+        name: selectedQuote.settings.sellerName || selectedQuote.settings.seller_name,
+        role: selectedQuote.settings.sellerRole || selectedQuote.settings.seller_role,
+        email: selectedQuote.settings.sellerEmail || selectedQuote.settings.seller_email,
+        phone: selectedQuote.settings.sellerPhone || selectedQuote.settings.seller_phone,
+      };
+
+      const proposalData = {
+        ...selectedQuote.settings,
+        sellerName: sellerInfo.name || selectedQuote.settings.sellerName,
+        sellerRole: sellerInfo.role || selectedQuote.settings.sellerRole,
+        sellerEmail: sellerInfo.email || selectedQuote.settings.sellerEmail,
+        sellerPhone: sellerInfo.phone || selectedQuote.settings.sellerPhone,
+      };
+
+      const blob = await generateProposalPDF(proposalData);
+      
+      const safeProposalNumber = String(selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const fileName = `${safeProposalNumber}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("PDF gerado com sucesso!", { id: loadToastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar PDF.", { id: loadToastId });
+    }
+  };
+
+  const handleRegeneratePDFFromHistory = async (quote: Quote) => {
+    if (!quote || !quote.settings) {
+      toast.error("Dados da proposta ausentes. Não é possível regenerar.");
+      return;
+    }
+    const loadToastId = toast.loading("Gerando proposta PDF a partir do histórico...");
+    try {
+      const proposalData = {
+        ...quote.settings,
+        sellerName: quote.settings.sellerName || quote.settings.seller_name,
+        sellerRole: quote.settings.sellerRole || quote.settings.seller_role,
+        sellerEmail: quote.settings.sellerEmail || quote.settings.seller_email,
+        sellerPhone: quote.settings.sellerPhone || quote.settings.seller_phone,
+      };
+
+      const blob = await generateProposalPDF(proposalData);
+      const safeProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const fileName = `${safeProposalNumber}.pdf`;
+
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast.success("PDF gerado com sucesso a partir do histórico!", { id: loadToastId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Erro ao gerar PDF a partir do histórico.", { id: loadToastId });
+    }
+  };
+
   const handleEditQuote = (quote: Quote) => {
     if (!quote || !quote.settings) {
       toast.error("Não há dados para editar nesta proposta.");
@@ -389,7 +468,11 @@ export default function Index() {
               <h2 className="text-3xl font-bold">Histórico de Propostas</h2>
               <Button variant="outline" onClick={() => setStep("welcome")}>Voltar</Button>
             </div>
-            <QuoteHistory onQuoteSelect={handleSelectQuote} onRegenerateFromHistory={handleRegenerateFromHistory} />
+            <QuoteHistory 
+              onQuoteSelect={handleSelectQuote} 
+              onRegenerateFromHistory={handleRegenerateFromHistory} 
+              onRegeneratePDFFromHistory={handleRegeneratePDFFromHistory} 
+            />
           </div>
         )}
 
@@ -400,6 +483,7 @@ export default function Index() {
               items={quoteItems} 
               onBack={() => setStep(canViewHistory ? "history" : "welcome")} 
               onRegenerate={handleRegenerateQuote}
+              onRegeneratePDF={handleRegeneratePDF}
               onEdit={() => handleEditQuote(selectedQuote)}
             />
           </div>
