@@ -6,13 +6,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { toast } from "sonner";
-import { ArrowRight, Loader2, Search, Plus, Trash2, Info, Presentation, CheckCircle2, RefreshCw, Link as LinkIcon, ArrowLeft, Save } from "lucide-react";
-import { fetchBases, type StoredBase } from "@/services/productBaseService";
+import { ArrowRight, Loader2, Search, Plus, Trash2, Info, FileText, CheckCircle2, RefreshCw, ArrowLeft, Save } from "lucide-react";
 import { generateProposalNumber } from "@/services/proposalService";
-import { Switch } from "@/components/ui/switch";
+import { getProposalSequenceAndRevision } from "@/services/supabaseService";
+import { fetchProducts } from "@/services/productService";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { saveDraft, updateDraft } from "@/services/draftService";
-import { saveUserSettings } from "@/services/settingsService";
+import { saveUserSettings, getUserSettings, ProductFieldDef, defaultFields } from "@/services/settingsService";
 import {
   Select,
   SelectContent,
@@ -35,19 +35,45 @@ interface WizardProps {
   draftId?: string;
 }
 
+const isServiceItem = (item: any) => {
+  const cat = (item.category || "").toLowerCase();
+  const desc = (item.description || "").toLowerCase();
+  const model = (item.model || item.name || "").toLowerCase();
+  return cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || model.includes("idpower");
+};
+
+const formatInitialCurrency = (value: number | string | null | undefined): string => {
+  if (value === undefined || value === null || value === "") return "";
+  const num = Number(value);
+  if (isNaN(num)) return "";
+  return num.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+};
+
+const handleCurrencyInput = (valueStr: string): string => {
+  const cleanStr = valueStr.replace(/\D/g, "");
+  if (!cleanStr) return "";
+  const numValue = Number(cleanStr) / 100;
+  return numValue.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+};
+
+const parseCurrencyBRLToNumber = (formattedStr: string): number => {
+  if (!formattedStr) return 0;
+  const cleanStr = formattedStr.replace(/\D/g, "");
+  if (!cleanStr) return 0;
+  return Number(cleanStr) / 100;
+};
+
 export function ProposalWizard({ initialSellerData, onComplete, onCancel, initialData, initialStep, draftId }: WizardProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [loadingBases, setLoadingBases] = useState(true);
-  const [availableBases, setAvailableBases] = useState<StoredBase[]>([]);
-  const [productSearch, setProductSearch] = useState("");
-  const [filterFacial, setFilterFacial] = useState<string>("ALL"); // "ALL" | "1" | "2"
-  const [filterSeries, setFilterSeries] = useState<string>("ALL"); // "ALL" | "Pro" | "Max"
-  const lastFetchedCnpj = useRef<string>("");
-
   const [formData, setFormData] = useState<any>({
-    pipedriveUrl: "",
-    dealId: "",
-    version: "1",
+    proposalNumber: "",
+    version: "0",
     date: new Date().toISOString().split('T')[0],
     companyName: "",
     contactName: "",
@@ -65,8 +91,101 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     selectedProducts: [] as any[],
     totalPrice: 0,
     includeApprovalPage: true,
-    approvalLink: ""
+    approvalLink: "",
+    ensaiosInclusos: false
   });
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [allProducts, setAllProducts] = useState<any[]>([]);
+  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const lastFetchedCnpj = useRef<string>("");
+  const [totalPriceInput, setTotalPriceInput] = useState("");
+  const prevCalculatedSum = useRef(0);
+
+  const calculatedSum = React.useMemo(() => {
+    const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
+    return (formData.selectedProducts || []).reduce((sum: number, p: any) => {
+      if (p.bonificado) return sum;
+      
+      const price = currencyField 
+        ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
+        : 0;
+      const effectivePrice = Number(p.unitPrice || price || p.value_12m || p.value_24m || 0);
+      return sum + (effectivePrice * (p.quantity || 1));
+    }, 0);
+  }, [formData.selectedProducts, fieldsConfig]);
+
+  useEffect(() => {
+    if (formData.totalPrice === 0 || formData.totalPrice === prevCalculatedSum.current) {
+      setFormData((prev: any) => ({ ...prev, totalPrice: calculatedSum }));
+      setTotalPriceInput(formatInitialCurrency(calculatedSum));
+      prevCalculatedSum.current = calculatedSum;
+    }
+  }, [calculatedSum]);
+
+  useEffect(() => {
+    if (formData.totalPrice && !totalPriceInput) {
+      setTotalPriceInput(formatInitialCurrency(formData.totalPrice));
+    }
+  }, [formData.totalPrice]);
+
+  const isFieldActive = (key: string) => {
+    return fieldsConfig.some((f) => f.key === key && f.isActive);
+  };
+
+  const getFieldLabel = (key: string, fallback: string) => {
+    const field = fieldsConfig.find((f) => f.key === key);
+    return field ? field.label : fallback;
+  };
+
+  const isValueEmpty = (v: any) => {
+    if (v === undefined || v === null) return true;
+    if (typeof v === "string" && v.trim() === "") return true;
+    if (Array.isArray(v) && v.length === 0) return true;
+    return false;
+  };
+
+  const [todaySequence, setTodaySequence] = useState<number>(1);
+  const [isProposalNumberEdited, setIsProposalNumberEdited] = useState(false);
+  const isInitialMount = useRef(true);
+
+  // Get sequence and revision on mount or when CNPJ changes
+  useEffect(() => {
+    async function loadSequenceAndRevision() {
+      if (isInitialMount.current && initialData) {
+        isInitialMount.current = false;
+        const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
+        if (obmMatch) {
+          setTodaySequence(parseInt(obmMatch[1], 10));
+        }
+        return;
+      }
+      isInitialMount.current = false;
+
+      const cleanCnpj = (formData.cnpj || "").replace(/\D/g, "");
+      const { sequence, revision } = await getProposalSequenceAndRevision(cleanCnpj);
+      setTodaySequence(sequence);
+      setFormData((prev: any) => {
+        if (prev.version !== String(revision)) {
+          return { ...prev, version: String(revision) };
+        }
+        return prev;
+      });
+    }
+    loadSequenceAndRevision();
+  }, [formData.cnpj]);
+
+  // Automatically generate proposal number
+  useEffect(() => {
+    if (!isProposalNumberEdited && formData.companyName) {
+      const formattedSeq = String(todaySequence).padStart(3, "0");
+      const ver = formData.version || "0";
+      setFormData((prev: any) => ({
+        ...prev,
+        proposalNumber: `${prev.companyName} - OBM-${formattedSeq} - REV${ver}`
+      }));
+    }
+  }, [formData.companyName, todaySequence, formData.version, isProposalNumberEdited]);
 
   // Sync seller data if it arrives late (prevents "sometimes empty" issue)
   useEffect(() => {
@@ -82,17 +201,31 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   }, [initialSellerData]);
 
-  // If initialData is provided (continuing a draft), initialize state accordingly
+  // If initialData is provided (continuing a draft or editing), initialize state accordingly
   useEffect(() => {
     if (initialData) {
       try {
-        setFormData((prev: any) => ({ ...prev, ...initialData }));
+        // Increment version when editing an existing finalized proposal, keep it same for drafts
+        const currentVersion = parseInt(initialData.version ?? "0", 10);
+        const nextVersion = draftId ? (isNaN(currentVersion) ? 0 : currentVersion) : (isNaN(currentVersion) ? 1 : currentVersion + 1);
+        setFormData((prev: any) => ({
+          ...prev,
+          ...initialData,
+          version: String(nextVersion),
+        }));
+        // Mark number as edited so auto-gen doesn't overwrite, but allow re-gen with new version
+        // We'll re-trigger auto-gen by keeping isProposalNumberEdited false
       } catch (err) {
         console.warn("Failed to apply initialData to wizard", err);
       }
     }
     if (initialStep && typeof initialStep === "number") {
-      setCurrentStep(initialStep);
+      let mappedStep = initialStep;
+      if (initialStep === 3) mappedStep = 2;
+      else if (initialStep === 4) mappedStep = 3;
+      else if (initialStep === 5) mappedStep = 4;
+      else if (initialStep === 6) mappedStep = 5;
+      setCurrentStep(mappedStep);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -100,10 +233,20 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   useEffect(() => {
     const loadData = async () => {
       try {
-        const bases = await fetchBases();
-        setAvailableBases(bases);
+        const settings = await getUserSettings();
+        if (Array.isArray(settings?.product_fields)) {
+          setFieldsConfig(settings.product_fields);
+        } else {
+          setFieldsConfig(defaultFields);
+        }
+
+        const prods = await fetchProducts();
+        const activeProds = prods.filter(p => (p.status || "").toLowerCase() === "ativo");
+        setAllProducts(activeProds);
+      } catch (err) {
+        console.warn("Failed to fetch products or settings", err);
       } finally {
-        setLoadingBases(false);
+        setLoadingProducts(false);
       }
     };
     loadData();
@@ -128,49 +271,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     setFormData((prev: any) => ({ ...prev, qtd: String(q), qtd1: String(q1), qtd2: String(q2), devices: q + q1 + q2 }));
   }, [formData.selectedProducts]);
 
-  const allProducts = React.useMemo(() => {
-    return availableBases.flatMap((base) => {
-      const headers = base.headers;
-      const nameCol = base.name_column?.toLowerCase();
-      const descCol = base.description_column?.toLowerCase();
 
-      return base.rows.map((row, idx) => {
-        const p: any = {};
-        headers.forEach((h, i) => { p[h.toLowerCase()] = row[i]; });
-
-        const name = nameCol && p[nameCol] ? p[nameCol] : (p.modelo || p.description || p.descrição || p.nome || p.dispositivo || p.product);
-        const description = descCol && p[descCol] ? p[descCol] : (p.description || p.descrição || p.detalhes || "");
-
-        const extras = (base.extra_columns || []).map(col => {
-          const val = p[col.toLowerCase()];
-          return val !== undefined && val !== null ? { label: col, value: String(val).trim() } : null;
-        }).filter(Boolean);
-
-        const raw = Object.keys(p).find(k => /facial|idface/i.test(k)) ? p[Object.keys(p).find(k => /facial|idface/i.test(k))!] : "";
-        const facialRaw = String(raw || "").trim();
-        let facialQty: string = "None";
-        let facialSeries: string = "None";
-        if (facialRaw) {
-          const lower = facialRaw.toLowerCase();
-          if (/^1/.test(lower)) facialQty = "1";
-          else if (/^2/.test(lower)) facialQty = "2";
-          if (/lite/.test(lower)) facialSeries = "Lite";
-          else if (/max/.test(lower)) facialSeries = "Max";
-        }
-        return {
-          id: `${base.id}-${idx}`,
-          name: String(name || "Produto sem nome").trim(),
-          description: String(description).trim(),
-          extras: extras,
-          sku: p.sku || p["part number"] || p.pn || "",
-          category: p.categoria || p.category || "",
-          facialQty: facialQty,
-          facialSeries: facialSeries,
-          baseName: base.name
-        };
-      });
-    });
-  }, [availableBases]);
 
   const selectedMap = React.useMemo(() => {
     const m = new Map<string, number>();
@@ -191,8 +292,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           p.extras.some((ex: any) => ex.value.toLowerCase().includes(q));
         if (!matchesSearch) return false;
       }
-      if (filterFacial !== "ALL" && p.facialQty !== filterFacial) return false;
-      if (filterSeries !== "ALL" && p.facialSeries !== filterSeries) return false;
       return true;
     });
 
@@ -207,7 +306,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     });
 
     return arr;
-  }, [allProducts, productSearch, filterFacial, filterSeries, selectedMap]);
+  }, [allProducts, productSearch, selectedMap]);
 
    const cnpjDebounce = useRef<NodeJS.Timeout | null>(null);
   
@@ -267,15 +366,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       if (exists) {
         return { ...prev, selectedProducts: prev.selectedProducts.filter((p: any) => p.baseId !== product.id) };
       }
-      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, quantity: 1 }] };
+      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, name: product.model, quantity: 1, ensaiosInclusos: false }] };
     });
   };
 
   const handleReset = () => {
     setFormData({
-      pipedriveUrl: "",
-      dealId: "",
-      version: "1",
+      proposalNumber: "",
+      version: "0",
       date: new Date().toISOString().split('T')[0],
       companyName: "",
       contactName: "",
@@ -293,30 +391,51 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       selectedProducts: [] as any[],
       totalPrice: 0,
       includeApprovalPage: true,
-      approvalLink: ""
+      approvalLink: "",
+      ensaiosInclusos: false
     });
+    setIsProposalNumberEdited(false);
+    isInitialMount.current = true;
     setCurrentStep(1);
     lastFetchedCnpj.current = "";
     toast.info("Iniciando novo orçamento.");
   };
 
   const handleFinish = () => {
-    const proposalNumber = generateProposalNumber(formData.pipedriveUrl, formData.version);
+    let proposalNumber = formData.proposalNumber;
+    if (!proposalNumber) {
+      const formattedSeq = String(todaySequence).padStart(3, "0");
+      proposalNumber = `${formData.companyName || "Proposta"} - OBM-${formattedSeq} - REV${formData.version || "0"}`;
+    }
+
+    // Find the active currency field from the product fields configuration
+    const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
 
     onComplete({
       ...formData,
       proposalNumber,
-      items: (formData.selectedProducts || []).map((p: any) => ({
-        product: {
-          id: p.id,
-          description: p.name,
-          model: p.name,
-          category: p.category,
-          part_number: p.sku
-        },
-        quantity: p.quantity,
-        unitPrice: 0,
-      })),
+      items: (formData.selectedProducts || []).map((p: any) => {
+        let fallbackPrice = 0;
+        if (currencyField) {
+          const rawVal = currencyField.isCustom
+            ? p.custom_fields?.[currencyField.key]
+            : p[currencyField.key];
+          fallbackPrice = Number(rawVal) || 0;
+        }
+        return {
+          product: {
+            id: p.id,
+            description: p.bonificado ? `${p.name} (Bonificado)` : p.name,
+            model: p.name,
+            category: p.category,
+            part_number: p.sku
+          },
+          quantity: p.quantity,
+          bonificado: !!p.bonificado,
+          ensaiosInclusos: !!formData.ensaiosInclusos,
+          unitPrice: p.bonificado ? 0 : (p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0),
+        };
+      }),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
     });
@@ -327,10 +446,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       } catch {}
     }
 
-    if (currentStep === 5) {
-      setCurrentStep(6);
+    if (currentStep === 4) {
+      setCurrentStep(5);
     }
   };
+
 
   const handleSaveDraft = async () => {
     try {
@@ -395,32 +515,92 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       case 1:
         return (
           <div className="space-y-4">
+            {/* Editable Filename / Orçamento Number */}
             <div className="space-y-2">
-              <Label>URL Pipedrive</Label>
-              <Input
-                placeholder="https://controlid.pipedrive.com/deal/214049"
-                value={formData.pipedriveUrl}
-                onChange={(e) => setFormData((prev: any) => ({ ...prev, pipedriveUrl: e.target.value }))}
+              <div className="flex justify-between items-center">
+                <Label className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">Nome do arquivo / Nº do Orçamento</Label>
+                {isProposalNumberEdited && (
+                  <Button 
+                    type="button" 
+                    variant="ghost" 
+                    size="sm" 
+                    className="h-6 text-[10px] text-primary hover:text-primary/80 px-2 py-0 font-bold flex items-center gap-1 hover:bg-primary/5 rounded-lg"
+                    onClick={() => {
+                      setIsProposalNumberEdited(false);
+                      const formattedSeq = String(todaySequence).padStart(3, "0");
+                      const ver = formData.version || "0";
+                      setFormData((prev: any) => ({
+                        ...prev,
+                        proposalNumber: `${prev.companyName || "Proposta"} - OBM-${formattedSeq} - REV${ver}`
+                      }));
+                    }}
+                  >
+                    <RefreshCw className="h-3 w-3" /> Restaurar Automático
+                  </Button>
+                )}
+              </div>
+              <div className="relative">
+                <Input
+                  value={formData.proposalNumber}
+                  onChange={(e) => {
+                    setIsProposalNumberEdited(true);
+                    setFormData((prev: any) => ({ ...prev, proposalNumber: e.target.value }));
+                  }}
+                  placeholder="Razão Social - OBM-001 - REV0"
+                  className="pr-16 font-mono text-sm border-primary/25 focus-visible:ring-primary rounded-xl"
+                />
+                <span className="absolute right-4 top-2.5 text-xs text-muted-foreground font-bold pointer-events-none select-none">
+                  .docx
+                </span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>REV (Versão)</Label>
+                <Input 
+                  type="number" 
+                  min="0" 
+                  value={formData.version} 
+                  onChange={(e) => setFormData((prev: any) => ({ ...prev, version: e.target.value }))} 
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Data</Label>
+                <Input 
+                  type="date" 
+                  value={formData.date} 
+                  onChange={(e) => setFormData((prev: any) => ({ ...prev, date: e.target.value }))} 
+                  className="rounded-xl"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>CNPJ</Label>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="00.000.000/0000-00"
+                  value={formData.cnpj}
+                  onChange={handleCnpjChange}
+                  className="rounded-xl"
+                />
+                <Button type="button" variant="outline" onClick={handleManualCnpjLookup} className="rounded-xl">
+                  <Search className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Razão Social</Label>
+              <Input 
+                placeholder="Nome da Empresa" 
+                value={formData.companyName} 
+                onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} 
+                className="rounded-xl"
               />
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2"><Label>Versão</Label><Input value={formData.version} onChange={(e) => setFormData((prev: any) => ({ ...prev, version: e.target.value }))} /></div>
-              <div className="space-y-2"><Label>Data</Label><Input type="date" value={formData.date} onChange={(e) => setFormData((prev: any) => ({ ...prev, date: e.target.value }))} /></div>
-            </div>
-             <div className="space-y-2">
-               <Label>CNPJ</Label>
-               <div className="flex gap-2">
-                 <Input
-                   placeholder="00.000.000/0000-00"
-                   value={formData.cnpj}
-                   onChange={handleCnpjChange}
-                 />
-                 <Button type="button" variant="outline" onClick={handleManualCnpjLookup}>
-                   <Search className="w-4 h-4" />
-                 </Button>
-               </div>
-             </div>
-            <div className="space-y-2"><Label>Razão Social</Label><Input placeholder="Nome da Empresa" value={formData.companyName} onChange={(e) => setFormData((prev: any) => ({ ...prev, companyName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} /></div>
           </div>
@@ -436,69 +616,74 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         );
       case 3:
         return (
-          <div className="space-y-4">
-            <Label>Usuários do Sistema</Label>
-            <Input type="number" value={formData.users} onChange={(e) => setFormData((prev: any) => ({ ...prev, users: e.target.value }))} />
-          </div>
-        );
-      case 4:
-        return (
           <div className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="relative md:col-span-1">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input className="pl-9" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="filterFacial">Quantidade</Label>
-                <Select value={filterFacial} onValueChange={setFilterFacial}>
-                  <SelectTrigger id="filterFacial">
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todos</SelectItem>
-                    <SelectItem value="1">1 IDFace</SelectItem>
-                    <SelectItem value="2">2 IDFace</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="filterSeries">Dispositivo</Label>
-                <Select value={filterSeries} onValueChange={(val) => { setFilterSeries(val); setFilterFacial("ALL"); }}>
-                  <SelectTrigger id="filterSeries">
-                    <SelectValue placeholder="Todas" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL">Todas</SelectItem>
-                    <SelectItem value="Lite">Lite</SelectItem>
-                    <SelectItem value="Max">Max</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="relative w-full">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+              <Input className="pl-9 w-full" placeholder="Buscar em todas as bases..." value={productSearch} onChange={(e) => setProductSearch(e.target.value)} />
             </div>
-            <div className="max-h-96 overflow-y-auto border rounded-xl divide-y bg-card">
+            <div className="border rounded-xl divide-y bg-card">
               {filteredProducts.map(p => {
                 const isSelected = (formData.selectedProducts || []).some((sp: any) => sp.baseId === p.id);
+                const isService = isServiceItem(p);
                 return (
-                  <div key={p.id} className="flex items-center justify-between p-3 hover:bg-muted/50 transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm">{p.name}</span>
-                        <span className="text-[9px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground uppercase font-medium">{p.baseName}</span>
+                  <div key={p.id} className="flex items-center justify-between p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex-1 space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm text-neutral-900 dark:text-white">{p.model}</span>
+                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
+                          isService 
+                            ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" 
+                            : "bg-blue-100 text-blue-800 dark:bg-orange-500/20 dark:text-orange-300"
+                        }`}>
+                          {isService ? "Serviço" : "Produto"}
+                        </span>
+                        {isFieldActive("category") && p.category && (
+                          <span className="text-[10px] bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400 px-2 py-0.5 rounded-md font-medium">
+                            {p.category}
+                          </span>
+                        )}
+                        {isFieldActive("sku") && p.sku && (
+                          <span className="text-[10px] text-muted-foreground font-mono">
+                            {getFieldLabel("sku", "SKU")}: {p.sku}
+                          </span>
+                        )}
                       </div>
-                      <div className="text-[10px] text-muted-foreground mb-1">{p.sku} | {p.description}</div>
-
-                      {p.extras && p.extras.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mt-1">
-                          {p.extras.map((ex: any) => (
-                            <span key={ex.label} className="text-[9px] border px-1.5 py-0.5 rounded bg-muted/30">
-                              <span className="font-bold opacity-70">{ex.label}:</span> {ex.value}
-                            </span>
-                          ))}
-                        </div>
+                      
+                      {isFieldActive("description") && p.description && (
+                        <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">{p.description}</p>
                       )}
+                      
+                      {/* Active Custom and Option Attributes */}
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-medium pt-1 text-neutral-600 dark:text-neutral-400">
+                        {fieldsConfig
+                          .filter((f) => f.isActive && f.key !== "model" && f.key !== "description" && f.key !== "category" && f.key !== "sku" && f.key !== "status")
+                          .map((f) => {
+                            const isCustom = f.isCustom;
+                            const val = isCustom ? p.custom_fields?.[f.key] : p[f.key as keyof typeof p];
+                            
+                            if (isValueEmpty(val)) return null;
+                            
+                            let renderedVal = "";
+                            if (f.type === "boolean") {
+                              renderedVal = val ? "Sim" : "Não";
+                            } else if (f.type === "currency") {
+                              renderedVal = formatCurrencyBRL(Number(val));
+                            } else if (Array.isArray(val)) {
+                              renderedVal = val.join(", ");
+                            } else {
+                              renderedVal = String(val);
+                            }
+                            
+                            return (
+                              <span key={f.key} className="border-r pr-4 last:border-0 last:pr-0">
+                                <span className="font-semibold text-neutral-500 dark:text-neutral-500">{f.label}:</span>{" "}
+                                <strong className="text-primary">{renderedVal}</strong>
+                              </span>
+                            );
+                          })}
+                      </div>
                     </div>
-                    <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-8 w-8 p-0 rounded-full" onClick={() => handleProductToggle(p)}>
+                    <Button size="sm" variant={isSelected ? "destructive" : "outline"} className="h-9 w-9 p-0 rounded-full shrink-0" onClick={() => handleProductToggle(p)}>
                       {isSelected ? <Trash2 className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -560,61 +745,150 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 ))}
               </div>
             </div>
+
+            {/* Global question for entire quote */}
+            <div className="p-4 bg-muted/20 border border-dashed rounded-2xl space-y-2">
+              <label className="text-sm font-bold text-neutral-800 dark:text-neutral-200 block">
+                Os ensaios de laboratório já estão inclusos no orçamento?
+              </label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev: any) => ({ ...prev, ensaiosInclusos: true }))}
+                  className={`text-xs px-4 py-2 rounded-xl font-bold border transition-all ${
+                    formData.ensaiosInclusos
+                      ? "bg-primary text-white border-primary"
+                      : "bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Sim
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFormData((prev: any) => ({ ...prev, ensaiosInclusos: false }))}
+                  className={`text-xs px-4 py-2 rounded-xl font-bold border transition-all ${
+                    !formData.ensaiosInclusos
+                      ? "bg-primary text-white border-primary"
+                      : "bg-background text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  Não
+                </button>
+              </div>
+            </div>
           </div>
         );
-      case 5:
+      case 4:
         return (
           <div className="space-y-6">
-            <div className="p-6 bg-primary text-white rounded-2xl">
-              <Label>VALOR TOTAL DA PROPOSTA</Label>
-              <div className="flex items-center gap-2 mt-2">
-                <span className="text-2xl opacity-70">R$</span>
-                <Input
-                  type="number"
-                  step="0.01"
-                  className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none text-white"
-                  value={formData.totalPrice || ""}
-                  onChange={(e) => {
-                    const val = parseFloat(e.target.value || "0");
-                    setFormData((prev: any) => ({ ...prev, totalPrice: val }));
-                  }}
-                />
+            {/* Items list with bonus toggle */}
+            <div className="space-y-3">
+              <Label className="font-bold text-base">
+                Itens do Orçamento ({(formData.selectedProducts || []).length})
+              </Label>
+              {(formData.selectedProducts || []).length === 0 && (
+                <p className="text-sm text-muted-foreground italic text-center py-4">
+                  Nenhum item selecionado no passo anterior.
+                </p>
+              )}
+              <div className="divide-y border rounded-2xl overflow-hidden bg-card">
+                {(formData.selectedProducts || []).map((p: any) => (
+                  <div
+                    key={p.baseId}
+                    className={`flex items-center justify-between gap-3 p-4 transition-colors ${
+                      p.bonificado
+                        ? "bg-amber-50 dark:bg-amber-900/10"
+                        : "hover:bg-muted/30"
+                    }`}
+                  >
+                    {/* Item info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-bold text-sm truncate">{p.name}</span>
+                        {p.bonificado && (
+                          <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                            Bonificado
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        Qtd: <strong>{p.quantity}</strong>
+                        {!p.bonificado && (
+                          <span className="ml-2">
+                            · Vlr. Unitário: <strong>{(() => {
+                              const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
+                              const price = currencyField 
+                                ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
+                                : 0;
+                              return formatCurrencyBRL(p.unitPrice || Number(price) || p.value_12m || p.value_24m || 0);
+                            })()}</strong>
+                          </span>
+                        )}
+                        {p.bonificado && (
+                          <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold">
+                            · Valor: R$ 0,00 no documento
+                          </span>
+                        )}
+                      </span>
+                    </div>
+
+                    {/* Bonus toggle */}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev: any) => ({
+                          ...prev,
+                          selectedProducts: prev.selectedProducts.map((sp: any) =>
+                            sp.baseId === p.baseId
+                              ? { ...sp, bonificado: !sp.bonificado }
+                              : sp
+                          ),
+                        }))
+                      }
+                      className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition-all duration-200 ${
+                        p.bonificado
+                          ? "bg-amber-400 border-amber-400 text-amber-900 hover:bg-amber-300"
+                          : "bg-transparent border-muted-foreground/30 text-muted-foreground hover:border-amber-400 hover:text-amber-600"
+                      }`}
+                      title={p.bonificado ? "Remover bonificação" : "Marcar como bonificado (R$ 0)"}
+                    >
+                      <span>{p.bonificado ? "★" : "☆"}</span>
+                      <span className="hidden sm:inline">
+                        {p.bonificado ? "Bonificado" : "Bonificar"}
+                      </span>
+                    </button>
+                  </div>
+                ))}
               </div>
-              <div className="mt-2 text-sm text-white/70 font-medium">
-                Visualização: {formatCurrencyBRL(formData.totalPrice)}
-              </div>
+
+              {(formData.selectedProducts || []).some((p: any) => p.bonificado) && (
+                <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+                  ★ Itens bonificados aparecem com valor <strong>R$ 0,00</strong> no documento gerado.
+                  O total deve ser ajustado manualmente abaixo.
+                </p>
+              )}
             </div>
 
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 border rounded-2xl bg-card shadow-sm">
-                <div className="space-y-0.5">
-                  <Label className="text-base font-bold">Página de Aprovação</Label>
-                  <p className="text-xs text-muted-foreground">Incluir a página "Clique aqui para aprovar" ao final da proposta.</p>
-                </div>
-                <Switch
-                  checked={formData.includeApprovalPage}
-                  onCheckedChange={(checked) => setFormData((prev: any) => ({ ...prev, includeApprovalPage: checked }))}
-                />
-              </div>
-
-              {formData.includeApprovalPage && (
-                <div className="p-4 border border-dashed rounded-2xl bg-muted/30 space-y-3 animate-in fade-in slide-in-from-top-2">
-                  <div className="flex items-center gap-2 text-primary">
-                    <LinkIcon className="h-4 w-4" />
-                    <Label className="font-bold">Link do Gerador de Aprovação</Label>
-                  </div>
-                  <Input
-                    placeholder="Cole aqui o link gerado no Gerador de Aprovação"
-                    value={formData.approvalLink}
-                    onChange={(e) => setFormData((prev: any) => ({ ...prev, approvalLink: e.target.value }))}
-                    className="bg-card"
-                  />
-                </div>
-              )}
+            {/* Total price */}
+            <div className="p-6 bg-primary text-white rounded-2xl space-y-1">
+              <Label className="text-white/80 text-xs uppercase tracking-widest font-bold">Valor Total da Proposta</Label>
+              <Input
+                type="text"
+                placeholder="R$ 0,00"
+                className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full text-white placeholder:text-white/40"
+                value={totalPriceInput}
+                onChange={(e) => {
+                  const masked = handleCurrencyInput(e.target.value);
+                  setTotalPriceInput(masked);
+                  const numericVal = parseCurrencyBRLToNumber(masked);
+                  setFormData((prev: any) => ({ ...prev, totalPrice: numericVal }));
+                }}
+              />
             </div>
           </div>
         );
-      case 6:
+
+      case 5:
         return (
           <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95 duration-500">
             <div className="p-4 bg-green-100 rounded-full">
@@ -631,19 +905,19 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 Dica: Como gerar o PDF
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Para enviar a proposta em PDF, abra o arquivo baixado no **PowerPoint** e vá em:<br />
-                <span className="font-bold">Arquivo {'>'} Exportar {'>'} Criar PDF/XPS</span> ou <span className="font-bold">Salvar como PDF</span>.
+                Para enviar a proposta em PDF, abra o arquivo baixado no <strong>Word</strong> e vá em:<br />
+                <span className="font-bold">Arquivo {'>'} Salvar como {'>'} PDF</span>.
               </p>
             </div>
 
             <div className="grid grid-cols-1 gap-4 w-full">
               <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary hover:bg-primary/5" onClick={() => handleFinish()}>
-                <Presentation className="mr-2 h-5 w-5" /> Baixar PPTX Novamente
+                <FileText className="mr-2 h-5 w-5" /> Baixar DOCX Novamente
               </Button>
             </div>
 
             <div className="grid grid-cols-2 gap-4 w-full">
-              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(5)}>
+              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(4)}>
                 <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
               </Button>
               <Button className="h-14 rounded-2xl" onClick={handleReset}>
@@ -656,51 +930,51 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
   };
 
-  if (loadingBases) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
+  if (loadingProducts) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl overflow-hidden border-none">
-      <CardHeader className="bg-primary text-white p-8">
+    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl border-none shadow-md w-full">
+      <CardHeader className="bg-primary text-white p-6 md:p-8">
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle className="text-2xl font-black">
-              {currentStep === 6 ? "Concluído" : `Passo ${currentStep}`}
+            <CardTitle className="text-xl md:text-2xl font-black">
+              {currentStep === 5 ? "Concluído" : `Passo ${currentStep}`}
             </CardTitle>
-            <CardDescription className="text-white/70">
-              {currentStep === 6 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
+            <CardDescription className="text-white/70 text-xs md:text-sm">
+              {currentStep === 5 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
             </CardDescription>
           </div>
-          {currentStep < 6 && (
+          {currentStep < 5 && (
             <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
-              {currentStep}/5
+              {currentStep}/4
             </div>
           )}
         </div>
       </CardHeader>
-      <CardContent className="p-8">
+      <CardContent className="p-6 md:p-8">
         {renderStep()}
 
-        {currentStep < 6 && (
-          <div className="flex justify-between mt-10">
+        {currentStep < 5 && (
+          <div className="flex justify-between mt-6 pt-4 border-t">
             <div className="flex gap-2">
-              <Button variant="ghost" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
+              <Button variant="ghost" className="rounded-xl" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
                 {currentStep === 1 ? "Cancelar" : "Voltar"}
               </Button>
 
-              {currentStep >= 4 ? (
-                <Button variant="outline" onClick={handleSaveDraft}>
+              {currentStep >= 3 ? (
+                <Button variant="outline" className="rounded-xl" onClick={handleSaveDraft}>
                   <Save className="mr-2 h-4 w-4" /> Salvar rascunho
                 </Button>
               ) : null}
             </div>
 
             <div className="flex gap-2">
-              {currentStep === 5 ? (
-                <Button className="rounded-full px-8" onClick={() => handleFinish()}>
-                  <Presentation className="mr-2 h-4 w-4" /> Gerar PPTX
+              {currentStep === 4 ? (
+                <Button className="rounded-xl px-6 font-bold" onClick={() => handleFinish()}>
+                  <FileText className="mr-2 h-4 w-4" /> Gerar DOCX
                 </Button>
               ) : (
-                <Button className="rounded-full px-8" onClick={handleNext}>
+                <Button className="rounded-xl px-6" onClick={handleNext}>
                   Próximo <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               )}

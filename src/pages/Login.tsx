@@ -168,18 +168,14 @@ export default function Login() {
           onMouseLeave={handleMouseLeave}
           className="hidden lg:relative lg:flex flex-col justify-between p-16 bg-black text-white overflow-hidden perspective-1000"
         >
-          {/* Imagem centralizada e menor */}
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          {/* Glowing orbital design */}
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none bg-gradient-to-br from-indigo-950 via-slate-950 to-black">
             <div 
-              className="w-[320px] h-[320px] bg-contain bg-no-repeat bg-center transition-transform duration-300 ease-out"
+              className="w-[450px] h-[450px] rounded-full bg-gradient-to-tr from-primary/30 to-violet-500/20 blur-[80px] transition-transform duration-300 ease-out"
               style={{ 
-                backgroundImage: "url('/slide-3.jpg')",
                 transform: `
-                  translate3d(${mousePos.x * 30}px, ${mousePos.y * 30}px, 0)
-                  rotateY(${mousePos.x * 10}deg)
-                  rotateX(${mousePos.y * -10}deg)
+                  translate3d(${mousePos.x * 50}px, ${mousePos.y * 50}px, 0)
                 `,
-                opacity: 0.35
               }}
             />
           </div>
@@ -190,14 +186,14 @@ export default function Login() {
             </div>
           </div>
           <div className="relative z-10">
-            <h2 className="text-5xl font-extrabold mb-6 leading-tight drop-shadow-lg">Segurança e agilidade em um só lugar.</h2>
+            <h2 className="text-5xl font-extrabold mb-6 leading-tight drop-shadow-lg">Propostas com agilidade e precisão.</h2>
             <p className="text-xl text-gray-300 max-w-lg leading-relaxed drop-shadow-md">
               {mode === "reset-password" 
                 ? "Não se preocupe, vamos ajudar você a recuperar o acesso à sua conta rapidamente."
-                : "A plataforma definitiva para automação de orçamentos e controle de acesso profissional."}
+                : "A plataforma definitiva para automação de orçamentos e propostas comerciais dinâmicas."}
             </p>
           </div>
-          <div className="relative z-10 text-sm text-gray-500">&copy; {new Date().getFullYear()} Control iD. Inovação Brasileira.</div>
+          <div className="relative z-10 text-sm text-gray-500">&copy; {new Date().getFullYear()} Orbital Mais. Todos os direitos reservados.</div>
         </div>
 
         {/* Lado Direito - Formulário */}
@@ -219,7 +215,7 @@ export default function Login() {
                       {mode === "sign-in" ? "Acessar Painel" : mode === "sign-up" ? "Criar Conta" : "Recuperar Conta"}
                     </CardTitle>
                     <CardDescription className="text-white/80 mt-1">
-                      {mode === "sign-in" ? "Bem-vindo de volta à Control iD" : mode === "sign-up" ? "Junte-se a nós hoje mesmo" : "Enviaremos um link de acesso"}
+                      {mode === "sign-in" ? "Bem-vindo de volta à Orbital Mais" : mode === "sign-up" ? "Junte-se a nós hoje mesmo" : "Enviaremos um link de acesso"}
                     </CardDescription>
                   </div>
                   <div className="hidden sm:block">

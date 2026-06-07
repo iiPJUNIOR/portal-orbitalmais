@@ -14,7 +14,7 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    --primary: 262 83% 58%;
+    --primary: 214 83% 27%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 240 4.8% 95.9%;
@@ -31,7 +31,7 @@
 
     --border: 240 5.9% 90%;
     --input: 240 5.9% 90%;
-    --ring: 262 83% 58%;
+    --ring: 214 83% 27%;
 
     --radius: 0.75rem;
   }
@@ -46,7 +46,7 @@
     --popover: 220 14% 14%;
     --popover-foreground: 210 40% 98%;
 
-    --primary: 262 83% 65%;
+    --primary: 23 91% 54%;
     --primary-foreground: 210 40% 98%;
 
     --secondary: 220 14% 18%;
@@ -63,7 +63,7 @@
 
     --border: 220 14% 25%;
     --input: 220 14% 18%;
-    --ring: 262 83% 65%;
+    --ring: 23 91% 54%;
   }
 }
 
@@ -100,8 +100,16 @@ html.font-extra-large { font-size: 20px; }
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground antialiased selection:bg-primary/30;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings: "rlig" 1, "calt" 1;
+  }
+  ::selection {
+    background-color: #f47321 !important;
+    color: #ffffff !important;
+  }
+  ::-moz-selection {
+    background-color: #f47321 !important;
+    color: #ffffff !important;
   }
 }
 

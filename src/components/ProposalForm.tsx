@@ -27,7 +27,7 @@ export interface ProposalFormData {
   proposalDate: string;
   observations: string;
   priceModel: '12m' | '24m';
-  pipedriveUrl?: string;
+  proposalNumber?: string;
   // global flags for conditional slides (option B)
   flags?: {
     botoeira?: boolean;
@@ -58,7 +58,7 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     proposalDate: format(new Date(), "yyyy-MM-dd"),
     observations: "",
     priceModel: '12m',
-    pipedriveUrl: "",
+    proposalNumber: "",
     flags: {
       botoeira: false,
       idfaceEntry: false,
@@ -71,6 +71,18 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     },
     overrideTotal: null,
   });
+
+  const [isProposalNumberEdited, setIsProposalNumberEdited] = useState(false);
+
+  useEffect(() => {
+    if (!isProposalNumberEdited && formData.companyName) {
+      const dateStr = (formData.proposalDate || "").replace(/\D/g, "");
+      setFormData(prev => ({
+        ...prev,
+        proposalNumber: `${prev.companyName} - ${dateStr}-001`
+      }));
+    }
+  }, [formData.companyName, formData.proposalDate, isProposalNumberEdited]);
 
   const [fetchingCnpj, setFetchingCnpj] = useState(false);
   const [lastFetchedCnpj, setLastFetchedCnpj] = useState<string | null>(null);
@@ -320,12 +332,15 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="pipedrive">Pipedrive URL (opcional)</Label>
+              <Label htmlFor="proposalNumber">Número do Orçamento</Label>
               <Input
-                id="pipedrive"
-                placeholder="https://controlid.pipedrive.com/deal/214049"
-                value={formData.pipedriveUrl}
-                onChange={(e) => handleChange('pipedriveUrl', e.target.value)}
+                id="proposalNumber"
+                placeholder="Ex: Razão Social - 20260605-001"
+                value={formData.proposalNumber}
+                onChange={(e) => {
+                  setIsProposalNumberEdited(true);
+                  handleChange('proposalNumber', e.target.value);
+                }}
               />
             </div>
 

@@ -1,19 +1,20 @@
 export interface Product {
   id: string;
   sku: string;
-  category: 'Catraca Pedestal' | 'Catraca Balcão' | 'Torniquete' | 'Controladores Porta';
+  category: string;
   model: string;
-  colors: string[];
-  biometrics: boolean;
-  facial: '1' | '2' | 'Lite' | 'Max' | 'None';
-  proximity: 'ASK' | 'Mifare' | 'None';
-  urn: boolean;
-  qr: boolean;
+  colors?: string[];
+  biometrics?: boolean;
+  facial?: string;
+  proximity?: string;
+  urn?: boolean;
+  qr?: boolean;
   description: string;
   value_12m: number;
   value_24m: number;
-  part_number: string;
+  part_number?: string;
   status: 'Ativo' | 'Inativo';
+  custom_fields?: Record<string, any>;
 }
 
 export interface ProductFilters {

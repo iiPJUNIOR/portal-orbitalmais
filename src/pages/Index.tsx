@@ -4,9 +4,11 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
+import { ProposalTypePicker } from "@/components/ProposalTypePicker";
+import { QualificationWizard } from "@/components/QualificationWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
 import { QuoteDetails } from "@/components/QuoteDetails";
-import { generateProposalPPTX } from "@/services/proposalService";
+import { generateProposalDOCX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote, getQuoteItems } from "@/services/supabaseService";
@@ -20,7 +22,7 @@ export default function Index() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
-  const [step, setStep] = useState<"welcome" | "wizard" | "history" | "details" | "drafts">("welcome");
+  const [step, setStep] = useState<"welcome" | "proposal-type" | "wizard" | "qualification" | "history" | "details" | "drafts">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -55,18 +57,18 @@ export default function Index() {
           const missing = !(s.seller_name && String(s.seller_name).trim().length > 0 && s.seller_email && String(s.seller_email).trim().length > 0);
           setNeedsSellerProfile(Boolean(missing && user));
 
-          setCanViewHistory(!!s?.can_view_history || user?.email === PAULO_EMAIL);
-          setCanAccessSettings(!!s?.can_access_settings || user?.email === PAULO_EMAIL);
+          setCanViewHistory(true);
+          setCanAccessSettings(true);
         } else {
           setNeedsSellerProfile(Boolean(user));
-          setCanViewHistory(user?.email === PAULO_EMAIL);
-          setCanAccessSettings(user?.email === PAULO_EMAIL);
+          setCanViewHistory(true);
+          setCanAccessSettings(true);
         }
       } catch (err) {
         console.warn("Falha ao carregar dados do vendedor", err);
         setNeedsSellerProfile(Boolean(user));
-        setCanViewHistory(user?.email === PAULO_EMAIL);
-        setCanAccessSettings(user?.email === PAULO_EMAIL);
+        setCanViewHistory(true);
+        setCanAccessSettings(true);
       }
     };
     loadSettings();
@@ -81,7 +83,7 @@ export default function Index() {
       (async () => {
         try {
           const s = await getUserSettings();
-          const allowed = !!s?.can_view_history || user?.email === PAULO_EMAIL;
+          const allowed = true;
           if (allowed) setStep("history");
           else {
             toast.error("Acesso ao histórico restrito.");
@@ -110,7 +112,7 @@ export default function Index() {
           (async () => {
             try {
               const s = await getUserSettings();
-              const allowed = !!s?.can_view_history || user?.email === PAULO_EMAIL;
+              const allowed = true;
               if (allowed) setStep("history");
               else {
                 toast.error("Acesso ao histórico restrito.");
@@ -137,7 +139,7 @@ export default function Index() {
   }, [user, navigate]);
 
   const handleWizardComplete = async (payload: any) => {
-    const loadToastId = toast.loading(`Gerando proposta em PPTX...`);
+    const loadToastId = toast.loading(`Gerando proposta em DOCX...`);
     try {
       const proposalData = {
         ...payload,
@@ -147,7 +149,7 @@ export default function Index() {
         sellerPhone: sellerInfo.phone,
       };
       
-      const blob = await generateProposalPPTX(proposalData);
+      const blob = await generateProposalDOCX(proposalData);
 
       await saveQuote(
         {
@@ -167,17 +169,18 @@ export default function Index() {
         },
         payload.items.map((it: any) => ({
           sku: it.product.part_number || it.product.description,
-          productDescription: it.product.description,
+          productDescription: it.bonificado
+            ? `${it.product.description} (Bonificado)`
+            : it.product.description,
           quantity: it.quantity,
-          unitPrice: it.unitPrice || 0,
+          unitPrice: it.bonificado ? 0 : (it.unitPrice || 0),
           priceModel: payload.priceModel,
+          bonificado: !!it.bonificado,
         }))
       );
 
-      const dateObj = new Date(payload.date + "T12:00:00");
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      const fileName = `${payload.companyName} - Proposta Plano Premium Access v.${payload.version || '1'}_${month}-${year}.pptx`;
+      const safeProposalNumber = String(payload.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const fileName = `${safeProposalNumber}.docx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -188,10 +191,10 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success(`Proposta PPTX gerada com sucesso!`, { id: loadToastId });
+      toast.success(`Proposta DOCX gerada com sucesso!`, { id: loadToastId });
     } catch (err) {
       console.error(err);
-      toast.error(`Erro ao gerar PPTX.`, { id: loadToastId });
+      toast.error(`Erro ao gerar DOCX.`, { id: loadToastId });
     } finally {
       // clear any edit state once wizard finishes
       setEditInitialData(null);
@@ -218,14 +221,12 @@ export default function Index() {
       return;
     }
 
-    const loadToastId = toast.loading("Regenerando arquivo PPTX...");
+    const loadToastId = toast.loading("Regenerando arquivo DOCX...");
     try {
-      const blob = await generateProposalPPTX(selectedQuote.settings);
+      const blob = await generateProposalDOCX(selectedQuote.settings);
       
-      const dateObj = new Date(selectedQuote.proposalDate);
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      const fileName = `${selectedQuote.companyName} - Proposta Regenerada_${month}-${year}.pptx`;
+      const safeProposalNumber = String(selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const fileName = `${safeProposalNumber}.docx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -236,10 +237,10 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success("PPTX regenerado com sucesso!", { id: loadToastId });
+      toast.success("DOCX regenerado com sucesso!", { id: loadToastId });
     } catch (err) {
       console.error(err);
-      toast.error("Erro ao regenerar PPTX.", { id: loadToastId });
+      toast.error("Erro ao regenerar DOCX.", { id: loadToastId });
     }
   };
 
@@ -250,11 +251,9 @@ export default function Index() {
     }
     const loadToastId = toast.loading("Gerando proposta a partir do histórico...");
     try {
-      const blob = await generateProposalPPTX(quote.settings);
-      const dateObj = new Date(quote.proposalDate || Date.now());
-      const month = String(dateObj.getMonth() + 1).padStart(2, '0');
-      const year = dateObj.getFullYear();
-      const fileName = `${quote.companyName || "proposta"} - Regenerada_${month}-${year}.pptx`;
+      const blob = await generateProposalDOCX(quote.settings);
+      const safeProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const fileName = `${safeProposalNumber}.docx`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -265,7 +264,7 @@ export default function Index() {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      toast.success("PPTX gerado com sucesso a partir do histórico!", { id: loadToastId });
+      toast.success("DOCX gerado com sucesso a partir do histórico!", { id: loadToastId });
     } catch (err) {
       console.error(err);
       toast.error("Erro ao gerar proposta a partir do histórico.", { id: loadToastId });
@@ -282,22 +281,23 @@ export default function Index() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-full flex flex-col">
       <main className="flex-1 container mx-auto py-10 px-4">
         {step === "welcome" && (
           <div className="max-w-4xl mx-auto space-y-8">
             <div className="text-center space-y-4">
               <h1 className="text-5xl font-black tracking-tight text-neutral-900 dark:text-white">
-                Gerador de Propostas <span className="text-neutral-900 dark:text-white">Control iD</span>
+                Gerador de Propostas <span className="text-neutral-900 dark:text-white">Orbital Mais</span>
               </h1>
               <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-                Crie apresentações profissionais em PPTX seguindo o padrão oficial da Control iD em poucos minutos.
+                Crie apresentações profissionais e propostas em poucos minutos para seus clientes.
               </p>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-10">
               <button 
-                onClick={() => setStep("wizard")}
+                id="btn-nova-proposta"
+                onClick={() => setStep("proposal-type")}
                 className="group p-8 bg-card border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all hover:shadow-xl space-y-4 shadow-sm"
               >
                 <div className="p-3 bg-primary/10 rounded-2xl w-fit group-hover:bg-primary group-hover:text-white transition-colors">
@@ -305,7 +305,7 @@ export default function Index() {
                 </div>
                 <div>
                   <h3 className="text-xl font-bold">Nova Proposta</h3>
-                  <p className="text-sm text-muted-foreground">Inicie o assistente guiado para criar um novo orçamento.</p>
+                  <p className="text-sm text-muted-foreground">Proposta de serviço ou qualificação.</p>
                 </div>
               </button>
 
@@ -346,16 +346,30 @@ export default function Index() {
           </div>
         )}
 
+        {step === "proposal-type" && (
+          <ProposalTypePicker
+            onSelectService={() => setStep("wizard")}
+            onSelectQualification={() => setStep("qualification")}
+            onBack={() => setStep("welcome")}
+          />
+        )}
+
         {step === "wizard" && (
           <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
             <ProposalWizard 
               initialSellerData={sellerInfo}
               onComplete={handleWizardComplete}
-              onCancel={() => (editInitialData ? setStep("details") : setStep("welcome"))}
+              onCancel={() => (editInitialData ? setStep("details") : setStep("proposal-type"))}
               initialData={editInitialData ?? undefined}
               initialStep={1}
               draftId={selectedQuote?.id ?? undefined}
             />
+          </div>
+        )}
+
+        {step === "qualification" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 flex justify-center">
+            <QualificationWizard onCancel={() => setStep("proposal-type")} />
           </div>
         )}
 
@@ -391,10 +405,6 @@ export default function Index() {
           </div>
         )}
       </main>
-
-      <footer className="py-6 border-t bg-card">
-        <MadeWithDyad />
-      </footer>
     </div>
   );
 }

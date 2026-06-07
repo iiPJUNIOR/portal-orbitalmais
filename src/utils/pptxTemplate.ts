@@ -1,6 +1,5 @@
-"use client";
-
 import JSZip from "jszip";
+import { getUserSettings } from "@/services/settingsService";
 
 /**
  * PPTX template processor with slide pruning support and robust token replacement.
@@ -174,7 +173,17 @@ async function pruneSlides(zip: JSZip, keepSlideNumbers: number[]) {
 }
 
 export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promise<Blob> {
-  const candidateUrls: string[] = ["/proposal-template.pptx"];
+  const candidateUrls: string[] = [];
+  try {
+    const settings = await getUserSettings();
+    if (settings?.pptx_template_url) {
+      candidateUrls.push(settings.pptx_template_url);
+    }
+  } catch (e) {
+    console.warn("Failed to load custom template URL", e);
+  }
+  
+  candidateUrls.push("/proposal-template.pptx");
   try {
     const modUrl = new URL("../templates/proposal-template.pptx", import.meta.url).href;
     candidateUrls.push(modUrl);

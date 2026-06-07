@@ -7,8 +7,6 @@ import React, { useEffect } from "react";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Settings from "./pages/Settings";
-import TokenScanner from "./pages/TokenScanner";
-import DocxTokenScanner from "./pages/DocxTokenScanner";
 import Login from "./pages/Login";
 import AuthStatus from "./pages/AuthStatus";
 import ResetPassword from "./pages/ResetPassword";
@@ -19,7 +17,8 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { getUserSettings } from "@/services/settingsService";
 import DraftsPage from "@/pages/Drafts";
 import WizardPage from "@/pages/WizardPage";
-import SolicitarVistoria from "@/pages/SolicitarVistoria";
+import Products from "./pages/Products";
+import DocxTokenScannerPage from "./pages/DocxTokenScanner";
 
 const queryClient = new QueryClient();
 
@@ -81,7 +80,7 @@ const AppContent = () => {
                   }}
                   className="text-xs font-bold uppercase tracking-widest text-muted-foreground/80 hover:text-primary transition-colors bg-transparent border-none p-0"
                 >
-                  Gerador de Propostas Control iD
+                  Gerador de Propostas Orbital Mais
                 </button>
 
                 <div className="ml-auto flex items-center gap-4">
@@ -89,17 +88,16 @@ const AppContent = () => {
                 </div>
               </header>
 
-              <main className="flex-1 overflow-auto bg-muted/20 dark:bg-background">
-                <div className="min-h-full">
+              <main className="flex-1 overflow-auto bg-muted/20 dark:bg-background flex flex-col">
+                <div className="flex-1 flex flex-col min-h-full">
                   <Routes>
                     <Route path="/" element={<Index />} />
                     <Route path="/history" element={<Index />} />
                     <Route path="/settings" element={<Settings />} />
-                    <Route path="/token-scan" element={<TokenScanner />} />
-                    <Route path="/docx-token-scan" element={<DocxTokenScanner />} />
                     <Route path="/drafts" element={<DraftsPage />} />
                     <Route path="/wizard" element={<WizardPage />} />
-                    <Route path="/solicitar-vistoria" element={<SolicitarVistoria />} />
+                    <Route path="/products" element={<Products />} />
+                    <Route path="/token-scan" element={<DocxTokenScannerPage />} />
                     <Route path="*" element={<NotFound />} />
                   </Routes>
                 </div>

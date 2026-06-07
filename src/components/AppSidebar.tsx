@@ -8,7 +8,7 @@ import {
   User,
   FileText,
   History as HistoryIcon,
-  MapPin
+  Package
 } from "lucide-react";
 import {
   Sidebar,
@@ -34,8 +34,8 @@ export function AppSidebar() {
   const location = useLocation();
   const { user } = useSession();
 
-  const [canViewHistory, setCanViewHistory] = useState<boolean>(false);
-  const [canAccessSettings, setCanAccessSettings] = useState<boolean>(false);
+  const [canViewHistory, setCanViewHistory] = useState<boolean>(true);
+  const [canAccessSettings, setCanAccessSettings] = useState<boolean>(true);
 
   const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 
@@ -44,34 +44,15 @@ export function AppSidebar() {
 
     async function checkAccess() {
       try {
-        if (!user) {
-          if (mounted) {
-            setCanViewHistory(false);
-            setCanAccessSettings(false);
-          }
-          return;
-        }
-
-        // Super admin always has access
-        if (user.email === PAULO_EMAIL) {
-          if (mounted) {
-            setCanViewHistory(true);
-            setCanAccessSettings(true);
-          }
-          return;
-        }
-
-        // Otherwise consult user settings (granular flags)
-        const s = await getUserSettings();
         if (mounted) {
-          setCanViewHistory(!!s?.can_view_history);
-          setCanAccessSettings(!!s?.can_access_settings);
+          setCanViewHistory(true);
+          setCanAccessSettings(true);
         }
       } catch (err) {
         console.warn("AppSidebar: failed to load user settings", err);
         if (mounted) {
-          setCanViewHistory(false);
-          setCanAccessSettings(false);
+          setCanViewHistory(true);
+          setCanAccessSettings(true);
         }
       }
     }
@@ -104,9 +85,9 @@ export function AppSidebar() {
       show: canViewHistory,
     },
     {
-      title: "Solicitar Vistoria",
-      url: "/solicitar-vistoria",
-      icon: MapPin,
+      title: "Produtos & Serviços",
+      url: "/products",
+      icon: Package,
       show: true,
     },
     {
@@ -158,7 +139,7 @@ export function AppSidebar() {
           aria-label="Ir para Gerador de Propostas"
           className="flex items-center justify-center p-0 m-0 bg-transparent border-0"
         >
-          <Logo className="h-7 w-auto object-contain" />
+          <Logo />
         </button>
       </SidebarHeader>
       

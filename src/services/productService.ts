@@ -1,210 +1,220 @@
 import { Product, ProductFilters } from "@/types/product";
+import { supabase } from "@/integrations/supabase/client";
 
-// Mock data - in a real app this would come from an API
+// Mock data as fallback if the database table doesn't exist or is empty yet
 const mockProducts: Product[] = [
   {
     id: "1",
-    sku: "IDB-NEXT-001",
-    category: "Catraca Pedestal",
-    model: "iDBlock Next",
-    colors: ["Inox", "Preta"],
-    biometrics: true,
-    facial: "Max",
-    proximity: "Mifare",
-    urn: true,
-    qr: true,
-    description: "Catraca pedestral biométrica com facial Max",
-    value_12m: 1200.0,
-    value_24m: 1000.0,
-    part_number: "IDB-NEXT-001",
+    sku: "ORB-CFTV-001",
+    category: "Câmeras",
+    model: "Câmera Bullet IP",
+    description: "Câmera Bullet IP de alta definição com infravermelho 30m",
+    value_12m: 120.0,
+    value_24m: 95.0,
     status: "Ativo",
   },
   {
     id: "2",
-    sku: "IDB-NEXT-BQC-001",
-    category: "Catraca Balcão",
-    model: "iDBlock Next BQC",
-    colors: ["Cinza"],
-    biometrics: true,
-    facial: "Lite",
-    proximity: "ASK",
-    urn: false,
-    qr: true,
-    description: "Catraca balcão com facial Lite",
-    value_12m: 950.0,
-    value_24m: 800.0,
-    part_number: "IDB-NEXT-BQC-001",
-    status: "Ativo",
-  },
-  {
-    id: "3",
-    sku: "IDB-V2-001",
-    category: "Torniquete",
-    model: "iDBlock V2",
-    colors: ["Inox"],
-    biometrics: false,
-    facial: "2",
-    proximity: "Mifare",
-    urn: true,
-    qr: false,
-    description: "Torniquete com facial 2",
-    value_12m: 1500.0,
-    value_24m: 1250.0,
-    part_number: "IDB-V2-001",
-    status: "Ativo",
-  },
-  {
-    id: "4",
-    sku: "IDB-BAL-001",
-    category: "Catraca Balcão",
-    model: "iDBlock Balcão",
-    colors: ["Preta", "Cinza"],
-    biometrics: true,
-    facial: "1",
-    proximity: "ASK",
-    urn: false,
-    qr: true,
-    description: "Catraca balcão com facial 1",
-    value_12m: 850.0,
-    value_24m: 720.0,
-    part_number: "IDB-BAL-001",
-    status: "Ativo",
-  },
-  {
-    id: "5",
-    sku: "IDF-PRO-001",
-    category: "Controladores Porta",
-    model: "iDFace Pro",
-    colors: ["Inox"],
-    biometrics: false,
-    facial: "Pro",
-    proximity: "Mifare",
-    urn: false,
-    qr: true,
-    description: "Controlador de porta com facial Pro",
-    value_12m: 650.0,
-    value_24m: 550.0,
-    part_number: "IDF-PRO-001",
+    sku: "ORB-ALM-002",
+    category: "Alarme",
+    model: "Central de Alarme Monitorada",
+    description: "Central de alarme com suporte a chip celular e bateria",
+    value_12m: 89.0,
+    value_24m: 75.0,
     status: "Ativo",
   },
 ];
 
+/**
+ * Fetch products from Supabase, applying filters.
+ * Falls back to mock data if there's an error or the table doesn't exist.
+ */
 export const fetchProducts = async (filters: ProductFilters = {}): Promise<Product[]> => {
-  // Simulate API delay
-  await new Promise((resolve) => setTimeout(resolve, 500));
+  try {
+    let query = supabase.from("products").select("*");
 
-  return mockProducts.filter((product) => {
-    // Category filter
-    if (filters.category && product.category !== filters.category) {
-      return false;
+    if (filters.category) {
+      query = query.eq("category", filters.category);
     }
 
-    // Tipo filter (matches model or part_number loosely)
-    if (filters.tipo) {
-      const t = String(filters.tipo).toLowerCase();
-      if (!(product.model.toLowerCase().includes(t) || product.part_number.toLowerCase().includes(t))) {
-        return false;
-      }
-    }
-
-    // Model filter
-    if (filters.model && product.model !== filters.model) {
-      return false;
-    }
-
-    // Color filter (match any color)
-    if (filters.color) {
-      const c = String(filters.color).toLowerCase();
-      if (!product.colors.some((col) => col.toLowerCase() === c)) {
-        return false;
-      }
-    }
-
-    // Biometrics filter
-    if (filters.biometrics !== undefined && product.biometrics !== filters.biometrics) {
-      return false;
-    }
-
-    // Facial filter
-    if (filters.facial && filters.facial !== "None" && product.facial !== filters.facial) {
-      return false;
-    }
-
-    // Proximity filter
-    if (filters.proximity && filters.proximity !== "None" && product.proximity !== filters.proximity) {
-      return false;
-    }
-
-    // Urn filter
-    if (filters.urn !== undefined && product.urn !== filters.urn) {
-      return false;
-    }
-
-    // QR filter
-    if (filters.qr !== undefined && product.qr !== filters.qr) {
-      return false;
-    }
-
-    // Price range filter
-    // Include product if at least one of the prices (12m or 24m) falls within the requested range.
-    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
-      const minPriceFilter = filters.minPrice ?? Number.NEGATIVE_INFINITY;
-      const maxPriceFilter = filters.maxPrice ?? Number.POSITIVE_INFINITY;
-
-      const lowestPrice = Math.min(product.value_12m, product.value_24m);
-      const highestPrice = Math.max(product.value_12m, product.value_24m);
-
-      // If both prices are strictly less than min OR both strictly greater than max, exclude.
-      if (highestPrice < minPriceFilter) {
-        return false;
-      }
-      if (lowestPrice > maxPriceFilter) {
-        return false;
-      }
-    }
-
-    // Search filter
     if (filters.search) {
-      const searchLower = filters.search.toLowerCase();
-      if (
-        !product.description.toLowerCase().includes(searchLower) &&
-        !product.part_number.toLowerCase().includes(searchLower) &&
-        !product.sku.toLowerCase().includes(searchLower)
-      ) {
-        return false;
-      }
+      const search = `%${filters.search}%`;
+      query = query.or(`description.ilike.${search},sku.ilike.${search},model.ilike.${search}`);
     }
 
-    return product.status === "Ativo";
+    const { data, error } = await query;
+    
+    if (error) throw error;
+
+    let products = (data || []).map((p: any) => ({
+      id: p.id,
+      sku: p.sku,
+      category: p.category,
+      model: p.model,
+      description: p.description || "",
+      value_12m: Number(p.value_12m || 0),
+      value_24m: Number(p.value_24m || 0),
+      part_number: p.part_number || "",
+      status: p.status || "Ativo",
+      colors: p.colors || [],
+      biometrics: !!p.biometrics,
+      facial: p.facial || "None",
+      proximity: p.proximity || "None",
+      urn: !!p.urn,
+      qr: !!p.qr,
+      custom_fields: p.custom_fields || {},
+    })) as Product[];
+
+    // Apply client-side filters if necessary (like min/max price ranges)
+    if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
+      const min = filters.minPrice ?? 0;
+      const max = filters.maxPrice ?? Number.MAX_VALUE;
+      products = products.filter(p => {
+        const lowest = Math.min(p.value_12m, p.value_24m);
+        const highest = Math.max(p.value_12m, p.value_24m);
+        return highest >= min && lowest <= max;
+      });
+    }
+
+    // If database has no products, return mock data for initial setup
+    if (products.length === 0) {
+      return getFilteredMockProducts(filters);
+    }
+
+    return products;
+  } catch (err) {
+    console.warn("fetchProducts database failed, using fallback mock data", err);
+    return getFilteredMockProducts(filters);
+  }
+};
+
+const getFilteredMockProducts = (filters: ProductFilters): Product[] => {
+  return mockProducts.filter((p) => {
+    if (filters.category && p.category !== filters.category) return false;
+    if (filters.search) {
+      const s = filters.search.toLowerCase();
+      return p.description.toLowerCase().includes(s) || p.sku.toLowerCase().includes(s) || p.model.toLowerCase().includes(s);
+    }
+    return p.status === "Ativo";
   });
 };
 
+/**
+ * Fetch a single product by ID
+ */
 export const getProductById = async (id: string): Promise<Product | undefined> => {
-  return mockProducts.find((product) => product.id === id);
+  try {
+    const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
+    if (error) throw error;
+    if (data) {
+      return {
+        id: data.id,
+        sku: data.sku,
+        category: data.category,
+        model: data.model,
+        description: data.description || "",
+        value_12m: Number(data.value_12m || 0),
+        value_24m: Number(data.value_24m || 0),
+        part_number: data.part_number || "",
+        status: data.status || "Ativo",
+        colors: data.colors || [],
+        biometrics: !!data.biometrics,
+        facial: data.facial || "None",
+        proximity: data.proximity || "None",
+        urn: !!data.urn,
+        qr: !!data.qr,
+        custom_fields: data.custom_fields || {},
+      } as Product;
+    }
+  } catch (err) {
+    console.warn("getProductById failed", err);
+  }
+  return mockProducts.find((p) => p.id === id);
 };
 
-export const getCategories = (): string[] => {
+/**
+ * Save a new product to Supabase
+ */
+export const createProduct = async (product: Omit<Product, "id">): Promise<Product> => {
+  const { data, error } = await supabase.from("products").insert([product]).select().single();
+  if (error) {
+    console.error("createProduct failed:", error);
+    throw error;
+  }
+  return data as Product;
+};
+
+/**
+ * Update an existing product in Supabase
+ */
+export const updateProduct = async (id: string, product: Partial<Product>): Promise<Product> => {
+  const { data, error } = await supabase.from("products").update(product).eq("id", id).select().single();
+  if (error) {
+    console.error("updateProduct failed:", error);
+    throw error;
+  }
+  return data as Product;
+};
+
+/**
+ * Delete or inactivate a product (soft delete — preserves history)
+ */
+export const deleteProduct = async (id: string): Promise<void> => {
+  // We perform an inactivation (soft delete) to avoid breaking existing quotes that reference this product
+  const { error } = await supabase.from("products").update({ status: "Inativo" }).eq("id", id);
+  if (error) {
+    console.error("deleteProduct failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Permanently delete a product from the database (hard delete — irreversible)
+ */
+export const hardDeleteProduct = async (id: string): Promise<void> => {
+  const { error } = await supabase.from("products").delete().eq("id", id);
+  if (error) {
+    console.error("hardDeleteProduct failed:", error);
+    throw error;
+  }
+};
+
+/**
+ * Helper to fetch distinct categories
+ */
+export const getCategories = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase.from("products").select("category");
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return Array.from(new Set(data.map((p) => p.category)));
+    }
+  } catch (err) {
+    console.warn("getCategories failed", err);
+  }
   return Array.from(new Set(mockProducts.map((p) => p.category)));
 };
 
-export const getModels = (): string[] => {
+/**
+ * Helper to fetch distinct models
+ */
+export const getModels = async (): Promise<string[]> => {
+  try {
+    const { data, error } = await supabase.from("products").select("model");
+    if (error) throw error;
+    if (data && data.length > 0) {
+      return Array.from(new Set(data.map((p) => p.model)));
+    }
+  } catch (err) {
+    console.warn("getModels failed", err);
+  }
   return Array.from(new Set(mockProducts.map((p) => p.model)));
 };
 
-// Return a list of 'tipo' candidates (we derive from model and part_number for flexibility)
-export const getTipos = (): string[] => {
-  const tipos = new Set<string>();
-  mockProducts.forEach((p) => {
-    tipos.add(p.model);
-    tipos.add(p.part_number);
-  });
-  return Array.from(tipos);
+export const getTipos = async (): Promise<string[]> => {
+  return getModels();
 };
 
-export const getColors = (): string[] => {
-  const set = new Set<string>();
-  mockProducts.forEach((p) => {
-    (p.colors || []).forEach((c) => set.add(c));
-  });
-  return Array.from(set);
+export const getColors = async (): Promise<string[]> => {
+  return [];
 };

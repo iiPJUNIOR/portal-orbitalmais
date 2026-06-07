@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Blue Open Circle -->
+  <path
+    d="M 50 15 A 35 35 0 1 1 19.7 32.5"
+    stroke="#0c3e7f"
+    stroke-width="11"
+    stroke-linecap="round"
+    fill="none"
+  />
+  <!-- Orange Tilted Center Bar -->
+  <line
+    x1="46"
+    y1="43"
+    x2="29"
+    y2="14"
+    stroke="#f47321"
+    stroke-width="11"
+    stroke-linecap="round"
+  />
+</svg>

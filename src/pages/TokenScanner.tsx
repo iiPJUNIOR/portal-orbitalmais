@@ -237,7 +237,6 @@ export default function TokenScannerPage() {
         },
       ],
       proposalNumber: "214049 V.1",
-      pipedriveUrl: "https://controlid.pipedrive.com/deal/214049",
       flags: {
         botoeira: true,
         idfaceEntry: true,

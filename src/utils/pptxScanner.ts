@@ -1,7 +1,6 @@
-"use client";
-
 import JSZip from "jszip";
 import PptxGenJS from "pptxgenjs";
+import { getUserSettings } from "@/services/settingsService";
 
 /**
  * Scans the PPTX template and returns a list of unique token fragments found in slide <a:t> nodes,
@@ -52,6 +51,15 @@ for (const k of ALLOWED_KEYS) {
 
 async function fetchTemplateArrayBuffer(): Promise<ArrayBuffer> {
   const candidateUrls: string[] = [];
+
+  try {
+    const settings = await getUserSettings();
+    if (settings?.pptx_template_url) {
+      candidateUrls.push(settings.pptx_template_url);
+    }
+  } catch (e) {
+    console.warn("pptx-scanner: failed to load custom template URL", e);
+  }
 
   // Try the public path first (this is the most reliable in dev/preview)
   candidateUrls.push("/proposal-template.pptx");

@@ -20,9 +20,43 @@ export type UserSettings = {
   font_size?: 'small' | 'medium' | 'large' | 'extra-large';
   slide_mappings?: Record<string, number>; // Mapeamento palavra-chave -> número do slide
   docx_mappings?: Record<string, string>; // Mapeamento tag_no_docx -> campo_do_form
+  product_fields?: any[]; // Configuração dinâmica de campos de produtos
+  pptx_template_url?: string | null; // URL do template PPTX customizado
   created_at?: string | null;
   updated_at?: string | null;
 };
+
+export interface ProductFieldDef {
+  key: string;
+  label: string;
+  type: "text" | "number" | "boolean" | "currency" | "dropdown";
+  options?: string[];
+  isCustom: boolean;
+  isActive: boolean;
+}
+
+export const defaultFields: ProductFieldDef[] = [
+  { key: "sku", label: "SKU/Código", type: "text", isCustom: false, isActive: true },
+  { key: "model", label: "Modelo / Nome", type: "text", isCustom: false, isActive: true },
+  { key: "status", label: "Status", type: "text", isCustom: false, isActive: true },
+  { key: "category", label: "Categoria", type: "text", isCustom: false, isActive: true },
+  { key: "description", label: "Descrição", type: "text", isCustom: false, isActive: true },
+  { key: "value_12m", label: "Valor Mensal (12m)", type: "number", isCustom: false, isActive: true },
+  { key: "value_24m", label: "Valor Mensal (24m)", type: "number", isCustom: false, isActive: true },
+  { key: "colors", label: "Cores", type: "text", isCustom: false, isActive: true },
+  { key: "biometrics", label: "Biometria", type: "boolean", isCustom: false, isActive: true },
+  { key: "facial", label: "Reconhecimento Facial", type: "text", isCustom: false, isActive: true },
+  { key: "proximity", label: "Proximidade / RFID", type: "text", isCustom: false, isActive: true },
+  { key: "urn", label: "Urna Coletora", type: "boolean", isCustom: false, isActive: true },
+  { key: "qr", label: "Leitor QR Code", type: "boolean", isCustom: false, isActive: true },
+];
+
+export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
+  if (Array.isArray(savedFields)) {
+    return savedFields;
+  }
+  return defaultFields;
+}
 
 const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
 const LOCAL_SETTINGS_KEY = "local_user_settings_v1";
@@ -61,6 +95,12 @@ function readLocalSettings(): UserSettings | null {
     const parsed = JSON.parse(raw) as UserSettings;
     // Inject docx mappings
     parsed.docx_mappings = getLocalDocxMappings();
+    // Merge product fields
+    if (Array.isArray(parsed.product_fields)) {
+      parsed.product_fields = mergeFieldsWithDefaults(parsed.product_fields);
+    } else {
+      parsed.product_fields = defaultFields;
+    }
     return parsed;
   } catch (err) {
     console.warn("settingsService: readLocalSettings failed", err);
@@ -128,6 +168,12 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     if (baseSettings) {
       // Always ensure docx_mappings are included from local storage source
       baseSettings.docx_mappings = getLocalDocxMappings();
+      // Auto-merge product fields config with defaults
+      if (Array.isArray(baseSettings.product_fields)) {
+        baseSettings.product_fields = mergeFieldsWithDefaults(baseSettings.product_fields);
+      } else {
+        baseSettings.product_fields = defaultFields;
+      }
     }
 
     return baseSettings;
@@ -138,11 +184,9 @@ export async function getUserSettings(): Promise<UserSettings | null> {
   }
 }
 
-/**
- * Get all users settings for admin management.
- */
 export async function getAllUsersSettings(): Promise<any[]> {
-  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/list-users";
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL || "https://jfbjeavkedcojarfygzf.supabase.co";
+  const FN_URL = `${baseUrl}/functions/v1/list-users`;
 
   try {
     const { data: { session } } = await supabase.auth.getSession();
@@ -194,12 +238,10 @@ export async function updateUserPermission(userId: string, email: string, permis
   }
 }
 
-/**
- * Grant permission(s) by email.
- */
 export async function grantPermissionByEmail(email: string, permission: 'history' | 'settings' | 'both'): Promise<void> {
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL || "https://jfbjeavkedcojarfygzf.supabase.co";
   const cleanEmail = email.trim().toLowerCase();
-  const FN_URL = "https://brbqsbvuitdxrtzqyopj.supabase.co/functions/v1/grant-permission";
+  const FN_URL = `${baseUrl}/functions/v1/grant-permission`;
   const { data: { session } } = await supabase.auth.getSession();
   const resp = await fetch(FN_URL, {
     method: "POST",

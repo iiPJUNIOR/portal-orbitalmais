@@ -1,9 +1,10 @@
 import { Product } from "@/types/product";
-import { generatePptxFromTemplate } from "@/utils/pptxTemplate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { parseISO } from "date-fns";
 import { getUserSettings } from "./settingsService";
+import PizZip from "pizzip";
+import Docxtemplater from "docxtemplater";
 
 interface QuoteItem {
   id: string;
@@ -25,7 +26,6 @@ interface ProposalData {
   priceModel: '12m' | '24m';
   items: QuoteItem[];
   proposalNumber?: string;
-  pipedriveUrl?: string;
   version?: string | number;
   sellerName?: string;
   sellerRole?: string;
@@ -40,6 +40,7 @@ interface ProposalData {
   overrideTotal?: number | null;
   includeApprovalPage?: boolean;
   approvalLink?: string;
+  ensaiosInclusos?: boolean;
 }
 
 const MODEL_TO_SLIDE: Record<string, number> = {
@@ -72,22 +73,149 @@ export const formatDateForProposal = (dateStr?: string | null): string => {
   }
 };
 
-export const generateProposalNumber = (pipedriveUrl?: string, version?: string | number): string => {
-  const match = pipedriveUrl?.match(/\/deal\/(\d+)/);
-  const dealId = match ? match[1] : null;
-  if (dealId) return `${dealId} V${version || 1}`;
-  
+export const generateProposalNumber = (companyName?: string, sequence?: number): string => {
   const now = new Date();
   const datePart = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}`;
-  const rand = Math.floor(1000 + Math.random() * 9000);
-  return `${datePart}-${rand} V${version || 1}`;
+  const formattedSeq = String(sequence || 1).padStart(3, "0");
+  return `${companyName || "Proposta"} - ${datePart}-${formattedSeq}`;
 };
 
-export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> => {
+const formatCurrencyBRL = (val: number): string => {
+  return new Intl.NumberFormat("pt-BR", { 
+    style: "currency",
+    currency: "BRL"
+  }).format(val);
+};
+
+function healDocxTokens(xml: string): string {
+  if (!xml) return xml;
+  const pRe = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
+  return xml.replace(pRe, (pFull, pContent) => {
+    if (!pContent.includes("{") && !pContent.includes("}")) return pFull;
+    const tRe = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
+    const runs: { open: string; text: string; close: string }[] = [];
+    let m;
+    while ((m = tRe.exec(pContent)) !== null)
+      runs.push({ open: m[1], text: m[2], close: m[3] });
+    if (runs.length <= 1) return pFull;
+    let idx = 0;
+    const healed = pContent.replace(tRe, () => {
+      const r = runs[idx++];
+      if (idx === 1) return r.open + runs.map((x) => x.text).join("") + r.close;
+      return r.open + r.close;
+    });
+    const pOpen = pFull.match(/^<w:p(?: [\s\S]*?)?>/i)?.[0] || "<w:p>";
+    return pOpen + healed + "</w:p>";
+  });
+}
+
+function getFieldValue(field: string, data: ProposalData, settings?: any): any {
+  const itemsSafe = data.items || [];
+  const docxMappings = settings?.docx_mappings || {};
+  const ensaiosYes = docxMappings["__ensaios_yes"] || "já";
+  const ensaiosNo = docxMappings["__ensaios_no"] || "não";
+
+  // Dynamic index-based resolution for SKU and Item Price
+  if (field.startsWith("sku")) {
+    const num = field.substring(3);
+    const idx = num === "" ? 0 : parseInt(num, 10);
+    if (!isNaN(idx) && itemsSafe[idx]) {
+      const it = itemsSafe[idx];
+      return it.product?.part_number || it.product?.description || "";
+    }
+    return "";
+  }
+
+  if (field.startsWith("valor_item")) {
+    const num = field.substring(10);
+    const idx = num === "" ? 0 : parseInt(num, 10);
+    if (!isNaN(idx) && itemsSafe[idx]) {
+      const it = itemsSafe[idx];
+      return it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice || 0);
+    }
+    return "";
+  }
+
+  if (field.startsWith("qtd") && field !== "quantidade") {
+    const num = field.substring(3);
+    const idx = num === "" ? 0 : parseInt(num, 10);
+    if (!isNaN(idx) && itemsSafe[idx]) {
+      const it = itemsSafe[idx];
+      return it.quantity || 0;
+    }
+    return "";
+  }
+
+  switch (field) {
+    case "vendedor": return data.sellerName || "";
+    case "empresa": return data.companyName || "";
+    case "cnpj": return data.cnpj || "";
+    case "empresa_phone": return data.sellerPhone || "";
+    case "empresa_email": return data.sellerEmail || "";
+    case "contato_nome": return data.contactName || "";
+    case "contato_telefone": return data.phone || "";
+    case "rua": return data.address || "";
+    case "endereco": return data.address || "";
+    case "observacoes": return data.observations || "";
+    case "quantidade": return itemsSafe.reduce((sum, it) => sum + (it.quantity || 0), 0);
+    case "produto": return itemsSafe.map(it => `${it.product?.description || ""} (Qtd: ${it.quantity || 0})`).join(", ");
+    case "valor": {
+      const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
+        ? Number(data.overrideTotal)
+        : (data.totalPrice || 0);
+      return formatCurrencyBRL(computedTotal);
+    }
+    case "data": return formatDateForProposal(data.proposalDate);
+    case "numeroproposta": return data.proposalNumber || "";
+    case "versao": return data.version || "0";
+    case "ensaios_inclusos": {
+      const isIncluded = data.ensaiosInclusos ?? itemsSafe.some(it => it.ensaiosInclusos);
+      return isIncluded ? ensaiosYes : ensaiosNo;
+    }
+    default: return "";
+  }
+}
+
+function wrapRowsInLoop(xml: string, docxMappings: Record<string, string>): string {
+  const itemLevelFields = ["sku", "produto", "quantidade", "qtd", "valor_item", "valor"];
+  
+  const itemTokens = Object.entries(docxMappings)
+    .filter(([token, field]) => itemLevelFields.includes(field) && !token.startsWith("__"))
+    .map(([token]) => token);
+    
+  let currentXml = xml;
+  
+  for (const token of itemTokens) {
+    const tokenRegex = new RegExp(`\\{\\{\\s*${token}\\s*\\}\\}`, "gi");
+    let match;
+    
+    while ((match = tokenRegex.exec(currentXml)) !== null) {
+      const tokenIdx = match.index;
+      const openTrIdx = currentXml.lastIndexOf("<w:tr", tokenIdx);
+      const closeTrIdx = currentXml.indexOf("</w:tr>", tokenIdx);
+      
+      if (openTrIdx !== -1 && closeTrIdx !== -1 && openTrIdx < tokenIdx && tokenIdx < closeTrIdx) {
+        const rowContent = currentXml.substring(openTrIdx, closeTrIdx + 7);
+        const isAlreadyWrapped = openTrIdx >= 10 && currentXml.substring(openTrIdx - 10, openTrIdx) === "{{#items}}";
+        if (!isAlreadyWrapped) {
+          const before = currentXml.substring(0, openTrIdx);
+          const after = currentXml.substring(closeTrIdx + 7);
+          currentXml = before + `{{#items}}` + rowContent + `{{/items}}` + after;
+          
+          // Reset the regex index past the newly inserted tags to avoid duplicate processing
+          tokenRegex.lastIndex = openTrIdx + 11 + rowContent.length;
+        }
+      }
+    }
+  }
+  
+  return currentXml;
+}
+
+export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> => {
   try {
     // Busca configurações do usuário para mapeamentos dinâmicos
     const settings = await getUserSettings();
-    const dynamicMappings = settings?.slide_mappings || {};
 
     const computedTotal = (data.overrideTotal !== undefined && data.overrideTotal !== null)
       ? Number(data.overrideTotal)
@@ -99,7 +227,64 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       useGrouping: true
     }).format(computedTotal);
 
-    const replacements: Record<string, string | number> = {
+    // 1. Fetch template from candidates
+    const candidateUrls: string[] = [];
+    if (settings?.pptx_template_url) {
+      candidateUrls.push(settings.pptx_template_url);
+    }
+    candidateUrls.push(encodeURI("/Solicitação de vistoria.docx"));
+
+    let arrayBuffer: ArrayBuffer | null = null;
+    let loadedUrl = "";
+
+    for (const url of candidateUrls) {
+      try {
+        const safeUrl = url.startsWith("http") ? url : encodeURI(decodeURIComponent(url));
+        const resp = await fetch(safeUrl);
+        if (!resp.ok) continue;
+        arrayBuffer = await resp.arrayBuffer();
+        loadedUrl = url;
+        break;
+      } catch {
+        continue;
+      }
+    }
+
+    if (!arrayBuffer) {
+      throw new Error("Não foi possível carregar o template da proposta.");
+    }
+
+    // Check if it is a DOCX file
+    const zip = new PizZip(arrayBuffer);
+    const isDocx = zip.file("word/document.xml") !== null;
+
+    if (!isDocx) {
+      throw new Error("O template da proposta deve ser um arquivo no formato Word (.docx).");
+    }
+
+    const docxMappings = settings?.docx_mappings || {};
+    const ensaiosYes = docxMappings["__ensaios_yes"] || "já";
+    const ensaiosNo = docxMappings["__ensaios_no"] || "não";
+
+    // Process as DOCX
+    const xmlFiles = Object.keys(zip.files).filter(fn => fn.endsWith(".xml") && fn.startsWith("word/"));
+    xmlFiles.forEach(fn => {
+      const f = zip.file(fn);
+      if (f) {
+        let content = healDocxTokens(f.asText());
+        content = wrapRowsInLoop(content, docxMappings);
+        zip.file(fn, content);
+      }
+    });
+
+    const doc = new Docxtemplater(zip, {
+      paragraphLoop: true,
+      linebreaks: true,
+      nullGetter: () => "",
+      delimiters: { start: "{{", end: "}}" },
+    });
+
+    const replacements: Record<string, any> = {
       companyName: data.companyName || "",
       contactName: data.contactName || "",
       date: formatDateForProposal(data.proposalDate),
@@ -114,63 +299,81 @@ export const generateProposalPPTX = async (data: ProposalData): Promise<Blob> =>
       devices: data.devices || 0,
       totalPrice: formattedTotal,
       approvalLink: data.approvalLink || "",
+      observations: data.observations || "",
     };
 
-    replacements["items_list"] = data.items[0] ? data.items[0].product.description : "";
-    replacements["qtd"] = data.items[0] ? data.items[0].quantity : "";
-    replacements["items_list1"] = data.items[1] ? data.items[1].product.description : "";
-    replacements["qtd1"] = data.items[1] ? data.items[1].quantity : "";
-    replacements["items_list2"] = data.items[2] ? data.items[2].product.description : "";
-    replacements["qtd2"] = data.items[2] ? data.items[2].quantity : "";
+    const itemsSafe = data.items || [];
 
-    const keepSlides = [1, 3, 4];
-    for (let i = 5; i <= 18; i++) keepSlides.push(i);
-    keepSlides.push(46, 55, 57);
+    // Add item list variables for loops
+    replacements["items"] = itemsSafe.map((it, idx) => {
+      const itemObj: Record<string, any> = {
+        index: idx + 1,
+        description: it.product?.description || "",
+        model: it.product?.model || "",
+        category: it.product?.category || "",
+        sku: it.product?.part_number || it.product?.description || "",
+        quantity: it.quantity || 0,
+        bonificado: it.bonificado ? "Sim" : "Não",
+        ensaiosInclusos: it.ensaiosInclusos ? ensaiosYes : ensaiosNo,
+        unitPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0),
+        totalItemPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL((it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0) * (it.quantity || 0)),
+      };
 
-    const hasCatraca = data.items.some(it => {
-      const model = (it.product.model || "").toLowerCase();
-      const desc = (it.product.description || "").toLowerCase();
-      const cat = (it.product.category || "").toLowerCase();
-      return model.includes("idblock") || model.includes("torniquete") || 
-             desc.includes("idblock") || desc.includes("torniquete") ||
-             cat.includes("catraca") || cat.includes("torniquete");
-    });
-
-    if (hasCatraca) {
-      keepSlides.push(54);
-    }
-
-    if (!keepSlides.includes(46)) keepSlides.push(46);
-    if (data.includeApprovalPage) keepSlides.push(56);
-
-    // Processamento de slides baseados em produtos
-    data.items.forEach(it => {
-      const modelRaw = (it.product.model || "").toLowerCase().trim();
-      const descRaw = (it.product.description || "").toLowerCase().trim();
-      
-      // 1. Mapeamento Estático
-      let foundSlide = MODEL_TO_SLIDE[modelRaw];
-      if (!foundSlide) {
-        const key = Object.keys(MODEL_TO_SLIDE).find(k => modelRaw.includes(k));
-        if (key) foundSlide = MODEL_TO_SLIDE[key];
-      }
-      if (foundSlide) keepSlides.push(foundSlide);
-
-      // 2. Mapeamento Dinâmico por Palavra-Chave (Configurado no Dashboard)
-      Object.entries(dynamicMappings).forEach(([keyword, slideNum]) => {
-        const kw = keyword.toLowerCase().trim();
-        if (modelRaw.includes(kw) || descRaw.includes(kw)) {
-          keepSlides.push(Number(slideNum));
+      // Inject resolved mapped fields into the item scope
+      Object.entries(docxMappings).forEach(([token, field]) => {
+        if (token && !token.startsWith("__") && field && field !== "none") {
+          if (field === "sku") {
+            itemObj[token] = it.product?.part_number || it.product?.description || "";
+          } else if (field === "produto") {
+            itemObj[token] = it.product?.description || it.product?.model || "";
+          } else if (field === "quantidade" || field === "qtd") {
+            itemObj[token] = it.quantity || 0;
+          } else if (field === "valor_item") {
+            const price = it.bonificado ? 0 : (it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0);
+            itemObj[token] = formatCurrencyBRL(price);
+          } else if (field === "valor") {
+            const price = it.bonificado ? 0 : (it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0);
+            itemObj[token] = formatCurrencyBRL(price * (it.quantity || 0));
+          }
         }
       });
+
+      return itemObj;
     });
 
-    return await generatePptxFromTemplate({
-      replacements,
-      keepSlidesOverride: Array.from(new Set(keepSlides)).sort((a, b) => a - b),
+    // Flatten items for legacy template compatibility
+    replacements["items_list"] = itemsSafe[0] ? (itemsSafe[0].product?.description || "") : "";
+    replacements["qtd"] = itemsSafe[0] ? (itemsSafe[0].quantity || 0) : "";
+    replacements["items_list1"] = itemsSafe[1] ? (itemsSafe[1].product?.description || "") : "";
+    replacements["qtd1"] = itemsSafe[1] ? (itemsSafe[1].quantity || 0) : "";
+    replacements["items_list2"] = itemsSafe[2] ? (itemsSafe[2].product?.description || "") : "";
+    replacements["qtd2"] = itemsSafe[2] ? (itemsSafe[2].quantity || 0) : "";
+
+    // Custom user settings mappings
+    Object.entries(docxMappings).forEach(([token, field]) => {
+      if (!token || !field || field === "none") return;
+      replacements[token] = getFieldValue(field, data, settings);
+    });
+
+    // Robust fallback casing
+    const finalReplacements: Record<string, any> = {};
+    Object.entries(replacements).forEach(([k, v]) => {
+      finalReplacements[k] = v;
+      if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+        finalReplacements[k.toLowerCase()] = v;
+        finalReplacements[k.toUpperCase()] = v;
+      }
+    });
+
+    doc.setData(finalReplacements);
+    doc.render();
+
+    return doc.getZip().generate({
+      type: "blob",
+      mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     });
   } catch (err) {
-    console.error("Erro PPTX:", err);
+    console.error("Erro na geração da proposta:", err);
     throw err;
   }
 };
@@ -197,7 +400,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
     doc.setTextColor(255, 255, 255);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
-    doc.text("Control iD", 15, 12);
+    doc.text("Orbital Mais", 15, 12);
     if (title) {
       doc.setFontSize(10);
       doc.setFont("helvetica", "normal");
@@ -236,7 +439,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.rect(15, 65, 40, 2, 'F');
   doc.setFontSize(14);
   doc.setFont("helvetica", "normal");
-  const introText = "A Control iD é uma empresa nacional, líder no desenvolvimento de hardware e software para controle de acesso e automação. Com design moderno e fabricação própria, entregamos soluções que combinam segurança extrema com usabilidade intuitiva.";
+  const introText = "A Orbital Mais é especialista em fornecer soluções de ponta em tecnologia, segurança e controle de acesso. Com foco na excelência e atendimento sob medida, entregamos soluções que combinam robustez com usabilidade intuitiva.";
   doc.text(doc.splitTextToSize(introText, width - 60), 15, 80);
 
   doc.addPage();

@@ -49,8 +49,8 @@ export default function WizardPage() {
   };
 
   return (
-    <div className="min-h-screen p-8 bg-background">
-      <div className="container mx-auto">
+    <div className="min-h-full py-8 px-4 flex items-center justify-center">
+      <div className="w-full max-w-2xl">
         <ProposalWizard
           initialSellerData={sellerData}
           onComplete={handleComplete}
