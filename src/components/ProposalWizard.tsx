@@ -107,13 +107,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const calculatedSum = React.useMemo(() => {
     const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
     return (formData.selectedProducts || []).reduce((sum: number, p: any) => {
-      if (p.bonificado) return sum;
+      const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
+      const regularQty = Math.max(0, (p.quantity || 1) - bonifiedQty);
+      if (regularQty <= 0) return sum;
       
       const price = currencyField 
         ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
         : 0;
       const effectivePrice = Number(p.unitPrice || price || p.value_12m || p.value_24m || 0);
-      return sum + (effectivePrice * (p.quantity || 1));
+      return sum + (effectivePrice * regularQty);
     }, 0);
   }, [formData.selectedProducts, fieldsConfig]);
 
@@ -420,7 +422,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     onComplete({
       ...formData,
       proposalNumber,
-      items: (formData.selectedProducts || []).map((p: any) => {
+      items: (formData.selectedProducts || []).flatMap((p: any) => {
         let fallbackPrice = 0;
         if (currencyField) {
           const rawVal = currencyField.isCustom
@@ -428,19 +430,44 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             : p[currencyField.key];
           fallbackPrice = Number(rawVal) || 0;
         }
-        return {
-          product: {
-            id: p.id,
-            description: p.bonificado ? `${p.name} (Bonificado)` : p.name,
-            model: p.name,
-            category: p.category,
-            part_number: p.sku
-          },
-          quantity: p.quantity,
-          bonificado: !!p.bonificado,
-          ensaiosInclusos: !!formData.ensaiosInclusos,
-          unitPrice: p.bonificado ? 0 : (p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0),
-        };
+
+        const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
+        const regularQty = p.quantity - bonifiedQty;
+        const itemsToReturn = [];
+
+        if (regularQty > 0) {
+          itemsToReturn.push({
+            product: {
+              id: p.id,
+              description: p.name,
+              model: p.name,
+              category: p.category,
+              part_number: p.sku
+            },
+            quantity: regularQty,
+            bonificado: false,
+            ensaiosInclusos: !!formData.ensaiosInclusos,
+            unitPrice: p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0,
+          });
+        }
+
+        if (bonifiedQty > 0) {
+          itemsToReturn.push({
+            product: {
+              id: p.id,
+              description: `${p.name} (Bonificado)`,
+              model: p.name,
+              category: p.category,
+              part_number: p.sku
+            },
+            quantity: bonifiedQty,
+            bonificado: true,
+            ensaiosInclusos: !!formData.ensaiosInclusos,
+            unitPrice: 0,
+          });
+        }
+
+        return itemsToReturn;
       }),
       proposalDate: formData.date,
       totalPrice: formData.totalPrice
@@ -471,7 +498,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       const proposalData = {
         ...formData,
         proposalNumber,
-        items: (formData.selectedProducts || []).map((p: any) => {
+        items: (formData.selectedProducts || []).flatMap((p: any) => {
           let fallbackPrice = 0;
           if (currencyField) {
             const rawVal = currencyField.isCustom
@@ -479,19 +506,44 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               : p[currencyField.key];
             fallbackPrice = Number(rawVal) || 0;
           }
-          return {
-            product: {
-              id: p.id,
-              description: p.bonificado ? `${p.name} (Bonificado)` : p.name,
-              model: p.name,
-              category: p.category,
-              part_number: p.sku
-            },
-            quantity: p.quantity,
-            bonificado: !!p.bonificado,
-            ensaiosInclusos: !!formData.ensaiosInclusos,
-            unitPrice: p.bonificado ? 0 : (p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0),
-          };
+
+          const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
+          const regularQty = p.quantity - bonifiedQty;
+          const itemsToReturn = [];
+
+          if (regularQty > 0) {
+            itemsToReturn.push({
+              product: {
+                id: p.id,
+                description: p.name,
+                model: p.name,
+                category: p.category,
+                part_number: p.sku
+              },
+              quantity: regularQty,
+              bonificado: false,
+              ensaiosInclusos: !!formData.ensaiosInclusos,
+              unitPrice: p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0,
+            });
+          }
+
+          if (bonifiedQty > 0) {
+            itemsToReturn.push({
+              product: {
+                id: p.id,
+                description: `${p.name} (Bonificado)`,
+                model: p.name,
+                category: p.category,
+                part_number: p.sku
+              },
+              quantity: bonifiedQty,
+              bonificado: true,
+              ensaiosInclusos: !!formData.ensaiosInclusos,
+              unitPrice: 0,
+            });
+          }
+
+          return itemsToReturn;
         }),
         proposalDate: formData.date,
         totalPrice: formData.totalPrice
@@ -921,73 +973,120 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 </p>
               )}
               <div className="divide-y border rounded-2xl overflow-hidden bg-card">
-                {(formData.selectedProducts || []).map((p: any) => (
-                  <div
-                    key={p.baseId}
-                    className={`flex items-center justify-between gap-3 p-4 transition-colors ${
-                      p.bonificado
-                        ? "bg-amber-50 dark:bg-amber-900/10"
-                        : "hover:bg-muted/30"
-                    }`}
-                  >
-                    {/* Item info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm truncate">{p.name}</span>
-                        {p.bonificado && (
-                          <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
-                            Bonificado
-                          </span>
-                        )}
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        Qtd: <strong>{p.quantity}</strong>
-                        {!p.bonificado && (
-                          <span className="ml-2">
-                            · Vlr. Unitário: <strong>{(() => {
-                              const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
-                              const price = currencyField 
-                                ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
-                                : 0;
-                              return formatCurrencyBRL(p.unitPrice || Number(price) || p.value_12m || p.value_24m || 0);
-                            })()}</strong>
-                          </span>
-                        )}
-                        {p.bonificado && (
-                          <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold">
-                            · Valor: R$ 0,00 no documento
-                          </span>
-                        )}
-                      </span>
-                    </div>
+                {(formData.selectedProducts || []).map((p: any) => {
+                  const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
+                  const regularQty = p.quantity - bonifiedQty;
+                  
+                  const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
+                  const price = currencyField 
+                    ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
+                    : 0;
+                  const unitPrice = p.unitPrice || Number(price) || p.value_12m || p.value_24m || 0;
+                  const regularTotal = unitPrice * regularQty;
 
-                    {/* Bonus toggle */}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormData((prev: any) => ({
-                          ...prev,
-                          selectedProducts: prev.selectedProducts.map((sp: any) =>
-                            sp.baseId === p.baseId
-                              ? { ...sp, bonificado: !sp.bonificado }
-                              : sp
-                          ),
-                        }))
-                      }
-                      className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition-all duration-200 ${
+                  return (
+                    <div
+                      key={p.baseId}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors ${
                         p.bonificado
-                          ? "bg-amber-400 border-amber-400 text-amber-900 hover:bg-amber-300"
-                          : "bg-transparent border-muted-foreground/30 text-muted-foreground hover:border-amber-400 hover:text-amber-600"
+                          ? "bg-amber-50 dark:bg-amber-900/10"
+                          : "hover:bg-muted/30"
                       }`}
-                      title={p.bonificado ? "Remover bonificação" : "Marcar como bonificado (R$ 0)"}
                     >
-                      <span>{p.bonificado ? "★" : "☆"}</span>
-                      <span className="hidden sm:inline">
-                        {p.bonificado ? "Bonificado" : "Bonificar"}
-                      </span>
-                    </button>
-                  </div>
-                ))}
+                      {/* Item info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-sm truncate">{p.name}</span>
+                          {p.bonificado && (
+                            <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
+                              {bonifiedQty === p.quantity ? "Bonificado" : "Parcialmente Bonificado"}
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground block mt-1">
+                          Qtd: <strong>{p.quantity}</strong>
+                          {bonifiedQty > 0 && (
+                            <span className="text-amber-600 dark:text-amber-400 ml-1.5 font-semibold">
+                              ({bonifiedQty} bonif.
+                              {regularQty > 0 ? ` + ${regularQty} paga` : ""})
+                            </span>
+                          )}
+                          <span className="ml-2">
+                            · Vlr. Unitário: <strong>{formatCurrencyBRL(unitPrice)}</strong>
+                          </span>
+                          {bonifiedQty > 0 && (
+                            <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold block sm:inline mt-0.5 sm:mt-0">
+                              · Subtotal no doc: {regularQty > 0 ? (
+                                <span>
+                                  {formatCurrencyBRL(regularTotal)} <span className="text-muted-foreground font-normal">({regularQty}x)</span> + R$ 0,00 <span className="text-muted-foreground font-normal">({bonifiedQty}x bonif.)</span>
+                                </span>
+                              ) : "R$ 0,00"}
+                            </span>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Controls (quantity selector and toggle button) */}
+                      <div className="flex items-center gap-2 self-end sm:self-center">
+                        {p.bonificado && p.quantity > 1 && (
+                          <div className="flex items-center gap-1.5 bg-amber-100/50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl px-2.5 py-1">
+                            <span className="text-[10px] text-amber-800 dark:text-amber-300 font-bold uppercase tracking-wide">Qtd Bonif:</span>
+                            <select
+                              value={bonifiedQty}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value, 10);
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                    sp.baseId === p.baseId
+                                      ? { ...sp, bonificadoQty: val }
+                                      : sp
+                                  ),
+                                }));
+                              }}
+                              className="bg-transparent border-none text-xs font-black text-amber-950 dark:text-amber-200 focus:outline-none focus:ring-0 cursor-pointer"
+                            >
+                              {Array.from({ length: p.quantity }, (_, i) => i + 1).map((num) => (
+                                <option key={num} value={num} className="bg-card text-foreground">
+                                  {num}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((prev: any) => ({
+                              ...prev,
+                              selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                sp.baseId === p.baseId
+                                  ? { 
+                                      ...sp, 
+                                      bonificado: !sp.bonificado,
+                                      bonificadoQty: !sp.bonificado ? sp.quantity : 0
+                                    }
+                                  : sp
+                              ),
+                            }))
+                          }
+                          className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition-all duration-200 ${
+                            p.bonificado
+                              ? "bg-amber-400 border-amber-400 text-amber-900 hover:bg-amber-300"
+                              : "bg-transparent border-muted-foreground/30 text-muted-foreground hover:border-amber-400 hover:text-amber-600"
+                          }`}
+                          title={p.bonificado ? "Remover bonificação" : "Marcar como bonificado (R$ 0)"}
+                        >
+                          <span>{p.bonificado ? "★" : "☆"}</span>
+                          <span className="hidden sm:inline">
+                            {p.bonificado ? "Bonificado" : "Bonificar"}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
 
               {(formData.selectedProducts || []).some((p: any) => p.bonificado) && (
