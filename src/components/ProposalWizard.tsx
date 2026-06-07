@@ -79,6 +79,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     contactName: "",
     cnpj: "",
     address: "",
+    email: "",
+    phone: "",
     sellerName: initialSellerData.name || "",
     sellerRole: initialSellerData.role || "",
     sellerEmail: initialSellerData.email || "",
@@ -320,7 +322,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         setFormData((prev: any) => ({
           ...prev,
           companyName: data.companyName || prev.companyName,
-          address: data.address || prev.address
+          address: data.address || prev.address,
+          email: data.email || prev.email,
+          phone: data.phone || prev.phone
         }));
         toast.success("Dados preenchidos!", { id: toastId });
       } catch (error) {
@@ -379,6 +383,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       contactName: "",
       cnpj: "",
       address: "",
+      email: "",
+      phone: "",
       sellerName: initialSellerData.name || "",
       sellerRole: initialSellerData.role || "",
       sellerEmail: initialSellerData.email || "",
@@ -602,6 +608,26 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               />
             </div>
             <div className="space-y-2"><Label>Nome do Contato</Label><Input placeholder="A/C: Nome" value={formData.contactName} onChange={(e) => setFormData((prev: any) => ({ ...prev, contactName: e.target.value }))} /></div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>E-mail do Cliente</Label>
+                <Input
+                  type="email"
+                  placeholder="cliente@email.com"
+                  value={formData.email || ""}
+                  onChange={(e) => setFormData((prev: any) => ({ ...prev, email: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Telefone do Cliente</Label>
+                <Input
+                  type="text"
+                  placeholder="(00) 00000-0000"
+                  value={formData.phone || ""}
+                  onChange={(e) => setFormData((prev: any) => ({ ...prev, phone: e.target.value }))}
+                />
+              </div>
+            </div>
             <div className="space-y-2"><Label>Endereço</Label><Input value={formData.address} onChange={(e) => setFormData((prev: any) => ({ ...prev, address: e.target.value }))} /></div>
           </div>
         );
