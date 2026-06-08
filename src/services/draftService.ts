@@ -98,10 +98,9 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
       priceModel: it.priceModel || quotePayload.priceModel,
     }));
 
-    const savedId = await saveQuote(quotePayload, items);
+    const { id: savedId, isRemote } = await saveQuote(quotePayload, items);
 
-    // If savedId differs from local id, server saved successfully -> mark synced.
-    if (savedId && savedId !== id) {
+    if (isRemote && savedId) {
       updateLocalDraftRecord(id, { remote_id: savedId, synced: true });
       synced = true;
     } else {
@@ -161,9 +160,9 @@ export async function updateDraft(
         priceModel: it.priceModel || quotePayload.priceModel,
       }));
 
-      const savedId = await saveQuote(quotePayload, items);
+      const { id: savedId, isRemote } = await saveQuote(quotePayload, items);
 
-      if (savedId) {
+      if (isRemote && savedId) {
         updateLocalDraftRecord(id, { remote_id: savedId, synced: true });
         synced = true;
       } else {
@@ -223,12 +222,12 @@ export async function syncLocalDrafts(): Promise<{ synced: string[]; failed: Arr
         priceModel: it.priceModel || quotePayload.priceModel,
       }));
 
-      const savedId = await saveQuote(quotePayload, items);
-      if (savedId) {
+      const { id: savedId, isRemote } = await saveQuote(quotePayload, items);
+      if (isRemote && savedId) {
         updateLocalDraftRecord(d.id, { remote_id: savedId, synced: true });
         synced.push(savedId);
       } else {
-        failed.push({ id: d.id, error: "No id returned" });
+        failed.push({ id: d.id, error: "No remote id returned" });
       }
     } catch (err) {
       failed.push({ id: d.id, error: err });
@@ -270,12 +269,12 @@ export async function syncSingleDraft(id: string): Promise<{ success: boolean; s
       priceModel: it.priceModel || quotePayload.priceModel,
     }));
 
-    const savedId = await saveQuote(quotePayload, items);
-    if (savedId) {
+    const { id: savedId, isRemote } = await saveQuote(quotePayload, items);
+    if (isRemote && savedId) {
       updateLocalDraftRecord(d.id, { remote_id: savedId, synced: true });
       return { success: true, savedId };
     }
-    return { success: false, error: "no id returned" };
+    return { success: false, error: "no remote id returned" };
   } catch (err) {
     return { success: false, error: err };
   }

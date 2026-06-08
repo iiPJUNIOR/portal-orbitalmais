@@ -21,7 +21,7 @@ type LocalStored = {
 export const saveQuote = async (
   quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt"> & { settings?: any },
   items: any[]
-): Promise<string> => {
+): Promise<{ id: string; isRemote: boolean }> => {
   // Create optimistic local entry first so that UI/history can show it immediately
   const localId = uuidv4();
   const localEntry: LocalStored = {
@@ -114,12 +114,12 @@ export const saveQuote = async (
       console.warn("Failed to remove optimistic local quote after remote save", cleanupErr);
     }
 
-    return quoteId;
+    return { id: quoteId, isRemote: true };
   } catch (err: any) {
     console.warn("saveQuote supabase failed, keeping optimistic local entry", err?.message || err);
 
     // If error happened, we already saved optimistic entry; return its id so UI can reference it.
-    return localId;
+    return { id: localId, isRemote: false };
   }
 };
 

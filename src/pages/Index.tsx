@@ -163,7 +163,7 @@ export default function Index() {
           proposalNumber: payload.proposalNumber,
           priceModel: payload.priceModel,
           totalPrice: payload.totalPrice,
-          status: "rascunho",
+          status: "enviada",
           observations: payload.observations || "",
           settings: payload,
         },
