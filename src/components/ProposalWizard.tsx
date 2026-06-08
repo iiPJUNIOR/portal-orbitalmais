@@ -167,13 +167,33 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       isInitialMount.current = false;
 
       const cleanCnpj = (formData.cnpj || "").replace(/\D/g, "");
-      const { sequence, revision } = await getProposalSequenceAndRevision(cleanCnpj);
+      const { sequence, revision, previousContact } = await getProposalSequenceAndRevision(cleanCnpj);
       setTodaySequence(sequence);
       setFormData((prev: any) => {
+        const updated = { ...prev };
         if (prev.version !== String(revision)) {
-          return { ...prev, version: String(revision) };
+          updated.version = String(revision);
         }
-        return prev;
+        
+        if (previousContact) {
+          if (previousContact.companyName && !prev.companyName) {
+            updated.companyName = previousContact.companyName;
+          }
+          if (previousContact.contactName && !prev.contactName) {
+            updated.contactName = previousContact.contactName;
+          }
+          if (previousContact.email && !prev.email) {
+            updated.email = previousContact.email;
+          }
+          if (previousContact.phone && !prev.phone) {
+            updated.phone = previousContact.phone;
+          }
+          if (previousContact.address && !prev.address) {
+            updated.address = previousContact.address;
+          }
+        }
+        
+        return updated;
       });
     }
     loadSequenceAndRevision();
@@ -481,91 +501,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
     if (currentStep === 4) {
       setCurrentStep(5);
-    }
-  };
-
-  const handleDownloadPDF = async () => {
-    const loadToastId = toast.loading("Gerando proposta em PDF...");
-    try {
-      let proposalNumber = formData.proposalNumber;
-      if (!proposalNumber) {
-        const formattedSeq = String(todaySequence).padStart(3, "0");
-        proposalNumber = `${formData.companyName || "Proposta"} - OBM-${formattedSeq} - REV${formData.version || "0"}`;
-      }
-
-      const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
-
-      const proposalData = {
-        ...formData,
-        proposalNumber,
-        items: (formData.selectedProducts || []).flatMap((p: any) => {
-          let fallbackPrice = 0;
-          if (currencyField) {
-            const rawVal = currencyField.isCustom
-              ? p.custom_fields?.[currencyField.key]
-              : p[currencyField.key];
-            fallbackPrice = Number(rawVal) || 0;
-          }
-
-          const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
-          const regularQty = p.quantity - bonifiedQty;
-          const itemsToReturn = [];
-
-          if (regularQty > 0) {
-            itemsToReturn.push({
-              product: {
-                id: p.id,
-                description: p.name,
-                model: p.name,
-                category: p.category,
-                part_number: p.sku
-              },
-              quantity: regularQty,
-              bonificado: false,
-              ensaiosInclusos: !!formData.ensaiosInclusos,
-              unitPrice: p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0,
-            });
-          }
-
-          if (bonifiedQty > 0) {
-            itemsToReturn.push({
-              product: {
-                id: p.id,
-                description: `${p.name} (Bonificado)`,
-                model: p.name,
-                category: p.category,
-                part_number: p.sku
-              },
-              quantity: bonifiedQty,
-              bonificado: true,
-              ensaiosInclusos: !!formData.ensaiosInclusos,
-              unitPrice: 0,
-            });
-          }
-
-          return itemsToReturn;
-        }),
-        proposalDate: formData.date,
-        totalPrice: formData.totalPrice
-      };
-
-      const blob = await generateProposalPDF(proposalData);
-      const safeProposalNumber = String(proposalData.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
-      const fileName = `${safeProposalNumber}.pdf`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-
-      toast.success("Proposta PDF gerada com sucesso!", { id: loadToastId });
-    } catch (err) {
-      console.error(err);
-      toast.error("Erro ao gerar PDF.", { id: loadToastId });
     }
   };
 
@@ -1130,20 +1065,17 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             <div className="w-full p-4 bg-muted/30 rounded-2xl border border-dashed border-neutral-200 text-left space-y-2">
               <div className="flex items-center gap-2 text-primary font-bold text-sm">
                 <Info className="h-4 w-4" />
-                Formatos de Exportação
+                Dica: Como gerar o PDF
               </div>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Escolha <strong>Baixar DOCX</strong> se precisar fazer edições ou alterações no Word.<br />
-                Escolha <strong>Baixar PDF</strong> para gerar um documento comercial diagramado e pronto para envio.
+                Para enviar a proposta em PDF com a mesma formatação do Word, abra o arquivo <strong>DOCX</strong> baixado no Microsoft Word e vá em:<br />
+                <span className="font-bold">Arquivo {'>'} Salvar como {'>'} formato PDF</span>.
               </p>
             </div>
 
-            <div className="grid grid-cols-2 gap-4 w-full">
-              <Button variant="outline" className="h-14 rounded-2xl border-primary text-primary hover:bg-primary/5 font-bold" onClick={() => handleFinish()}>
-                <FileText className="mr-2 h-5 w-5" /> Baixar DOCX
-              </Button>
-              <Button className="h-14 rounded-2xl font-bold bg-orange-500 hover:bg-orange-600 text-white border-none" onClick={() => handleDownloadPDF()}>
-                <FileText className="mr-2 h-5 w-5" /> Baixar PDF
+            <div className="grid grid-cols-1 gap-4 w-full">
+              <Button className="h-14 rounded-2xl font-bold bg-primary hover:bg-primary/90 text-white" onClick={() => handleFinish()}>
+                <FileText className="mr-2 h-5 w-5" /> Baixar DOCX Novamente
               </Button>
             </div>
 

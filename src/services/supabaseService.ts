@@ -331,54 +331,19 @@ export const getNextProposalSequence = async (dateStr: string): Promise<number> 
 
 export const getProposalSequenceAndRevision = async (
   cnpj: string
-): Promise<{ sequence: number; revision: number }> => {
+): Promise<{ 
+  sequence: number; 
+  revision: number;
+  previousContact?: {
+    companyName?: string;
+    contactName?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+  }
+}> => {
   try {
     const cleanTargetCnpj = String(cnpj || "").replace(/\D/g, "");
-    if (!cleanTargetCnpj || cleanTargetCnpj.length < 14) {
-      // If CNPJ is empty or incomplete, get the next global sequence and revision 0
-      const { data, error } = await supabase
-        .from("quotes")
-        .select("proposal_number");
-
-      if (error) throw error;
-
-      let maxGlobalSequence = 0;
-      const parseProposalNumber = (num: string) => {
-        const obmMatch = num.match(/OBM-(\d+)/i);
-        return obmMatch ? parseInt(obmMatch[1], 10) : 0;
-      };
-
-      if (data && data.length > 0) {
-        data.forEach((q) => {
-          const seq = parseProposalNumber(q.proposal_number || "");
-          if (seq > maxGlobalSequence) maxGlobalSequence = seq;
-        });
-      }
-
-      try {
-        const localRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
-        if (localRaw) {
-          const localArr: LocalStored[] = JSON.parse(localRaw);
-          localArr.forEach((l) => {
-            const seq = parseProposalNumber(l.quote.proposalNumber || "");
-            if (seq > maxGlobalSequence) maxGlobalSequence = seq;
-          });
-        }
-      } catch {}
-
-      return { sequence: maxGlobalSequence + 1, revision: 0 };
-    }
-
-    // Fetch all quotes to determine sequence and revision based on CNPJ
-    const { data, error } = await supabase
-      .from("quotes")
-      .select("proposal_number, cnpj");
-
-    if (error) throw error;
-
-    let maxGlobalSequence = 0;
-    let cnpjSequence = 0;
-    let maxCnpjRevision = -1;
 
     const parseProposalNumber = (num: string) => {
       const obmMatch = num.match(/OBM-(\d+)/i);
@@ -389,52 +354,116 @@ export const getProposalSequenceAndRevision = async (
       };
     };
 
-    const processQuote = (qCnpj: string, proposalNum: string) => {
-      const cleanQuoteCnpj = String(qCnpj || "").replace(/\D/g, "");
-      const { seq, rev } = parseProposalNumber(proposalNum);
+    // Helper to fetch max global sequence from recent quotes (much more efficient than fetching all)
+    const fetchMaxGlobalSequence = async (): Promise<number> => {
+      let maxGlobalSequence = 0;
+      try {
+        const { data, error } = await supabase
+          .from("quotes")
+          .select("proposal_number")
+          .order("created_at", { ascending: false })
+          .limit(100);
 
-      if (seq > maxGlobalSequence) {
-        maxGlobalSequence = seq;
+        if (!error && data) {
+          data.forEach((q) => {
+            const { seq } = parseProposalNumber(q.proposal_number || "");
+            if (seq > maxGlobalSequence) maxGlobalSequence = seq;
+          });
+        }
+      } catch (err) {
+        console.warn("Failed to fetch recent global sequence", err);
       }
 
-      if (cleanQuoteCnpj && cleanQuoteCnpj === cleanTargetCnpj) {
+      // Fallback to local storage
+      try {
+        const localRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (localRaw) {
+          const localArr: LocalStored[] = JSON.parse(localRaw);
+          localArr.forEach((l) => {
+            const { seq } = parseProposalNumber(l.quote.proposalNumber || "");
+            if (seq > maxGlobalSequence) maxGlobalSequence = seq;
+          });
+        }
+      } catch {}
+
+      return maxGlobalSequence;
+    };
+
+    if (!cleanTargetCnpj || cleanTargetCnpj.length < 14) {
+      const maxGlobalSequence = await fetchMaxGlobalSequence();
+      return { sequence: maxGlobalSequence + 1, revision: 0 };
+    }
+
+    // Format CNPJ as XX.XXX.XXX/XXXX-XX
+    const formattedCnpj = cleanTargetCnpj.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, "$1.$2.$3/$4-$5");
+
+    // Fetch quotes specifically matching this CNPJ
+    const { data: dbQuotes, error } = await supabase
+      .from("quotes")
+      .select("proposal_number, cnpj, company_name, contact_name, email, phone, address")
+      .or(`cnpj.eq."${formattedCnpj}",cnpj.eq."${cleanTargetCnpj}"`);
+
+    if (error) throw error;
+
+    let allMatchingQuotes = dbQuotes || [];
+
+    // Check localStorage for local matches
+    try {
+      const localRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      if (localRaw) {
+        const localArr: LocalStored[] = JSON.parse(localRaw);
+        const localMatches = localArr
+          .filter(l => {
+            const cleanL = String(l.quote.cnpj || "").replace(/\D/g, "");
+            return cleanL === cleanTargetCnpj;
+          })
+          .map(l => ({
+            proposal_number: l.quote.proposalNumber,
+            cnpj: l.quote.cnpj,
+            company_name: l.quote.companyName,
+            contact_name: l.quote.contactName,
+            email: l.quote.email,
+            phone: l.quote.phone,
+            address: l.quote.address
+          }));
+        allMatchingQuotes = [...allMatchingQuotes, ...localMatches];
+      }
+    } catch {}
+
+    if (allMatchingQuotes.length > 0) {
+      let cnpjSequence = 0;
+      let maxCnpjRevision = -1;
+      let latestQuote: any = null;
+
+      allMatchingQuotes.forEach((q) => {
+        const { seq, rev } = parseProposalNumber(q.proposal_number || "");
         if (seq > 0) {
           cnpjSequence = seq;
         }
         if (rev > maxCnpjRevision) {
           maxCnpjRevision = rev;
+          latestQuote = q;
         }
-      }
-    };
-
-    if (data && data.length > 0) {
-      data.forEach((q) => {
-        processQuote(q.cnpj, q.proposal_number || "");
       });
-    }
 
-    // Also check local quotes in localStorage
-    try {
-      const localRaw = localStorage.getItem(LOCAL_STORAGE_KEY);
-      if (localRaw) {
-        const localArr: LocalStored[] = JSON.parse(localRaw);
-        localArr.forEach((l) => {
-          processQuote(l.quote.cnpj, l.quote.proposalNumber || "");
-        });
+      if (cnpjSequence > 0) {
+        return {
+          sequence: cnpjSequence,
+          revision: maxCnpjRevision + 1,
+          previousContact: latestQuote ? {
+            companyName: latestQuote.company_name || latestQuote.companyName,
+            contactName: latestQuote.contact_name || latestQuote.contactName,
+            email: latestQuote.email,
+            phone: latestQuote.phone,
+            address: latestQuote.address
+          } : undefined
+        };
       }
-    } catch {}
-
-    if (cnpjSequence > 0) {
-      return {
-        sequence: cnpjSequence,
-        revision: maxCnpjRevision + 1
-      };
-    } else {
-      return {
-        sequence: maxGlobalSequence + 1,
-        revision: 0
-      };
     }
+
+    // CNPJ new to database, fallback to global max sequence
+    const maxGlobalSequence = await fetchMaxGlobalSequence();
+    return { sequence: maxGlobalSequence + 1, revision: 0 };
   } catch (err) {
     console.warn("Failed to get proposal sequence and revision", err);
     return { sequence: 1, revision: 0 };
