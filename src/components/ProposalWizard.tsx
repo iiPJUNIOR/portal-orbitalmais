@@ -72,6 +72,7 @@ const parseCurrencyBRLToNumber = (formattedStr: string): number => {
 export function ProposalWizard({ initialSellerData, onComplete, onCancel, initialData, initialStep, draftId }: WizardProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<any>({
+    wizardVersion: 2,
     proposalNumber: "",
     version: "0",
     date: new Date().toISOString().split('T')[0],
@@ -256,10 +257,13 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     }
     if (initialStep && typeof initialStep === "number") {
       let mappedStep = initialStep;
-      if (initialStep === 3) mappedStep = 2;
-      else if (initialStep === 4) mappedStep = 3;
-      else if (initialStep === 5) mappedStep = 4;
-      else if (initialStep === 6) mappedStep = 5;
+      const isLegacy = !initialData?.wizardVersion;
+      if (isLegacy) {
+        if (initialStep === 2) mappedStep = 2;
+        else if (initialStep === 3) mappedStep = 2;
+        else if (initialStep === 4) mappedStep = 3;
+        else if (initialStep === 5) mappedStep = 4;
+      }
       setCurrentStep(mappedStep);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -433,6 +437,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
   const handleReset = () => {
     setFormData({
+      wizardVersion: 2,
       proposalNumber: "",
       version: "0",
       date: new Date().toISOString().split('T')[0],
@@ -536,8 +541,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice
     });
 
-    if (currentStep === 4) {
-      setCurrentStep(5);
+    if (currentStep === 3) {
+      setCurrentStep(4);
     }
   };
 
@@ -604,24 +609,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         if (cleanCnpj.length !== 14) {
           toast.error("CNPJ inválido. Deve possuir 14 dígitos.");
           return;
-        }
-      }
-    }
-
-    if (currentStep === 2) {
-      const sellerPayload: any = {
-        seller_name: formData.sellerName || undefined,
-        seller_role: formData.sellerRole || undefined,
-        seller_email: formData.sellerEmail || undefined,
-        seller_phone: formData.sellerPhone || undefined,
-      };
-
-      const anyFilled = Object.values(sellerPayload).some((v) => v !== undefined && v !== null && String(v).trim() !== "");
-      if (anyFilled) {
-        try {
-          await saveUserSettings(sellerPayload);
-        } catch (err) {
-          console.warn("Falha ao salvar perfil automaticamente", err);
         }
       }
     }
@@ -767,15 +754,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           </div>
         );
       case 2:
-        return (
-          <div className="space-y-4">
-            <div className="space-y-2"><Label>Vendedor</Label><Input value={formData.sellerName} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerName: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Cargo</Label><Input value={formData.sellerRole} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerRole: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>E-mail</Label><Input value={formData.sellerEmail} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerEmail: e.target.value }))} /></div>
-            <div className="space-y-2"><Label>Telefone</Label><Input value={formData.sellerPhone} onChange={(e) => setFormData((prev: any) => ({ ...prev, sellerPhone: e.target.value }))} /></div>
-          </div>
-        );
-      case 3:
         return (
           <div className="space-y-6">
             <div className="relative w-full">
@@ -1023,7 +1001,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             </div>
           </div>
         );
-      case 4:
+      case 3:
         return (
           <div className="space-y-6">
             {/* Items list with bonus toggle */}
@@ -1122,7 +1100,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                       </div>
 
                       {/* Controls (quantity selector and toggle button) */}
-                      <div className="flex items-center gap-2 self-end sm:self-center">
+                      <div className="flex items-center justify-center gap-2 self-center w-full sm:w-auto">
                         {p.bonificado && p.quantity > 1 && (
                           <div className="flex items-center gap-1.5 bg-amber-100/50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl px-2.5 py-1">
                             <span className="text-[10px] text-amber-800 dark:text-amber-300 font-bold uppercase tracking-wide">Qtd Bonif:</span>
@@ -1166,7 +1144,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                               ),
                             }))
                           }
-                          className={`shrink-0 flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition-all duration-200 ${
+                          className={`shrink-0 flex items-center justify-center gap-1.5 text-xs font-bold px-3 py-2 rounded-xl border-2 transition-all duration-200 ${
                             p.bonificado
                               ? "bg-amber-400 border-amber-400 text-amber-900 hover:bg-amber-300"
                               : "bg-transparent border-muted-foreground/30 text-muted-foreground hover:border-amber-400 hover:text-amber-600"
@@ -1211,7 +1189,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           </div>
         );
 
-      case 5:
+      case 4:
         return (
           <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95 duration-500">
             <div className="p-4 bg-green-100 rounded-full">
@@ -1240,7 +1218,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             </div>
 
             <div className="grid grid-cols-2 gap-4 w-full">
-              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(4)}>
+              <Button variant="ghost" className="h-14 rounded-2xl" onClick={() => setCurrentStep(3)}>
                 <ArrowLeft className="mr-2 h-5 w-5" /> Voltar ao Orçamento
               </Button>
               <Button className="h-14 rounded-2xl" onClick={handleReset}>
@@ -1262,15 +1240,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="text-xl md:text-2xl font-black">
-                {currentStep === 5 ? "Concluído" : `Passo ${currentStep}`}
+                {currentStep === 4 ? "Concluído" : `Passo ${currentStep}`}
               </CardTitle>
               <CardDescription className="text-white/70 text-xs md:text-sm">
-                {currentStep === 5 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
+                {currentStep === 4 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
               </CardDescription>
             </div>
-            {currentStep < 5 && (
+            {currentStep < 4 && (
               <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
-                {currentStep}/4
+                {currentStep}/3
               </div>
             )}
           </div>
@@ -1278,14 +1256,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         <CardContent className="p-5 md:p-6">
           {renderStep()}
 
-          {currentStep < 5 && (
+          {currentStep < 4 && (
             <div className="flex justify-between mt-5 pt-4 border-t">
               <div className="flex gap-2">
                 <Button variant="ghost" className="rounded-xl px-2.5 sm:px-4" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
                   {currentStep === 1 ? "Cancelar" : "Voltar"}
                 </Button>
 
-                {currentStep >= 3 ? (
+                {currentStep >= 2 ? (
                   <Button variant="outline" className="rounded-xl px-2.5 sm:px-4" onClick={handleSaveDraft} title="Salvar Rascunho">
                     <Save className="h-4 w-4" />
                     <span className="hidden sm:inline ml-2">Salvar</span>
@@ -1294,7 +1272,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               </div>
 
               <div className="flex gap-2">
-                {currentStep === 4 ? (
+                {currentStep === 3 ? (
                   <Button className="rounded-xl px-2.5 sm:px-6 font-bold" onClick={() => handleFinish()} title="Gerar DOCX">
                     <FileText className="h-4 w-4" />
                     <span className="hidden sm:inline ml-2">Gerar DOCX</span>
