@@ -38,7 +38,7 @@ export default function WizardPage() {
     // If opened from a draft, remove the draft now that user completed the proposal
     try {
       if (stateDraft?.id) {
-        deleteDraft(stateDraft.id);
+        await deleteDraft(stateDraft.id);
       }
     } catch {}
     navigate("/");

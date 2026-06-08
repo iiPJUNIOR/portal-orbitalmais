@@ -10,6 +10,7 @@ import { QuoteHistory } from "@/components/QuoteHistory";
 import { QuoteDetails } from "@/components/QuoteDetails";
 import { generateProposalDOCX } from "@/services/proposalService";
 import { toast } from "sonner";
+import { saveAs } from "file-saver";
 import { MadeWithDyad } from "@/components/made-with-dyad";
 import { saveQuote, getQuoteItems } from "@/services/supabaseService";
 import { getUserSettings } from "@/services/settingsService";
@@ -181,15 +182,7 @@ export default function Index() {
 
       const safeProposalNumber = String(payload.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, fileName);
 
       toast.success(`Proposta DOCX gerada com sucesso!`, { id: loadToastId });
     } catch (err) {
@@ -227,15 +220,7 @@ export default function Index() {
       
       const safeProposalNumber = String(selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, fileName);
 
       toast.success("DOCX regenerado com sucesso!", { id: loadToastId });
     } catch (err) {
@@ -254,15 +239,7 @@ export default function Index() {
       const blob = await generateProposalDOCX(quote.settings);
       const safeProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
-
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, fileName);
 
       toast.success("DOCX gerado com sucesso a partir do histórico!", { id: loadToastId });
     } catch (err) {

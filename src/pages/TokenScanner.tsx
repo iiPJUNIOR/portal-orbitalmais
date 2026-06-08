@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { saveAs } from "file-saver";
 
 /**
  * Replacement keys we expect to populate in the template.
@@ -252,15 +253,7 @@ export default function TokenScannerPage() {
 
     try {
       const blob = await generateProposalPPTX(mock as any);
-      // trigger download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `test-proposal-${Date.now()}.pptx`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, `test-proposal-${Date.now()}.pptx`);
       toast.success("Arquivo gerado e download iniciado (teste).");
     } catch (err: any) {
       console.error("generate failed", err);

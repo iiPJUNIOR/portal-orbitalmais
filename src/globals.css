@@ -34,6 +34,15 @@
     --ring: 214 83% 27%;
 
     --radius: 0.75rem;
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 240 10% 3.9%;
+    --sidebar-primary: 214 83% 27%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 240 5.9% 90%;
+    --sidebar-ring: 214 83% 27%;
   }
 
   .dark {
@@ -64,6 +73,15 @@
     --border: 220 14% 25%;
     --input: 220 14% 18%;
     --ring: 23 91% 54%;
+
+    --sidebar-background: 220 14% 12%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 23 91% 54%;
+    --sidebar-primary-foreground: 210 40% 98%;
+    --sidebar-accent: 220 14% 18%;
+    --sidebar-accent-foreground: 210 40% 98%;
+    --sidebar-border: 220 14% 25%;
+    --sidebar-ring: 23 91% 54%;
   }
 }
 
@@ -154,4 +172,11 @@ html.font-extra-large { font-size: 20px; }
 }
 .dark ::-webkit-scrollbar-thumb {
   @apply bg-secondary rounded-full border-2 border-background;
+}
+
+/* Evitar que o iOS dê zoom automático ao focar em inputs no mobile */
+@media (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
 }

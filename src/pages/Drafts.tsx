@@ -7,13 +7,15 @@ import { getDrafts, deleteDraft, syncSingleDraft, syncLocalDrafts, DraftRecord }
 import { useNavigate } from "react-router-dom";
 import { Trash2, ArrowRight, RefreshCw, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
+import { saveAs } from "file-saver";
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<DraftRecord[]>([]);
   const navigate = useNavigate();
 
-  function load() {
-    setDrafts(getDrafts());
+  async function load() {
+    const data = await getDrafts();
+    setDrafts(data);
   }
 
   useEffect(() => {
@@ -27,25 +29,22 @@ export default function DraftsPage() {
   const handleExport = (d: DraftRecord) => {
     try {
       const blob = new Blob([JSON.stringify(d, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `draft-${d.id}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, `draft-${d.id}.json`);
       toast.success("Rascunho exportado");
     } catch (err) {
       toast.error("Falha ao exportar rascunho");
     }
   };
 
-  const handleDelete = (d: DraftRecord) => {
+  const handleDelete = async (d: DraftRecord) => {
     if (!confirm("Remover rascunho permanentemente?")) return;
-    deleteDraft(d.id);
-    load();
-    toast.success("Rascunho removido");
+    try {
+      await deleteDraft(d.id);
+      await load();
+      toast.success("Rascunho removido");
+    } catch (err) {
+      toast.error("Falha ao remover rascunho");
+    }
   };
 
   const handleSync = async (d: DraftRecord) => {

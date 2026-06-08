@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import { saveAs } from "file-saver";
 import { fetchBases, deleteBase, type StoredBase } from "@/services/productBaseService";
 
 type ProductBasesTabProps = {
@@ -44,14 +45,7 @@ export default function ProductBasesTab({ onBack }: ProductBasesTabProps) {
   async function handleExport(b: StoredBase) {
     try {
       const blob = new Blob([JSON.stringify(b, null, 2)], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `${(b.name || b.id).replace(/\s+/g, "-") || b.id}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      saveAs(blob, `${(b.name || b.id).replace(/\s+/g, "-") || b.id}.json`);
       toast.success("Base exportada");
     } catch (err) {
       console.error("export failed", err);

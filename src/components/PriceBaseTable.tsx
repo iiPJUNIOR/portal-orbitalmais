@@ -21,6 +21,7 @@ import {
 } from "@dnd-kit/sortable";
 import { SortableHeader } from "./SortableHeader";
 import { toast } from "sonner";
+import { saveAs } from "file-saver";
 
 type StoredBase = {
   id: string;
@@ -220,14 +221,7 @@ export default function PriceBaseTable({ base, onAddRow, maxRows = 1000 }: Price
                             return acc;
                           }, {});
                           const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-                          const url = URL.createObjectURL(blob);
-                          const a = document.createElement("a");
-                          a.href = url;
-                          a.download = `${base.name.replace(/\s+/g, "-") || base.id}-row-${ri}.json`;
-                          document.body.appendChild(a);
-                          a.click();
-                          document.body.removeChild(a);
-                          URL.revokeObjectURL(url);
+                          saveAs(blob, `${base.name.replace(/\s+/g, "-") || base.id}-row-${ri}.json`);
                         } catch (err) {
                           console.error("export row failed", err);
                         }

@@ -906,7 +906,28 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                               type="number"
                               className="h-8 text-xs bg-card text-center font-bold"
                               value={p.quantity}
-                              onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                    sp.baseId === p.baseId
+                                      ? { ...sp, quantity: val === "" ? "" : Math.max(1, parseInt(val) || 1) }
+                                      : sp
+                                  )
+                                }));
+                              }}
+                              onBlur={(e) => {
+                                const val = e.target.value;
+                                if (val === "" || parseInt(val) < 1) {
+                                  setFormData((prev: any) => ({
+                                    ...prev,
+                                    selectedProducts: prev.selectedProducts.map((sp: any) =>
+                                      sp.baseId === p.baseId ? { ...sp, quantity: 1 } : sp
+                                    )
+                                  }));
+                                }
+                              }}
                             />
                           </div>
                           <div className="flex flex-col gap-1 w-28">
