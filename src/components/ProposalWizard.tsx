@@ -413,14 +413,16 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       setTodaySequence(revisionData.sequence);
       setFormData((prev: any) => ({
         ...prev,
-        version: String(revisionData.revision)
+        version: String(revisionData.revision),
+        selectedProducts: revisionData.previousContact?.selectedProducts || []
       }));
-      toast.success(`Configurado como Revisão (REV${revisionData.revision})`);
+      toast.success(`Configurado como Revisão (REV${revisionData.revision}) com os itens anteriores importados.`);
     } else {
       setTodaySequence(revisionData.nextGlobalSequence ?? (revisionData.sequence + 1));
       setFormData((prev: any) => ({
         ...prev,
-        version: "0"
+        version: "0",
+        selectedProducts: []
       }));
       toast.success(`Configurado como Novo Orçamento (REV0)`);
     }

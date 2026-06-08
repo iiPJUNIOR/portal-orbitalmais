@@ -400,7 +400,7 @@ export const getProposalSequenceAndRevision = async (
     // Fetch quotes specifically matching this CNPJ
     const { data: dbQuotes, error } = await supabase
       .from("quotes")
-      .select("proposal_number, cnpj, company_name, contact_name, email, phone, address")
+      .select("proposal_number, cnpj, company_name, contact_name, email, phone, address, settings")
       .or(`cnpj.eq."${formattedCnpj}",cnpj.eq."${cleanTargetCnpj}"`);
 
     if (error) throw error;
@@ -424,7 +424,8 @@ export const getProposalSequenceAndRevision = async (
             contact_name: l.quote.contactName,
             email: l.quote.email,
             phone: l.quote.phone,
-            address: l.quote.address
+            address: l.quote.address,
+            settings: l.quote.settings
           }));
         allMatchingQuotes = [...allMatchingQuotes, ...localMatches];
       }
@@ -448,6 +449,7 @@ export const getProposalSequenceAndRevision = async (
 
       if (cnpjSequence > 0) {
         const maxGlobalSequence = await fetchMaxGlobalSequence();
+        const prevSettings = latestQuote ? (latestQuote.settings || latestQuote.quote?.settings) : null;
         return {
           sequence: cnpjSequence,
           revision: maxCnpjRevision + 1,
@@ -457,7 +459,8 @@ export const getProposalSequenceAndRevision = async (
             contactName: latestQuote.contact_name || latestQuote.contactName,
             email: latestQuote.email,
             phone: latestQuote.phone,
-            address: latestQuote.address
+            address: latestQuote.address,
+            selectedProducts: prevSettings?.selectedProducts || []
           } : undefined
         };
       }
