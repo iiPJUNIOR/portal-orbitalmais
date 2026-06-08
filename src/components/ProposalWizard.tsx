@@ -103,6 +103,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const lastFetchedCnpj = useRef<string>("");
   const [totalPriceInput, setTotalPriceInput] = useState("");
   const prevCalculatedSum = useRef(0);
+  const [showRevisionModal, setShowRevisionModal] = useState(false);
+  const [revisionData, setRevisionData] = useState<any>(null);
 
   const calculatedSum = React.useMemo(() => {
     const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
@@ -167,34 +169,42 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       isInitialMount.current = false;
 
       const cleanCnpj = (formData.cnpj || "").replace(/\D/g, "");
-      const { sequence, revision, previousContact } = await getProposalSequenceAndRevision(cleanCnpj);
-      setTodaySequence(sequence);
+      if (cleanCnpj.length < 14) {
+        setRevisionData(null);
+        setShowRevisionModal(false);
+        const { sequence, revision } = await getProposalSequenceAndRevision(cleanCnpj);
+        setTodaySequence(sequence);
+        setFormData((prev: any) => ({ ...prev, version: String(revision) }));
+        return;
+      }
+
+      const res = await getProposalSequenceAndRevision(cleanCnpj);
+      
+      // Prefill contact data if returned
       setFormData((prev: any) => {
         const updated = { ...prev };
-        if (prev.version !== String(revision)) {
-          updated.version = String(revision);
+        if (res.previousContact) {
+          const pc = res.previousContact;
+          if (pc.companyName && !prev.companyName) updated.companyName = pc.companyName;
+          if (pc.contactName && !prev.contactName) updated.contactName = pc.contactName;
+          if (pc.email && !prev.email) updated.email = pc.email;
+          if (pc.phone && !prev.phone) updated.phone = pc.phone;
+          if (pc.address && !prev.address) updated.address = pc.address;
         }
-        
-        if (previousContact) {
-          if (previousContact.companyName && !prev.companyName) {
-            updated.companyName = previousContact.companyName;
-          }
-          if (previousContact.contactName && !prev.contactName) {
-            updated.contactName = previousContact.contactName;
-          }
-          if (previousContact.email && !prev.email) {
-            updated.email = previousContact.email;
-          }
-          if (previousContact.phone && !prev.phone) {
-            updated.phone = previousContact.phone;
-          }
-          if (previousContact.address && !prev.address) {
-            updated.address = previousContact.address;
-          }
-        }
-        
         return updated;
       });
+
+      if (res.revision > 0) {
+        // Existing quote found! Show the popup
+        setRevisionData(res);
+        setShowRevisionModal(true);
+      } else {
+        // CNPJ new to database, use default global sequence
+        setTodaySequence(res.sequence);
+        setFormData((prev: any) => ({ ...prev, version: String(res.revision) }));
+        setRevisionData(null);
+        setShowRevisionModal(false);
+      }
     }
     loadSequenceAndRevision();
   }, [formData.cnpj]);
@@ -394,6 +404,28 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       }
       return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, name: product.model, quantity: 1, ensaiosInclusos: false }] };
     });
+  };
+
+  const handleSelectRevisionMode = (mode: "revision" | "new") => {
+    if (!revisionData) return;
+
+    if (mode === "revision") {
+      setTodaySequence(revisionData.sequence);
+      setFormData((prev: any) => ({
+        ...prev,
+        version: String(revisionData.revision)
+      }));
+      toast.success(`Configurado como Revisão (REV${revisionData.revision})`);
+    } else {
+      setTodaySequence(revisionData.nextGlobalSequence ?? (revisionData.sequence + 1));
+      setFormData((prev: any) => ({
+        ...prev,
+        version: "0"
+      }));
+      toast.success(`Configurado como Novo Orçamento (REV0)`);
+    }
+
+    setShowRevisionModal(false);
   };
 
   const handleReset = () => {
@@ -1096,55 +1128,86 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   if (loadingProducts) return <div className="p-20 flex justify-center"><Loader2 className="animate-spin text-primary" /></div>;
 
   return (
-    <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl border-none shadow-md w-full">
-      <CardHeader className="bg-primary text-white p-5 md:p-6">
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle className="text-xl md:text-2xl font-black">
-              {currentStep === 5 ? "Concluído" : `Passo ${currentStep}`}
-            </CardTitle>
-            <CardDescription className="text-white/70 text-xs md:text-sm">
-              {currentStep === 5 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
-            </CardDescription>
+    <>
+      <Card className="max-w-2xl mx-auto proposal-highlight rounded-3xl border-none shadow-md w-full">
+        <CardHeader className="bg-primary text-white p-5 md:p-6">
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle className="text-xl md:text-2xl font-black">
+                {currentStep === 5 ? "Concluído" : `Passo ${currentStep}`}
+              </CardTitle>
+              <CardDescription className="text-white/70 text-xs md:text-sm">
+                {currentStep === 5 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
+              </CardDescription>
+            </div>
+            {currentStep < 5 && (
+              <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
+                {currentStep}/4
+              </div>
+            )}
           </div>
+        </CardHeader>
+        <CardContent className="p-5 md:p-6">
+          {renderStep()}
+
           {currentStep < 5 && (
-            <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
-              {currentStep}/4
+            <div className="flex justify-between mt-5 pt-4 border-t">
+              <div className="flex gap-2">
+                <Button variant="ghost" className="rounded-xl" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
+                  {currentStep === 1 ? "Cancelar" : "Voltar"}
+                </Button>
+
+                {currentStep >= 3 ? (
+                  <Button variant="outline" className="rounded-xl" onClick={handleSaveDraft}>
+                    <Save className="mr-2 h-4 w-4" /> Salvar rascunho
+                  </Button>
+                ) : null}
+              </div>
+
+              <div className="flex gap-2">
+                {currentStep === 4 ? (
+                  <Button className="rounded-xl px-6 font-bold" onClick={() => handleFinish()}>
+                    <FileText className="mr-2 h-4 w-4" /> Gerar DOCX
+                  </Button>
+                ) : (
+                  <Button className="rounded-xl px-6" onClick={handleNext}>
+                    Próximo <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                )}
+              </div>
             </div>
           )}
-        </div>
-      </CardHeader>
-      <CardContent className="p-5 md:p-6">
-        {renderStep()}
+        </CardContent>
+      </Card>
 
-        {currentStep < 5 && (
-          <div className="flex justify-between mt-5 pt-4 border-t">
-            <div className="flex gap-2">
-              <Button variant="ghost" className="rounded-xl" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
-                {currentStep === 1 ? "Cancelar" : "Voltar"}
-              </Button>
-
-              {currentStep >= 3 ? (
-                <Button variant="outline" className="rounded-xl" onClick={handleSaveDraft}>
-                  <Save className="mr-2 h-4 w-4" /> Salvar rascunho
-                </Button>
-              ) : null}
+      {showRevisionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-card border rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-6 animate-in fade-in zoom-in-95 duration-200 text-left">
+            <div className="space-y-2">
+              <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Propostas Anteriores Encontradas</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Já existem orçamentos salvos para o CNPJ <strong>{formData.cnpj}</strong> na base de dados. Como deseja prosseguir com este orçamento?
+              </p>
             </div>
-
-            <div className="flex gap-2">
-              {currentStep === 4 ? (
-                <Button className="rounded-xl px-6 font-bold" onClick={() => handleFinish()}>
-                  <FileText className="mr-2 h-4 w-4" /> Gerar DOCX
-                </Button>
-              ) : (
-                <Button className="rounded-xl px-6" onClick={handleNext}>
-                  Próximo <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              )}
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => handleSelectRevisionMode("revision")}
+                className="w-full h-12 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary/95 transition-colors"
+              >
+                Criar como Revisão (REV{revisionData?.revision})
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSelectRevisionMode("new")}
+                className="w-full h-12 rounded-xl bg-transparent border-2 border-neutral-200 dark:border-neutral-800 text-neutral-800 dark:text-neutral-200 font-bold text-sm hover:bg-muted transition-colors"
+              >
+                Criar como Novo Orçamento (REV0)
+              </button>
             </div>
           </div>
-        )}
-      </CardContent>
-    </Card>
+        </div>
+      )}
+    </>
   );
 }

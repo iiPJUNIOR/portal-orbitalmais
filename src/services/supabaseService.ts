@@ -447,9 +447,11 @@ export const getProposalSequenceAndRevision = async (
       });
 
       if (cnpjSequence > 0) {
+        const maxGlobalSequence = await fetchMaxGlobalSequence();
         return {
           sequence: cnpjSequence,
           revision: maxCnpjRevision + 1,
+          nextGlobalSequence: maxGlobalSequence + 1,
           previousContact: latestQuote ? {
             companyName: latestQuote.company_name || latestQuote.companyName,
             contactName: latestQuote.contact_name || latestQuote.contactName,
