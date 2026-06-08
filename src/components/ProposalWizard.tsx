@@ -882,6 +882,36 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                             {p.description || <span className="italic text-xs text-muted-foreground">Sem descrição</span>}
                           </div>
 
+                          {/* Active Custom and Option Attributes */}
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium pt-1.5 text-neutral-600 dark:text-neutral-400">
+                            {fieldsConfig
+                              .filter((f) => f.isActive && f.key !== "model" && f.key !== "description" && f.key !== "category" && f.key !== "sku" && f.key !== "status")
+                              .map((f) => {
+                                const isCustom = f.isCustom;
+                                const val = isCustom ? p.custom_fields?.[f.key] : p[f.key as keyof typeof p];
+                                
+                                if (isValueEmpty(val)) return null;
+                                
+                                let renderedVal = "";
+                                if (f.type === "boolean") {
+                                  renderedVal = val ? "Sim" : "Não";
+                                } else if (f.type === "currency") {
+                                  renderedVal = formatCurrencyBRL(Number(val));
+                                } else if (Array.isArray(val)) {
+                                  renderedVal = val.join(", ");
+                                } else {
+                                  renderedVal = String(val);
+                                }
+                                
+                                return (
+                                  <span key={f.key} className="border-r pr-3 last:border-0 last:pr-0">
+                                    <span className="font-semibold text-neutral-500 dark:text-neutral-500">{f.label}:</span>{" "}
+                                    <strong className="text-primary">{renderedVal}</strong>
+                                  </span>
+                                );
+                              })}
+                          </div>
+
                           {p.extras && p.extras.length > 0 && (
                             <div className="flex flex-wrap gap-2 mt-3">
                               {p.extras.map((ex: any, idx: number) => (
@@ -1059,6 +1089,36 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                             </span>
                           )}
                         </span>
+
+                        {/* Active Custom and Option Attributes */}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] font-medium pt-1.5 text-neutral-600 dark:text-neutral-400">
+                          {fieldsConfig
+                            .filter((f) => f.isActive && f.key !== "model" && f.key !== "description" && f.key !== "category" && f.key !== "sku" && f.key !== "status")
+                            .map((f) => {
+                              const isCustom = f.isCustom;
+                              const val = isCustom ? p.custom_fields?.[f.key] : p[f.key as keyof typeof p];
+                              
+                              if (isValueEmpty(val)) return null;
+                              
+                              let renderedVal = "";
+                              if (f.type === "boolean") {
+                                renderedVal = val ? "Sim" : "Não";
+                              } else if (f.type === "currency") {
+                                renderedVal = formatCurrencyBRL(Number(val));
+                              } else if (Array.isArray(val)) {
+                                renderedVal = val.join(", ");
+                              } else {
+                                renderedVal = String(val);
+                              }
+                              
+                              return (
+                                <span key={f.key} className="border-r pr-3 last:border-0 last:pr-0">
+                                  <span className="font-semibold text-neutral-500 dark:text-neutral-500">{f.label}:</span>{" "}
+                                  <strong className="text-primary">{renderedVal}</strong>
+                                </span>
+                              );
+                            })}
+                        </div>
                       </div>
 
                       {/* Controls (quantity selector and toggle button) */}
@@ -1221,25 +1281,28 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           {currentStep < 5 && (
             <div className="flex justify-between mt-5 pt-4 border-t">
               <div className="flex gap-2">
-                <Button variant="ghost" className="rounded-xl" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
+                <Button variant="ghost" className="rounded-xl px-2.5 sm:px-4" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
                   {currentStep === 1 ? "Cancelar" : "Voltar"}
                 </Button>
 
                 {currentStep >= 3 ? (
-                  <Button variant="outline" className="rounded-xl" onClick={handleSaveDraft}>
-                    <Save className="mr-2 h-4 w-4" /> Salvar rascunho
+                  <Button variant="outline" className="rounded-xl px-2.5 sm:px-4" onClick={handleSaveDraft} title="Salvar Rascunho">
+                    <Save className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">Salvar</span>
                   </Button>
                 ) : null}
               </div>
 
               <div className="flex gap-2">
                 {currentStep === 4 ? (
-                  <Button className="rounded-xl px-6 font-bold" onClick={() => handleFinish()}>
-                    <FileText className="mr-2 h-4 w-4" /> Gerar DOCX
+                  <Button className="rounded-xl px-2.5 sm:px-6 font-bold" onClick={() => handleFinish()} title="Gerar DOCX">
+                    <FileText className="h-4 w-4" />
+                    <span className="hidden sm:inline ml-2">Gerar DOCX</span>
                   </Button>
                 ) : (
-                  <Button className="rounded-xl px-6" onClick={handleNext}>
-                    Próximo <ArrowRight className="ml-2 h-4 w-4" />
+                  <Button className="rounded-xl px-2.5 sm:px-6" onClick={handleNext} title="Próximo Passo">
+                    <span className="hidden sm:inline mr-2">Próximo</span>
+                    <ArrowRight className="h-4 w-4" />
                   </Button>
                 )}
               </div>
