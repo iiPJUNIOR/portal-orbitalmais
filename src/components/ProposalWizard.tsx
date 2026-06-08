@@ -1030,7 +1030,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                   return (
                     <div
                       key={p.baseId}
-                      className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 transition-colors ${
+                      className={`flex flex-row items-center justify-between gap-3 p-4 transition-colors ${
                         p.bonificado
                           ? "bg-amber-50 dark:bg-amber-900/10"
                           : "hover:bg-muted/30"
@@ -1100,7 +1100,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                       </div>
 
                       {/* Controls (quantity selector and toggle button) */}
-                      <div className="flex items-center justify-center gap-2 self-center w-full sm:w-auto">
+                      <div className="shrink-0 flex items-center gap-2">
                         {p.bonificado && p.quantity > 1 && (
                           <div className="flex items-center gap-1.5 bg-amber-100/50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-xl px-2.5 py-1">
                             <span className="text-[10px] text-amber-800 dark:text-amber-300 font-bold uppercase tracking-wide">Qtd Bonif:</span>
