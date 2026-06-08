@@ -464,7 +464,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     toast.info("Iniciando novo orçamento.");
   };
 
-  const handleFinish = () => {
+  const handleFinish = async () => {
     let proposalNumber = formData.proposalNumber;
     if (!proposalNumber) {
       const formattedSeq = String(todaySequence).padStart(3, "0");
@@ -473,6 +473,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
     // Find the active currency field from the product fields configuration
     const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
+
+    if (draftId) {
+      try {
+        await updateDraft(draftId, { data: formData, step: currentStep });
+      } catch (err) {
+        console.warn("Failed to update draft on finish", err);
+      }
+    }
 
     onComplete({
       ...formData,
@@ -528,12 +536,6 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice
     });
 
-    if (draftId) {
-      try {
-        updateDraft(draftId, { data: formData, step: currentStep });
-      } catch {}
-    }
-
     if (currentStep === 4) {
       setCurrentStep(5);
     }
@@ -544,17 +546,25 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     try {
       const tId = toast.loading("Salvando rascunho...");
       if (draftId) {
-        const ok = updateDraft(draftId, { data: formData, step: currentStep });
-        if (ok) {
-          toast.success("Rascunho atualizado", { id: tId });
+        const { success, synced } = await updateDraft(draftId, { data: formData, step: currentStep });
+        if (success) {
+          if (synced) {
+            toast.success("Rascunho atualizado e sincronizado com o servidor", { id: tId });
+          } else {
+            toast.info("Rascunho atualizado localmente (offline)", { id: tId });
+          }
         } else {
           toast.error("Falha ao atualizar rascunho", { id: tId });
         }
         return;
       }
 
-      const id = await saveDraft({ data: formData, step: currentStep });
-      toast.success("Rascunho salvo", { id: tId });
+      const { id, synced } = await saveDraft({ data: formData, step: currentStep });
+      if (synced) {
+        toast.success("Rascunho salvo e sincronizado com o servidor", { id: tId });
+      } else {
+        toast.info("Rascunho salvo localmente (offline)", { id: tId });
+      }
     } catch (err) {
       console.error("save draft failed", err);
       toast.error("Erro ao salvar rascunho");

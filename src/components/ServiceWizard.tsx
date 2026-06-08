@@ -264,13 +264,28 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep }: P
     try {
       const tId = toast.loading("Salvando rascunho...");
       if (draftId) {
-        updateDraft(draftId, { data: form, step: currentStep });
-        toast.success("Rascunho atualizado", { id: tId });
+        const { success, synced } = await updateDraft(draftId, { data: form, step: currentStep });
+        if (success) {
+          if (synced) {
+            toast.success("Rascunho atualizado e sincronizado com o servidor", { id: tId });
+          } else {
+            toast.info("Rascunho atualizado localmente (offline)", { id: tId });
+          }
+        } else {
+          toast.error("Falha ao atualizar rascunho", { id: tId });
+        }
       } else {
-        await saveDraft({ data: form, step: currentStep });
-        toast.success("Rascunho salvo", { id: tId });
+        const { id, synced } = await saveDraft({ data: form, step: currentStep });
+        if (synced) {
+          toast.success("Rascunho salvo e sincronizado com o servidor", { id: tId });
+        } else {
+          toast.info("Rascunho salvo localmente (offline)", { id: tId });
+        }
       }
-    } catch { toast.error("Erro ao salvar rascunho"); }
+    } catch (err) {
+      console.error("save draft failed", err);
+      toast.error("Erro ao salvar rascunho");
+    }
   };
 
   /* ─── Steps ─── */
