@@ -93,14 +93,25 @@ function readLocalSettings(): UserSettings | null {
     const raw = localStorage.getItem(LOCAL_SETTINGS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as UserSettings;
-    // Inject docx mappings
-    parsed.docx_mappings = getLocalDocxMappings();
-    // Merge product fields
-    if (Array.isArray(parsed.product_fields)) {
-      parsed.product_fields = mergeFieldsWithDefaults(parsed.product_fields);
-    } else {
-      parsed.product_fields = defaultFields;
+    
+    let docxM = getLocalDocxMappings();
+    let slideM = parsed.slide_mappings || {};
+    let finalFields = defaultFields;
+
+    if (parsed.product_fields) {
+      if (!Array.isArray(parsed.product_fields) && typeof parsed.product_fields === 'object') {
+        const obj = parsed.product_fields as any;
+        finalFields = Array.isArray(obj.fields) ? obj.fields : defaultFields;
+        docxM = obj.docx_mappings || {};
+        slideM = obj.slide_mappings || {};
+      } else if (Array.isArray(parsed.product_fields)) {
+        finalFields = parsed.product_fields;
+      }
     }
+
+    parsed.docx_mappings = docxM;
+    parsed.slide_mappings = slideM;
+    parsed.product_fields = mergeFieldsWithDefaults(finalFields);
     return parsed;
   } catch (err) {
     console.warn("settingsService: readLocalSettings failed", err);
@@ -108,18 +119,37 @@ function readLocalSettings(): UserSettings | null {
   }
 }
 
-/**
- * Persist settings to localStorage fallback.
- */
 function writeLocalSettings(payload: Partial<UserSettings>): UserSettings {
   try {
     if (payload.docx_mappings) {
       saveLocalDocxMappings(payload.docx_mappings);
     }
     const existing = readLocalSettings() || {};
-    const merged = { ...existing, ...payload, updated_at: new Date().toISOString() } as UserSettings;
-    localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(merged));
-    // notify listeners
+    
+    const existingFields = Array.isArray(existing.product_fields) ? existing.product_fields : [];
+    const newFields = payload.product_fields !== undefined ? payload.product_fields : existingFields;
+    const newDocx = payload.docx_mappings !== undefined ? payload.docx_mappings : (existing.docx_mappings || {});
+    const newSlide = payload.slide_mappings !== undefined ? payload.slide_mappings : (existing.slide_mappings || {});
+
+    const localProductFieldsObj = {
+      fields: newFields,
+      docx_mappings: newDocx,
+      slide_mappings: newSlide
+    };
+
+    const mergedPayload = { ...payload };
+    mergedPayload.product_fields = localProductFieldsObj;
+    delete mergedPayload.docx_mappings;
+    delete mergedPayload.slide_mappings;
+
+    const merged = { ...existing, ...mergedPayload, updated_at: new Date().toISOString() } as UserSettings;
+    
+    // unpack for returning
+    merged.product_fields = newFields;
+    merged.docx_mappings = newDocx;
+    merged.slide_mappings = newSlide;
+
+    localStorage.setItem(LOCAL_SETTINGS_KEY, JSON.stringify(mergedPayload));
     try { window.dispatchEvent(new Event("user_settings_changed")); } catch {}
     return merged;
   } catch (err) {
@@ -166,14 +196,29 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     }
 
     if (baseSettings) {
-      // Always ensure docx_mappings are included from local storage source
-      baseSettings.docx_mappings = getLocalDocxMappings();
-      // Auto-merge product fields config with defaults
-      if (Array.isArray(baseSettings.product_fields)) {
-        baseSettings.product_fields = mergeFieldsWithDefaults(baseSettings.product_fields);
+      let docxM = {};
+      let slideM = {};
+      let finalFields = defaultFields;
+
+      if (baseSettings.product_fields) {
+        if (!Array.isArray(baseSettings.product_fields) && typeof baseSettings.product_fields === 'object') {
+          const obj = baseSettings.product_fields as any;
+          finalFields = Array.isArray(obj.fields) ? obj.fields : defaultFields;
+          docxM = obj.docx_mappings || {};
+          slideM = obj.slide_mappings || {};
+        } else if (Array.isArray(baseSettings.product_fields)) {
+          finalFields = baseSettings.product_fields;
+          docxM = getLocalDocxMappings();
+          slideM = (baseSettings as any).slide_mappings || {};
+        }
       } else {
-        baseSettings.product_fields = defaultFields;
+        docxM = getLocalDocxMappings();
+        slideM = (baseSettings as any).slide_mappings || {};
       }
+
+      baseSettings.docx_mappings = docxM;
+      baseSettings.slide_mappings = slideM;
+      baseSettings.product_fields = mergeFieldsWithDefaults(finalFields);
     }
 
     return baseSettings;
@@ -254,27 +299,58 @@ export async function grantPermissionByEmail(email: string, permission: 'history
   if (!resp.ok) throw new Error("Edge Function failed");
 }
 
-/**
- * Upsert user settings.
- * If there is no authenticated user or Supabase fails, persist to localStorage as a fallback.
- */
 export async function saveUserSettings(payload: Partial<UserSettings>): Promise<UserSettings> {
   try {
-    // 1. Handle docx_mappings locally first as they don't have a DB column
     if (payload.docx_mappings) {
       saveLocalDocxMappings(payload.docx_mappings);
     }
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      // No authenticated user: persist locally as fallback
       const saved = writeLocalSettings(payload);
       return saved;
     }
 
-    // 2. Build cleaned payload for DB (remove non-db fields)
+    // Load current settings from database to preserve existing properties in product_fields
+    const { data: currentDbData } = await supabase
+      .from("user_settings")
+      .select("product_fields")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    let existingFields = [];
+    let existingDocx = {};
+    let existingSlide = {};
+
+    if (currentDbData?.product_fields) {
+      if (!Array.isArray(currentDbData.product_fields) && typeof currentDbData.product_fields === 'object') {
+        const obj = currentDbData.product_fields as any;
+        existingFields = obj.fields || [];
+        existingDocx = obj.docx_mappings || {};
+        existingSlide = obj.slide_mappings || {};
+      } else if (Array.isArray(currentDbData.product_fields)) {
+        existingFields = currentDbData.product_fields;
+      }
+    }
+
+    if (Object.keys(existingDocx).length === 0) {
+      existingDocx = getLocalDocxMappings();
+    }
+
+    const mergedFields = payload.product_fields !== undefined ? payload.product_fields : existingFields;
+    const mergedDocx = payload.docx_mappings !== undefined ? payload.docx_mappings : existingDocx;
+    const mergedSlide = payload.slide_mappings !== undefined ? payload.slide_mappings : existingSlide;
+
+    const productFieldsObj = {
+      fields: mergedFields,
+      docx_mappings: mergedDocx,
+      slide_mappings: mergedSlide
+    };
+
     const dbPayload = { ...payload };
-    delete dbPayload.docx_mappings; // DB doesn't have this column
+    dbPayload.product_fields = productFieldsObj;
+    delete dbPayload.docx_mappings;
+    delete dbPayload.slide_mappings;
 
     const { data, error } = await supabase
       .from("user_settings")
@@ -292,7 +368,6 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
       return local;
     }
 
-    // If we succeeded saving to server, also remove any separate local fallback to avoid divergence.
     try {
       const localRaw = localStorage.getItem(LOCAL_SETTINGS_KEY);
       if (localRaw) {
@@ -301,8 +376,22 @@ export async function saveUserSettings(payload: Partial<UserSettings>): Promise<
     } catch {}
 
     window.dispatchEvent(new Event("user_settings_changed"));
+    
     const final = data as UserSettings;
-    final.docx_mappings = getLocalDocxMappings();
+    let finalFields = defaultFields;
+    let finalDocx = {};
+    let finalSlide = {};
+    
+    if (final.product_fields && !Array.isArray(final.product_fields) && typeof final.product_fields === 'object') {
+      const obj = final.product_fields as any;
+      finalFields = Array.isArray(obj.fields) ? obj.fields : defaultFields;
+      finalDocx = obj.docx_mappings || {};
+      finalSlide = obj.slide_mappings || {};
+    }
+    
+    final.product_fields = mergeFieldsWithDefaults(finalFields);
+    final.docx_mappings = finalDocx;
+    final.slide_mappings = finalSlide;
     return final;
   } catch (err) {
     console.error("saveUserSettings unexpected error:", err);

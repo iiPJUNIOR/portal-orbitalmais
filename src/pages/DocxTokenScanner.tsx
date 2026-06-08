@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft, FileSearch, AlertTriangle, RefreshCw, Save, CheckCircle2 } from "lucide-react";
+import { getUserSettings, saveUserSettings } from "@/services/settingsService";
 
 const baseSystemFields = [
   { value: "vendedor", label: "Vendedor (Nome)" },
@@ -104,6 +105,29 @@ export default function DocxTokenScannerPage() {
 
   useEffect(() => { runScan(); }, []);
 
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settings = await getUserSettings();
+        if (settings?.docx_mappings) {
+          const loaded = settings.docx_mappings;
+          const inverted: Record<string, string> = {};
+          Object.entries(loaded).forEach(([token, field]) => {
+            if (field && field !== "none" && !token.startsWith("__")) {
+              inverted[field] = token;
+            }
+          });
+          setMapping(inverted);
+          setEnsaiosYes(loaded["__ensaios_yes"] || "já");
+          setEnsaiosNo(loaded["__ensaios_no"] || "não");
+        }
+      } catch (err) {
+        console.warn("Failed to load user settings in DocxTokenScanner", err);
+      }
+    }
+    loadSettings();
+  }, []);
+
   /* Auto-mapping */
   useEffect(() => {
     if (found.length === 0 || autoMappedRef.current) return;
@@ -134,16 +158,18 @@ export default function DocxTokenScannerPage() {
       });
       toSave["__ensaios_yes"] = ensaiosYes;
       toSave["__ensaios_no"] = ensaiosNo;
-      try {
-        localStorage.setItem("docx_token_map", JSON.stringify(toSave));
-        window.dispatchEvent(new Event("user_settings_changed"));
-      } catch {}
+      const applyAuto = async () => {
+        try {
+          await saveUserSettings({ docx_mappings: toSave });
+        } catch {}
+      };
+      applyAuto();
       toast.success("Mapeamento automático aplicado.");
     }
     autoMappedRef.current = true;
   }, [found]);
 
-  const saveMapping = () => {
+  const saveMapping = async () => {
     try {
       const toSave: Record<string, string> = {};
       Object.entries(mapping).forEach(([field, token]) => {
@@ -153,8 +179,7 @@ export default function DocxTokenScannerPage() {
       });
       toSave["__ensaios_yes"] = ensaiosYes;
       toSave["__ensaios_no"] = ensaiosNo;
-      localStorage.setItem("docx_token_map", JSON.stringify(toSave));
-      window.dispatchEvent(new Event("user_settings_changed"));
+      await saveUserSettings({ docx_mappings: toSave });
       setSaved(true);
       toast.success("Mapeamento salvo com sucesso!");
       setTimeout(() => setSaved(false), 3000);
@@ -164,8 +189,9 @@ export default function DocxTokenScannerPage() {
   };
 
   const handleClearCache = async () => {
-    localStorage.removeItem("docx_token_map");
-    window.dispatchEvent(new Event("user_settings_changed"));
+    try {
+      await saveUserSettings({ docx_mappings: {} });
+    } catch {}
     setMapping({});
     autoMappedRef.current = false;
     setFound([]);
