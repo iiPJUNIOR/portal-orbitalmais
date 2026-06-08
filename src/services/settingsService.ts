@@ -167,6 +167,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     const { data: { user } } = await supabase.auth.getUser();
     
     let baseSettings: UserSettings | null = null;
+    let rawProductFields: any = null;
 
     if (user) {
       const { data, error } = await supabase
@@ -177,6 +178,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
       if (!error && data) {
         baseSettings = data as UserSettings;
+        rawProductFields = data.product_fields;
         if (String(user.email).toLowerCase() === PAULO_EMAIL) {
           baseSettings.can_view_history = true;
           baseSettings.can_access_settings = true;
@@ -216,9 +218,42 @@ export async function getUserSettings(): Promise<UserSettings | null> {
         slideM = (baseSettings as any).slide_mappings || {};
       }
 
+      let dbDocxEmpty = Object.keys(docxM).length === 0;
+      let localDocx = getLocalDocxMappings();
+      let localDocxNotEmpty = Object.keys(localDocx).length > 0;
+
+      if (dbDocxEmpty && localDocxNotEmpty) {
+        docxM = localDocx;
+      }
+
       baseSettings.docx_mappings = docxM;
       baseSettings.slide_mappings = slideM;
       baseSettings.product_fields = mergeFieldsWithDefaults(finalFields);
+
+      // AUTOMATIC MIGRATION TO DATABASE
+      // If user is authenticated and the DB needs migration (either legacy format or missing mappings that we have locally),
+      // migrate it immediately to prevent cross-device setting gaps!
+      const needsMigration = Array.isArray(rawProductFields) || (dbDocxEmpty && localDocxNotEmpty);
+
+      if (user && needsMigration) {
+        const productFieldsObj = {
+          fields: finalFields,
+          docx_mappings: docxM,
+          slide_mappings: slideM
+        };
+        // silent upsert in DB
+        supabase
+          .from("user_settings")
+          .upsert({
+            user_id: user.id,
+            product_fields: productFieldsObj,
+            updated_at: new Date().toISOString()
+          }, { onConflict: "user_id" })
+          .then(({ error }) => {
+            if (error) console.warn("Failed to auto-migrate legacy mappings to DB", error);
+            else console.log("Auto-migrated settings to DB successfully");
+          });
+      }
     }
 
     return baseSettings;
