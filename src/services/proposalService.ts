@@ -315,8 +315,8 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
         quantity: it.quantity || 0,
         bonificado: it.bonificado ? "Sim" : "Não",
         ensaiosInclusos: it.ensaiosInclusos ? ensaiosYes : ensaiosNo,
-        unitPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0),
-        totalItemPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL((it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0) * (it.quantity || 0)),
+        unitPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0),
+        totalItemPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL((it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0) * (it.quantity || 0)),
       };
 
       // Inject resolved mapped fields into the item scope
@@ -329,10 +329,10 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
           } else if (field === "quantidade" || field === "qtd") {
             itemObj[token] = it.quantity || 0;
           } else if (field === "valor_item") {
-            const price = it.bonificado ? 0 : (it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0);
+            const price = it.bonificado ? 0 : (it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0);
             itemObj[token] = formatCurrencyBRL(price);
           } else if (field === "valor") {
-            const price = it.bonificado ? 0 : (it.unitPrice || it.product?.value_12m || it.product?.value_24m || 0);
+            const price = it.bonificado ? 0 : (it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0);
             itemObj[token] = formatCurrencyBRL(price * (it.quantity || 0));
           }
         }

@@ -116,7 +116,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       const price = currencyField 
         ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
         : 0;
-      const effectivePrice = Number(p.unitPrice || price || p.value_12m || p.value_24m || 0);
+      const defaultPrice = price || p.value_12m || p.value_24m || 0;
+      const effectivePrice = Number(p.unitPrice ?? defaultPrice);
       return sum + (effectivePrice * regularQty);
     }, 0);
   }, [formData.selectedProducts, fieldsConfig]);
@@ -501,7 +502,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             quantity: regularQty,
             bonificado: false,
             ensaiosInclusos: !!formData.ensaiosInclusos,
-            unitPrice: p.unitPrice || fallbackPrice || p.value_12m || p.value_24m || 0,
+            unitPrice: p.unitPrice ?? (fallbackPrice || p.value_12m || p.value_24m || 0),
           });
         }
 
@@ -843,56 +844,89 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             <div className="space-y-3 pt-6 border-t">
               <Label className="font-bold text-lg">Itens Selecionados ({(formData.selectedProducts || []).length})</Label>
               <div className="grid grid-cols-1 gap-3">
-                {(formData.selectedProducts || []).map((p: any) => (
-                  <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                    <div className="md:flex md:items-start md:justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1">
+                {(formData.selectedProducts || []).map((p: any) => {
+                  const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
+                  const price = currencyField 
+                    ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
+                    : 0;
+                  const defaultPrice = Number(price || p.value_12m || p.value_24m || 0);
+
+                  return (
+                    <div key={p.baseId} className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
+                      <div className="md:flex md:items-start md:justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1">
+                              <Input
+                                value={p.name}
+                                onChange={(e) => setFormData((prev: any) => ({
+                                  ...prev,
+                                  selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, name: e.target.value } : sp)
+                                }))}
+                                className="text-sm font-bold"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="text-[11px] text-muted-foreground mt-2 break-words">
+                            {p.description || <span className="italic text-xs text-muted-foreground">Sem descrição</span>}
+                          </div>
+
+                          {p.extras && p.extras.length > 0 && (
+                            <div className="flex flex-wrap gap-2 mt-3">
+                              {p.extras.map((ex: any, idx: number) => (
+                                <button
+                                  key={idx}
+                                  type="button"
+                                  onClick={() => appendToName(p.baseId, ex.value)}
+                                  className="text-xs px-2 py-1 rounded-md border bg-white/90 hover:bg-primary/5 transition-colors text-muted-foreground"
+                                  title={`Adicionar "${ex.value}" ao nome`}
+                                >
+                                  <span className="font-semibold mr-1">{ex.label}:</span> {ex.value}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-3 mt-4 md:mt-0 md:ml-4">
+                          <div className="flex flex-col gap-1 w-16">
+                            <Label className="text-[10px] text-muted-foreground uppercase font-bold text-center">Qtd</Label>
                             <Input
-                              value={p.name}
-                              onChange={(e) => setFormData((prev: any) => ({
-                                ...prev,
-                                selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, name: e.target.value } : sp)
-                              }))}
-                              className="text-sm font-bold"
+                              type="number"
+                              className="h-8 text-xs bg-card text-center font-bold"
+                              value={p.quantity}
+                              onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
                             />
                           </div>
-                        </div>
-
-                        <div className="text-[11px] text-muted-foreground mt-2 break-words">
-                          {p.description || <span className="italic text-xs text-muted-foreground">Sem descrição</span>}
-                        </div>
-
-                        {p.extras && p.extras.length > 0 && (
-                          <div className="flex flex-wrap gap-2 mt-3">
-                            {p.extras.map((ex: any, idx: number) => (
-                              <button
-                                key={idx}
-                                type="button"
-                                onClick={() => appendToName(p.baseId, ex.value)}
-                                className="text-xs px-2 py-1 rounded-md border bg-white/90 hover:bg-primary/5 transition-colors text-muted-foreground"
-                                title={`Adicionar "${ex.value}" ao nome`}
-                              >
-                                <span className="font-semibold mr-1">{ex.label}:</span> {ex.value}
-                              </button>
-                            ))}
+                          <div className="flex flex-col gap-1 w-28">
+                            <Label className="text-[10px] text-muted-foreground uppercase font-bold text-right">Vlr. Unitário</Label>
+                            <Input
+                              type="text"
+                              className="h-8 text-xs bg-card text-right font-bold"
+                              value={formatInitialCurrency(p.unitPrice ?? defaultPrice)}
+                              onChange={(e) => {
+                                const masked = handleCurrencyInput(e.target.value);
+                                const numericVal = parseCurrencyBRLToNumber(masked);
+                                setFormData((prev: any) => ({
+                                  ...prev,
+                                  selectedProducts: prev.selectedProducts.map((sp: any) => 
+                                    sp.baseId === p.baseId ? { ...sp, unitPrice: numericVal } : sp
+                                  )
+                                }));
+                              }}
+                            />
                           </div>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-3 mt-4 md:mt-0 md:ml-4">
-                        <Input
-                          type="number"
-                          className="w-20 h-8 text-xs bg-card text-center font-bold"
-                          value={p.quantity}
-                          onChange={(e) => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.map((sp: any) => sp.baseId === p.baseId ? { ...sp, quantity: Math.max(1, parseInt(e.target.value) || 1) } : sp) }))}
-                        />
-                        <Button variant="ghost" size="sm" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}><Trash2 className="h-4 w-4" /></Button>
+                          <div className="flex items-end h-8 mt-auto">
+                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}>
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 
@@ -950,7 +984,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                   const price = currencyField 
                     ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
                     : 0;
-                  const unitPrice = p.unitPrice || Number(price) || p.value_12m || p.value_24m || 0;
+                  const defaultPrice = Number(price) || p.value_12m || p.value_24m || 0;
+                  const unitPrice = p.unitPrice ?? defaultPrice;
                   const regularTotal = unitPrice * regularQty;
 
                   return (
