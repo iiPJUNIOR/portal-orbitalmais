@@ -344,6 +344,28 @@ export default function Settings() {
       setDocxTemplateUrl(publicUrl);
       setDocxFile(null);
       toast.success("Template DOCX enviado com sucesso!");
+
+      // Clean up old templates, keeping only the 2 most recent ones
+      try {
+        const { data: files, error: listError } = await supabase.storage.from(bucketName).list();
+        if (!listError && files) {
+          const docxTemplates = files.filter(f => f.name.startsWith("proposal-template-") && f.name.endsWith(".docx"));
+          if (docxTemplates.length > 2) {
+            // Sort ascending chronologically (oldest first)
+            docxTemplates.sort((a, b) => {
+              const timeA = parseInt(a.name.replace("proposal-template-", "").replace(".docx", ""), 10) || 0;
+              const timeB = parseInt(b.name.replace("proposal-template-", "").replace(".docx", ""), 10) || 0;
+              return timeA - timeB;
+            });
+            const filesToDelete = docxTemplates.slice(0, docxTemplates.length - 2).map(f => f.name);
+            if (filesToDelete.length > 0) {
+              await supabase.storage.from(bucketName).remove(filesToDelete);
+            }
+          }
+        }
+      } catch (cleanupErr) {
+        console.warn("Failed to auto-clean old templates:", cleanupErr);
+      }
     } catch (err: any) {
       clearInterval(progressInterval);
       console.error("Upload error:", err);
