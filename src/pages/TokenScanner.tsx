@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { saveAs } from "file-saver";
+import { getUserSettings, saveUserSettings } from "@/services/settingsService";
 
 /**
  * Replacement keys we expect to populate in the template.
@@ -58,6 +59,20 @@ export default function TokenScannerPage() {
   });
 
   const autoMappedRef = useRef(false);
+
+  useEffect(() => {
+    async function loadSettings() {
+      try {
+        const settings = await getUserSettings();
+        if (settings?.pptx_mappings) {
+          setMapping(settings.pptx_mappings);
+        }
+      } catch (err) {
+        console.warn("Failed to load user settings in TokenScanner", err);
+      }
+    }
+    loadSettings();
+  }, []);
 
   const runScan = async () => {
     setLoading(true);
@@ -154,12 +169,15 @@ export default function TokenScannerPage() {
 
     if (anyMapped) {
       setMapping(newMapping);
-      try {
-        localStorage.setItem("pptx_token_map", JSON.stringify(newMapping));
-        toast.success("Mapeamento automático aplicado (você pode ajustar manualmente)");
-      } catch (err) {
-        console.warn("failed to save automatic mapping", err);
-      }
+      const applyAuto = async () => {
+        try {
+          await saveUserSettings({ pptx_mappings: newMapping });
+        } catch (err) {
+          console.warn("failed to save automatic mapping", err);
+        }
+      };
+      applyAuto();
+      toast.success("Mapeamento automático aplicado (você pode ajustar manualmente)");
     } else {
       // no automatic matches found (not an error)
       console.debug("TokenScanner: no automatic mapping candidates found");
@@ -169,10 +187,10 @@ export default function TokenScannerPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [found]);
 
-  const saveMapping = () => {
+  const saveMapping = async () => {
     try {
-      localStorage.setItem("pptx_token_map", JSON.stringify(mapping));
-      toast.success("Mapeamento salvo em localStorage (pptx_token_map)");
+      await saveUserSettings({ pptx_mappings: mapping });
+      toast.success("Mapeamento salvo com sucesso!");
     } catch (err) {
       console.error("save mapping failed", err);
       toast.error("Falha ao salvar mapeamento");
@@ -263,14 +281,11 @@ export default function TokenScannerPage() {
 
   const handleClearScannerCache = async () => {
     try {
-      // Remove the saved mapping used by the scanner
-      localStorage.removeItem("pptx_token_map");
+      await saveUserSettings({ pptx_mappings: {} });
       setMapping({});
       autoMappedRef.current = false;
       setFound([]);
       toast.success("Cache do scanner limpo (pptx_token_map removido). Reescaneando...");
-
-      // Re-run scan to refresh the page view
       await runScan();
     } catch (err) {
       console.error("failed to clear scanner cache", err);

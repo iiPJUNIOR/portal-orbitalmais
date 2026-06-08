@@ -80,7 +80,11 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function applyGlobalStringReplacements(xml: string, replacements: Record<string, string | number>) {
+function applyGlobalStringReplacements(
+  xml: string, 
+  replacements: Record<string, string | number>,
+  pptxMappings?: Record<string, string>
+) {
   let out = xml;
   
   // 1. Cura os tokens fragmentados
@@ -96,7 +100,7 @@ function applyGlobalStringReplacements(xml: string, replacements: Record<string,
   }
 
   // 3. Aplica os mapeamentos manuais
-  const plainMap = loadPlainMapping();
+  const plainMap = pptxMappings || loadPlainMapping();
   for (const [replacementKey, sourceText] of Object.entries(plainMap)) {
     if (!sourceText) continue;
     const val = String(replacements[replacementKey] ?? "");
@@ -198,9 +202,10 @@ export async function generatePptxFromTemplate(opts: PptxGenerateOptions): Promi
 
   // 1. Processa os arquivos de slide (.xml) para substituir textos
   const slideFiles = Object.keys(zip.files).filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p));
+  const pptxMappings = settings?.pptx_mappings;
   for (const path of slideFiles) {
     const content = await zip.file(path)!.async("string");
-    const modifiedContent = applyGlobalStringReplacements(content, opts.replacements);
+    const modifiedContent = applyGlobalStringReplacements(content, opts.replacements, pptxMappings);
     zip.file(path, modifiedContent);
   }
 
