@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getDrafts, deleteDraft, syncSingleDraft, DraftRecord } from "@/services/draftService";
+import { getDrafts, deleteDraft, syncSingleDraft, syncLocalDrafts, DraftRecord } from "@/services/draftService";
 import { useNavigate } from "react-router-dom";
 import { Trash2, ArrowRight, RefreshCw, FileText, Download } from "lucide-react";
 import { toast } from "sonner";
@@ -63,12 +63,48 @@ export default function DraftsPage() {
     }
   };
 
+  const [isSyncingAll, setIsSyncingAll] = useState(false);
+
+  const handleSyncAll = async () => {
+    const pending = drafts.filter((d) => !d.synced);
+    if (pending.length === 0) {
+      toast.info("Todos os rascunhos já estão sincronizados com o servidor.");
+      return;
+    }
+
+    setIsSyncingAll(true);
+    const tId = toast.loading("Sincronizando todos os rascunhos...");
+    try {
+      const res = await syncLocalDrafts();
+      const syncedLen = res.synced.length;
+      const failedLen = res.failed.length;
+
+      if (syncedLen > 0 && failedLen === 0) {
+        toast.success(`Sucesso: ${syncedLen} rascunho(s) sincronizado(s).`, { id: tId });
+      } else if (syncedLen > 0 && failedLen > 0) {
+        toast.warning(`Sincronizados: ${syncedLen}. Falhas: ${failedLen}.`, { id: tId });
+      } else if (failedLen > 0) {
+        toast.error(`Falha ao sincronizar ${failedLen} rascunho(s).`, { id: tId });
+      } else {
+        toast.info("Nenhum rascunho pendente para sincronização.", { id: tId });
+      }
+      load();
+    } catch (err) {
+      toast.error("Erro ao sincronizar rascunhos", { id: tId });
+    } finally {
+      setIsSyncingAll(false);
+    }
+  };
+
   return (
     <div className="min-h-full p-6">
       <div className="container mx-auto">
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Rascunhos</h1>
           <div className="flex gap-2">
+            <Button onClick={handleSyncAll} disabled={isSyncingAll} className="bg-amber-500 hover:bg-amber-600 text-white font-bold">
+              <RefreshCw className={`mr-2 h-4 w-4 ${isSyncingAll ? "animate-spin" : ""}`} /> Sincronizar Todos
+            </Button>
             <Button onClick={load} variant="outline"><RefreshCw className="mr-2 h-4 w-4" /> Recarregar</Button>
             <Button onClick={() => navigate("/")}>Ir para o Gerador</Button>
           </div>

@@ -14,6 +14,7 @@ import { SessionProvider, useSession } from "@/contexts/SessionProvider";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
+import { GlobalSyncButton } from "@/components/GlobalSyncButton";
 import { getUserSettings } from "@/services/settingsService";
 import DraftsPage from "@/pages/Drafts";
 import WizardPage from "@/pages/WizardPage";
@@ -84,6 +85,7 @@ const AppContent = () => {
                 </button>
 
                 <div className="ml-auto flex items-center gap-4">
+                  <GlobalSyncButton />
                   <ThemeToggle />
                 </div>
               </header>

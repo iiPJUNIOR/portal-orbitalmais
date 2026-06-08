@@ -28,6 +28,9 @@ function readAll(): DraftRecord[] {
 function writeAll(arr: DraftRecord[]) {
   try {
     localStorage.setItem(DRAFTS_STORAGE_KEY, JSON.stringify(arr.slice(0, 200)));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new Event("local_drafts_changed"));
+    }
   } catch (err) {
     console.warn("draftService: writeAll failed", err);
   }
