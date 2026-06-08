@@ -308,6 +308,28 @@ export default function Settings() {
     }
   };
 
+  const handleFetchDocxMappings = async () => {
+    try {
+      const tId = toast.loading("Buscando mapeamentos salvos no banco de dados...");
+      const s = await getUserSettings();
+      if (s?.docx_mappings) {
+        setDocxMappings(s.docx_mappings);
+        
+        const savedKeys = Object.keys(s.docx_mappings).filter(k => !k.startsWith("__"));
+        if (savedKeys.length > 0 && docxTokens.length === 0) {
+          setDocxTokens(savedKeys);
+        }
+        
+        toast.success("Mapeamentos baixados do banco de dados!", { id: tId });
+      } else {
+        toast.info("Nenhum mapeamento encontrado no banco de dados.", { id: tId });
+      }
+    } catch (err) {
+      console.error("Failed to fetch docx mappings", err);
+      toast.error("Erro ao baixar mapeamentos do banco de dados.");
+    }
+  };
+
   const handleUploadDocx = async () => {
     if (!docxFile) return;
     setUploadingDocx(true);
@@ -585,7 +607,10 @@ export default function Settings() {
                           Escanear
                         </Button>
 
-                        <AccordionTrigger className="rounded-md px-3 py-2 bg-muted/10 hover:bg-muted">
+                        <AccordionTrigger 
+                          className="rounded-md px-3 py-2 bg-muted/10 hover:bg-muted"
+                          onClick={handleFetchDocxMappings}
+                        >
                           Ver mapeamentos
                         </AccordionTrigger>
                       </div>
@@ -655,8 +680,13 @@ export default function Settings() {
 
                         <div className="flex justify-end">
                           <Button onClick={async () => {
-                            await saveUserSettings({ docx_mappings: docxMappings });
-                            toast.success("Mapeamentos salvos com sucesso");
+                            const tId = toast.loading("Salvando mapeamentos no banco de dados...");
+                            try {
+                              await saveUserSettings({ docx_mappings: docxMappings });
+                              toast.success("Mapeamentos salvos com sucesso no banco de dados!", { id: tId });
+                            } catch (err) {
+                              toast.error("Erro ao salvar mapeamentos no banco de dados.", { id: tId });
+                            }
                           }}>
                             Salvar Mapeamentos
                           </Button>
