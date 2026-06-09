@@ -208,7 +208,7 @@ export default function TokenScannerPage() {
       address: "Rua Exemplo, 123",
       proposalDate: new Date().toISOString(),
       observations: "Proposta de teste",
-      priceModel: "12m" as const,
+      priceModel: "padrao",
       items: [
         {
           id: "p1",
@@ -230,7 +230,7 @@ export default function TokenScannerPage() {
             status: "Ativo",
           },
           quantity: 2,
-          priceModel: "12m" as const,
+          priceModel: "padrao",
         },
         {
           id: "p2",
@@ -252,7 +252,7 @@ export default function TokenScannerPage() {
             status: "Ativo",
           },
           quantity: 1,
-          priceModel: "12m" as const,
+          priceModel: "padrao",
         },
       ],
       proposalNumber: "214049 V.1",

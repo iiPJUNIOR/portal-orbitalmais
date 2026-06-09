@@ -27,7 +27,7 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
       address: d.address,
       proposalDate: d.date || d.proposalDate || new Date().toISOString(),
       proposalNumber: d.proposalNumber || undefined,
-      priceModel: d.priceModel || d.price_model || "12m",
+      priceModel: d.priceModel || d.price_model || "padrao",
       totalPrice: d.totalPrice ?? 0,
       status: "rascunho",
       observations: d.observations || "",
@@ -89,7 +89,7 @@ export async function updateDraft(
         address: d.address,
         proposal_date: d.date || d.proposalDate || new Date().toISOString(),
         proposal_number: d.proposalNumber || undefined,
-        price_model: d.priceModel || d.price_model || "12m",
+        price_model: d.priceModel || d.price_model || "padrao",
         total_price: d.totalPrice ?? 0,
         status: "rascunho",
         observations: d.observations || "",
@@ -107,7 +107,7 @@ export async function updateDraft(
       product_description: it.name || it.product?.description || it.productDescription || "",
       quantity: it.quantity || it.qty || 1,
       unit_price: it.unitPrice || it.price || 0,
-      price_model: it.priceModel || d.priceModel || "12m",
+      price_model: it.priceModel || d.priceModel || "padrao",
       subtotal: (it.unitPrice || it.price || 0) * (it.quantity || it.qty || 1),
     }));
 

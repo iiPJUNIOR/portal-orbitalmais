@@ -8,7 +8,7 @@ export interface Quote {
   address: string;
   proposalDate: string;
   proposalNumber: string;
-  priceModel: '12m' | '24m';
+  priceModel: string;
   totalPrice: number;
   status: 'rascunho' | 'enviada' | 'aceita' | 'recusada';
   observations: string;
@@ -25,6 +25,6 @@ export interface QuoteItem {
   productDescription: string;
   quantity: number;
   unitPrice: number;
-  priceModel: '12m' | '24m';
+  priceModel: string;
   subtotal: number;
 }

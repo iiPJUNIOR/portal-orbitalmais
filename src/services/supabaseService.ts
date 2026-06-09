@@ -26,7 +26,7 @@ export const saveQuote = async (
       address: quote.address || "",
       proposal_date: quote.proposalDate || new Date().toISOString().split('T')[0],
       proposal_number: quote.proposalNumber || `OBM-${Date.now()}`,
-      price_model: quote.priceModel || "12m",
+      price_model: quote.priceModel || "padrao",
       total_price: quote.totalPrice || 0,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",
@@ -81,7 +81,7 @@ export const saveQuote = async (
         product_description: it.productDescription || (it.product && it.product.description) || "",
         quantity: qty,
         unit_price: price,
-        price_model: it.price_model || it.priceModel || quote.priceModel || "12m",
+        price_model: it.price_model || it.priceModel || quote.priceModel || "padrao",
         subtotal: price * qty,
       };
     });
