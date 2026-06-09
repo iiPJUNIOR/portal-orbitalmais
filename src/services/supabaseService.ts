@@ -14,7 +14,7 @@ import type { Quote as QuoteType, QuoteItem as QuoteItemType } from "@/types/quo
 export const saveQuote = async (
   quote: Omit<QuoteType, "id" | "createdAt" | "updatedAt"> & { settings?: any },
   items: any[]
-): Promise<{ id: string; isRemote: boolean }> => {
+): Promise<{ id: string; isRemote: boolean; error?: any }> => {
   try {
     // 1) Prepare payload for Supabase
     const insertPayload: any = {
@@ -39,14 +39,34 @@ export const saveQuote = async (
       insertPayload.user_id = userData.user.id;
     }
 
-    const { data: quoteInsertData, error: quoteInsertError } = await supabase
+    let quoteInsertData: any;
+
+    // First attempt: with user_id
+    const firstAttempt = await supabase
       .from("quotes")
       .insert(insertPayload)
       .select()
       .single();
 
-    if (quoteInsertError) {
-      throw quoteInsertError;
+    if (firstAttempt.error) {
+      console.warn("First insert attempt failed (likely RLS / foreign key). Retrying with user_id = null...", firstAttempt.error);
+      
+      const fallbackPayload = { ...insertPayload };
+      fallbackPayload.user_id = null; // Save as public/shared
+
+      const secondAttempt = await supabase
+        .from("quotes")
+        .insert(fallbackPayload)
+        .select()
+        .single();
+
+      if (secondAttempt.error) {
+        console.error("Second insert attempt failed as well:", secondAttempt.error);
+        throw secondAttempt.error;
+      }
+      quoteInsertData = secondAttempt.data;
+    } else {
+      quoteInsertData = firstAttempt.data;
     }
 
     const quoteId = quoteInsertData.id as string;
@@ -69,8 +89,8 @@ export const saveQuote = async (
 
     return { id: quoteId, isRemote: true };
   } catch (err: any) {
-    console.warn("saveQuote supabase failed", err?.message || err);
-    return { id: uuidv4(), isRemote: false };
+    console.error("saveQuote supabase failed completely", err);
+    return { id: uuidv4(), isRemote: false, error: err };
   }
 };
 

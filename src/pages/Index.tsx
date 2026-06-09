@@ -152,7 +152,7 @@ export default function Index() {
       
       const blob = await generateProposalDOCX(proposalData);
 
-      await saveQuote(
+      const saveResult = await saveQuote(
         {
           cnpj: payload.cnpj,
           companyName: payload.companyName,
@@ -184,7 +184,15 @@ export default function Index() {
       const fileName = `${safeProposalNumber}.docx`;
       saveAs(blob, fileName);
 
-      toast.success(`Proposta DOCX gerada com sucesso!`, { id: loadToastId });
+      if (saveResult.isRemote) {
+        toast.success(`Proposta DOCX gerada com sucesso!`, { id: loadToastId });
+      } else {
+        const errMsg = saveResult.error?.message || "Erro ao salvar na base remota.";
+        toast.error(`Proposta gerada, mas NÃO foi salva no histórico: ${errMsg}`, { 
+          id: loadToastId,
+          duration: 6000
+        });
+      }
     } catch (err) {
       console.error(err);
       toast.error(`Erro ao gerar DOCX.`, { id: loadToastId });
