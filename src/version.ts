@@ -1,1 +1,1 @@
-export const APP_VERSION = "02032025.132845"; // Este valor será atualizado automaticamente em cada deploy
+export const APP_VERSION = "09062026.115827-a3b6e4c";
