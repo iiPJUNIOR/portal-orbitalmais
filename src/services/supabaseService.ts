@@ -18,16 +18,16 @@ export const saveQuote = async (
   try {
     // 1) Prepare payload for Supabase
     const insertPayload: any = {
-      cnpj: quote.cnpj,
-      company_name: quote.companyName,
-      contact_name: quote.contactName,
-      email: quote.email,
-      phone: quote.phone,
-      address: quote.address,
-      proposal_date: quote.proposalDate,
-      proposal_number: quote.proposalNumber,
-      price_model: quote.priceModel,
-      total_price: quote.totalPrice,
+      cnpj: quote.cnpj || "",
+      company_name: quote.companyName || "",
+      contact_name: quote.contactName || "",
+      email: quote.email || "",
+      phone: quote.phone || "",
+      address: quote.address || "",
+      proposal_date: quote.proposalDate || new Date().toISOString().split('T')[0],
+      proposal_number: quote.proposalNumber || `OBM-${Date.now()}`,
+      price_model: quote.priceModel || "12m",
+      total_price: quote.totalPrice || 0,
       status: quote.status ?? "rascunho",
       observations: quote.observations ?? "",
       settings: quote.settings || {}, // save the whole wizard state
@@ -72,15 +72,19 @@ export const saveQuote = async (
     const quoteId = quoteInsertData.id as string;
 
     // 2) Insert quote items
-    const itemsToInsert = items.map((it) => ({
-      quote_id: quoteId,
-      sku: it.sku || it.productDescription || (it.product && it.product.part_number) || "",
-      product_description: it.productDescription || (it.product && it.product.description) || "",
-      quantity: it.quantity,
-      unit_price: it.unitPrice || 0,
-      price_model: it.price_model || it.priceModel || quote.priceModel,
-      subtotal: (it.unitPrice || 0) * it.quantity,
-    }));
+    const itemsToInsert = items.map((it) => {
+      const qty = it.quantity || 1;
+      const price = it.unitPrice || 0;
+      return {
+        quote_id: quoteId,
+        sku: it.sku || it.productDescription || (it.product && it.product.part_number) || "",
+        product_description: it.productDescription || (it.product && it.product.description) || "",
+        quantity: qty,
+        unit_price: price,
+        price_model: it.price_model || it.priceModel || quote.priceModel || "12m",
+        subtotal: price * qty,
+      };
+    });
 
     const { error: itemsError } = await supabase.from("quote_items").insert(itemsToInsert);
     if (itemsError) {
