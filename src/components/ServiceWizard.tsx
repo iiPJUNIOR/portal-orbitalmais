@@ -638,10 +638,12 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
         responsabilidadeorbital: form.respOrbital
           .map((id: string) => respOptions.orbital.find((r) => r.id === id)?.label)
           .filter(Boolean)
+          .map((label: string, idx: number) => `3.${idx + 1} ${label}`)
           .join('\n') || "",
         responsabilidadedocliente: form.respCliente
           .map((id: string) => respOptions.cliente.find((r) => r.id === id)?.label)
           .filter(Boolean)
+          .map((label: string, idx: number) => `4.${idx + 1} ${label}`)
           .join('\n') || "",
         prazoexec: form.prazo || "",
         corpodeprova: form.usaEpsOrbital === false
