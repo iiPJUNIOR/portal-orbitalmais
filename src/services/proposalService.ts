@@ -309,6 +309,8 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
       const itemObj: Record<string, any> = {
         index: idx + 1,
         description: it.product?.description || "",
+        observacao: it.product?.custom_fields?.observacao || "",
+        observacoes: it.product?.custom_fields?.observacao || "",
         model: it.product?.model || "",
         category: it.product?.category || "",
         sku: it.product?.part_number || it.product?.description || "",

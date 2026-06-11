@@ -201,85 +201,6 @@ export function ProductFieldsTab() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Unified fields list */}
-        <div className="space-y-4">
-          <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Campos do Catálogo</h3>
-          
-          {fields.length === 0 ? (
-            <p className="text-sm text-muted-foreground italic py-4">Nenhum campo opcional configurado. Use o formulário abaixo para adicionar campos.</p>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {fields.map((field) => (
-                <div
-                  key={field.key}
-                  className={`flex items-center justify-between p-4 bg-muted/20 dark:bg-muted/5 rounded-2xl border transition-all ${
-                    field.isActive ? "border-primary/20 bg-primary/5" : "border-border"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <p className="font-semibold text-sm flex items-center gap-2">
-                      {field.label}
-                      {field.isCustom && (
-                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">Custom</span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Tipo: {field.type === "boolean" ? "Sim / Não" : field.type === "number" ? "Número" : field.type === "currency" ? "Valor Monetário" : field.type === "dropdown" ? "Seleção (Dropdown)" : "Texto"}
-                    </p>
-                    {field.type === "dropdown" && field.options && field.options.length > 0 && (
-                      <p className="text-[10px] text-muted-foreground font-semibold max-w-[200px] truncate" title={field.options.join(", ")}>
-                        Opções: {field.options.join(", ")}
-                      </p>
-                    )}
-                  </div>
-                  
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <Label
-                        htmlFor={`active-${field.key}`}
-                        className={`text-xs cursor-pointer font-medium ${
-                          field.isActive ? "text-primary font-bold" : "text-muted-foreground"
-                        }`}
-                      >
-                        {field.isActive ? "Ativo" : "Inativo"}
-                      </Label>
-                      <Switch
-                        id={`active-${field.key}`}
-                        checked={field.isActive}
-                        onCheckedChange={() => handleToggleActive(field.key)}
-                      />
-                    </div>
-                    
-                    <div className="h-4 w-[1px] bg-border" />
-
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleOpenEdit(field)}
-                      className="hover:bg-primary/10 hover:text-primary rounded-xl h-8 w-8"
-                      title="Editar campo"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
-                    <div className="h-4 w-[1px] bg-border" />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleRemoveField(field.key)}
-                      className="hover:bg-destructive/10 hover:text-destructive rounded-xl h-8 w-8"
-                      title="Excluir campo"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <hr className="border-border" />
-
         {/* Custom fields creator */}
         <div className="space-y-4">
           <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Criar Novo Campo</h3>
@@ -360,6 +281,85 @@ export function ProductFieldsTab() {
               ) : (
                 <p className="text-xs text-muted-foreground italic">Nenhuma opção adicionada ainda. Adicione pelo menos uma opção.</p>
               )}
+            </div>
+          )}
+        </div>
+
+        <hr className="border-border" />
+
+        {/* Unified fields list */}
+        <div className="space-y-4">
+          <h3 className="font-bold text-sm text-muted-foreground uppercase tracking-wider">Campos do Catálogo</h3>
+          
+          {fields.length === 0 ? (
+            <p className="text-sm text-muted-foreground italic py-4">Nenhum campo opcional configurado. Use o formulário acima para adicionar campos.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {fields.map((field) => (
+                <div
+                  key={field.key}
+                  className={`flex items-center justify-between p-4 bg-muted/20 dark:bg-muted/5 rounded-2xl border transition-all ${
+                    field.isActive ? "border-primary/20 bg-primary/5" : "border-border"
+                  }`}
+                >
+                  <div className="space-y-1">
+                    <p className="font-semibold text-sm flex items-center gap-2">
+                      {field.label}
+                      {field.isCustom && (
+                        <span className="text-[10px] bg-primary/10 text-primary px-1.5 py-0.5 rounded font-bold">Custom</span>
+                      )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Tipo: {field.type === "boolean" ? "Sim / Não" : field.type === "number" ? "Número" : field.type === "currency" ? "Valor Monetário" : field.type === "dropdown" ? "Seleção (Dropdown)" : "Texto"}
+                    </p>
+                    {field.type === "dropdown" && field.options && field.options.length > 0 && (
+                      <p className="text-[10px] text-muted-foreground font-semibold max-w-[200px] truncate" title={field.options.join(", ")}>
+                        Opções: {field.options.join(", ")}
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Label
+                        htmlFor={`active-${field.key}`}
+                        className={`text-xs cursor-pointer font-medium ${
+                          field.isActive ? "text-primary font-bold" : "text-muted-foreground"
+                        }`}
+                      >
+                        {field.isActive ? "Ativo" : "Inativo"}
+                      </Label>
+                      <Switch
+                        id={`active-${field.key}`}
+                        checked={field.isActive}
+                        onCheckedChange={() => handleToggleActive(field.key)}
+                      />
+                    </div>
+                    
+                    <div className="h-4 w-[1px] bg-border" />
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleOpenEdit(field)}
+                      className="hover:bg-primary/10 hover:text-primary rounded-xl h-8 w-8"
+                      title="Editar campo"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    <div className="h-4 w-[1px] bg-border" />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleRemoveField(field.key)}
+                      className="hover:bg-destructive/10 hover:text-destructive rounded-xl h-8 w-8"
+                      title="Excluir campo"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>

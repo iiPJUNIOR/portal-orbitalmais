@@ -95,7 +95,7 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
               <TableHeader>
                 <TableRow>
                   <TableHead>Descrição</TableHead>
-                  <TableHead>SKU</TableHead>
+                  <TableHead>Código</TableHead>
                   <TableHead className="text-right">Quantidade</TableHead>
                   <TableHead className="text-right">Valor Unitário</TableHead>
                   <TableHead className="text-right">Subtotal</TableHead>

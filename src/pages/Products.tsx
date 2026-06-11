@@ -246,7 +246,7 @@ export default function Products() {
             <div className="relative w-full md:max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                placeholder="Buscar por SKU, nome ou descrição..."
+                placeholder="Buscar por código, modelo ou descrição..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-10 rounded-xl"
@@ -275,7 +275,7 @@ export default function Products() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "SKU")}</TableHead>}
+                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "Código")}</TableHead>}
                   {isFieldActive("model") && <TableHead className="font-bold">{getFieldLabel("model", "Modelo / Nome")}</TableHead>}
                   {isFieldActive("category") && <TableHead className="font-bold">{getFieldLabel("category", "Categoria")}</TableHead>}
                   {activeCustomFields.map((f) => (
@@ -302,7 +302,11 @@ export default function Products() {
                   </TableRow>
                 ) : (
                   products.map((p) => (
-                    <TableRow key={p.id} className="hover:bg-muted/10">
+                    <TableRow 
+                      key={p.id} 
+                      className="hover:bg-primary/5 dark:hover:bg-primary/10 cursor-pointer transition-colors duration-150"
+                      onClick={() => handleEdit(p)}
+                    >
                       {isFieldActive("sku") && <TableCell className="font-mono text-xs">{p.sku}</TableCell>}
                       {isFieldActive("model") && <TableCell className="font-semibold">{p.model}</TableCell>}
                       {isFieldActive("category") && <TableCell className="text-muted-foreground">{p.category}</TableCell>}
@@ -339,7 +343,7 @@ export default function Products() {
                           </span>
                         </TableCell>
                       )}
-                      <TableCell className="text-center">
+                      <TableCell className="text-center" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"

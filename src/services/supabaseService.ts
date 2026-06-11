@@ -214,12 +214,15 @@ export const getProposalSequenceAndRevision = async (
 ): Promise<{ 
   sequence: number; 
   revision: number;
+  nextGlobalSequence?: number;
+  existingQuotes?: any[];
   previousContact?: {
     companyName?: string;
     contactName?: string;
     email?: string;
     phone?: string;
     address?: string;
+    selectedProducts?: any[];
   }
 }> => {
   try {
@@ -259,7 +262,7 @@ export const getProposalSequenceAndRevision = async (
 
     if (!cleanTargetCnpj || cleanTargetCnpj.length < 14) {
       const maxGlobalSequence = await fetchMaxGlobalSequence();
-      return { sequence: maxGlobalSequence + 1, revision: 0 };
+      return { sequence: maxGlobalSequence + 1, revision: 0, existingQuotes: [] };
     }
 
     // Format CNPJ as XX.XXX.XXX/XXXX-XX
@@ -268,7 +271,7 @@ export const getProposalSequenceAndRevision = async (
     // Fetch quotes specifically matching this CNPJ
     const { data: dbQuotes, error } = await supabase
       .from("quotes")
-      .select("proposal_number, cnpj, company_name, contact_name, email, phone, address, settings")
+      .select("id, proposal_number, total_price, proposal_date, cnpj, company_name, contact_name, email, phone, address, settings")
       .or(`cnpj.eq."${formattedCnpj}",cnpj.eq."${cleanTargetCnpj}"`);
 
     if (error) throw error;
@@ -291,28 +294,28 @@ export const getProposalSequenceAndRevision = async (
         }
       });
 
-      if (cnpjSequence > 0) {
-        const maxGlobalSequence = await fetchMaxGlobalSequence();
-        const prevSettings = latestQuote ? (latestQuote.settings || latestQuote.quote?.settings) : null;
-        return {
-          sequence: cnpjSequence,
-          revision: maxCnpjRevision + 1,
-          nextGlobalSequence: maxGlobalSequence + 1,
-          previousContact: latestQuote ? {
-            companyName: latestQuote.company_name || latestQuote.companyName,
-            contactName: latestQuote.contact_name || latestQuote.contactName,
-            email: latestQuote.email,
-            phone: latestQuote.phone,
-            address: latestQuote.address,
-            selectedProducts: prevSettings?.selectedProducts || []
-          } : undefined
-        };
-      }
+      const maxGlobalSequence = await fetchMaxGlobalSequence();
+      const prevSettings = latestQuote ? (latestQuote.settings || latestQuote.quote?.settings) : null;
+      
+      return {
+        sequence: cnpjSequence > 0 ? cnpjSequence : maxGlobalSequence + 1,
+        revision: maxCnpjRevision + 1,
+        nextGlobalSequence: maxGlobalSequence + 1,
+        existingQuotes: allMatchingQuotes,
+        previousContact: latestQuote ? {
+          companyName: latestQuote.company_name || latestQuote.companyName,
+          contactName: latestQuote.contact_name || latestQuote.contactName,
+          email: latestQuote.email,
+          phone: latestQuote.phone,
+          address: latestQuote.address,
+          selectedProducts: prevSettings?.selectedProducts || []
+        } : undefined
+      };
     }
 
     // CNPJ new to database, fallback to global max sequence
     const maxGlobalSequence = await fetchMaxGlobalSequence();
-    return { sequence: maxGlobalSequence + 1, revision: 0 };
+    return { sequence: maxGlobalSequence + 1, revision: 0, existingQuotes: [] };
   } catch (err) {
     console.warn("Failed to get proposal sequence and revision", err);
     return { sequence: 1, revision: 0 };

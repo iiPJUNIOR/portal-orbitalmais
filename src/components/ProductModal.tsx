@@ -46,9 +46,17 @@ interface ProductModalProps {
   onOpenChange: (open: boolean) => void;
   product?: Product | null;
   onSaveSuccess: () => void;
+  initialReadOnly?: boolean;
 }
 
-export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: ProductModalProps) {
+export function ProductModal({ open, onOpenChange, product, onSaveSuccess, initialReadOnly }: ProductModalProps) {
+  const [isReadOnly, setIsReadOnly] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setIsReadOnly(!!initialReadOnly);
+    }
+  }, [open, initialReadOnly]);
   const [sku, setSku] = useState("");
   const [category, setCategory] = useState("");
   const [model, setModel] = useState("");
@@ -56,6 +64,10 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
   const [value12m, setValue12m] = useState("");
   const [value24m, setValue24m] = useState("");
   const [status, setStatus] = useState<"Ativo" | "Inativo">("Ativo");
+  
+  // Conditionally render description for services
+  const [itemType, setItemType] = useState<"Produto" | "Serviço">("Produto");
+  const [observacao, setObservacao] = useState("");
   
   // Dynamic fields configuration and values
   const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>([]);
@@ -93,6 +105,15 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
       setValue24m(formatInitialCurrency(product.value_24m));
       setStatus(product.status);
 
+      // Detect if it is a service
+      const cat = (product.category || "").toLowerCase();
+      const desc = (product.description || "").toLowerCase();
+      const mdl = (product.model || "").toLowerCase();
+      const isService = cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || mdl.includes("idpower");
+      setItemType(isService ? "Serviço" : "Produto");
+      const rawObs = product.custom_fields?.observacao || "";
+      setObservacao(rawObs);
+
       // Initialize dynamic values
       const initialDynValues: Record<string, any> = {};
       fieldsConfig.forEach((field) => {
@@ -118,6 +139,8 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
       setValue12m("");
       setValue24m("");
       setStatus("Ativo");
+      setItemType("Produto");
+      setObservacao("");
 
       // Reset dynamic values to defaults
       const initialDynValues: Record<string, any> = {};
@@ -134,9 +157,10 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isReadOnly) return;
     // Validate only if active
     if (isFieldActive("sku") && !sku) {
-      toast.error("Por favor, preencha o campo SKU.");
+      toast.error("Por favor, preencha o campo Código.");
       return;
     }
     if (isFieldActive("model") && !model) {
@@ -160,11 +184,15 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
 
     // Prepare standard and custom fields payload
     const customFieldsPayload: Record<string, any> = {};
+    const finalDescription = itemType === "Serviço"
+      ? description.trim()
+      : (isFieldActive("description") ? description.trim() : "");
+
     const payload: Omit<Product, "id"> = {
       sku: isFieldActive("sku") ? sku.trim() : `ORB-${Date.now()}`,
-      category: isFieldActive("category") ? category.trim() : "",
+      category: itemType,
       model: isFieldActive("model") ? model.trim() : "Item Sem Nome",
-      description: isFieldActive("description") ? description.trim() : "",
+      description: finalDescription,
       value_12m: isFieldActive("value_12m") ? parseCurrencyBRLToNumber(value12m) : 0,
       value_24m: isFieldActive("value_24m") ? parseCurrencyBRLToNumber(value24m) : 0,
       status: isFieldActive("status") ? status : "Ativo",
@@ -196,6 +224,12 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
         }
       }
     });
+
+    if (itemType === "Serviço") {
+      customFieldsPayload["observacao"] = observacao.trim();
+    } else {
+      customFieldsPayload["observacao"] = "";
+    }
 
     payload.custom_fields = customFieldsPayload;
 
@@ -230,6 +264,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             id={field.key}
             checked={!!value}
             onCheckedChange={onChange}
+            disabled={isReadOnly}
           />
         </div>
       );
@@ -246,6 +281,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             onChange={(e) => onChange(handleCurrencyInput(e.target.value))}
             placeholder="R$ 0,00"
             className="rounded-xl"
+            disabled={isReadOnly}
           />
         </div>
       );
@@ -256,7 +292,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
       return (
         <div className="space-y-2 w-full">
           <Label htmlFor={field.key}>{field.label}</Label>
-          <Select value={value} onValueChange={onChange}>
+          <Select value={value} onValueChange={onChange} disabled={isReadOnly}>
             <SelectTrigger id={field.key} className="rounded-xl">
               <SelectValue placeholder="Selecione..." />
             </SelectTrigger>
@@ -283,6 +319,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             onChange={(e) => onChange(e.target.value)}
             placeholder="0"
             className="rounded-xl"
+            disabled={isReadOnly}
           />
         </div>
       );
@@ -299,6 +336,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             onChange={(e) => onChange(e.target.value)}
             placeholder="Descreva brevemente o item/serviço..."
             className="resize-none h-16"
+            disabled={isReadOnly}
           />
         </div>
       );
@@ -314,6 +352,7 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
           onChange={(e) => onChange(e.target.value)}
           placeholder={`Preencher ${field.label.toLowerCase()}...`}
           className="rounded-xl"
+          disabled={isReadOnly}
         />
       </div>
     );
@@ -336,15 +375,39 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
       <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto rounded-3xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">
-            {product ? "Editar Item" : "Novo Item"}
+            {isReadOnly ? "Visualizar Item/Serviço" : (product ? "Editar Item" : "Novo Item")}
           </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-2">
+            <Label htmlFor="item-type-select">Tipo de Cadastro</Label>
+            <Select
+              value={itemType}
+              onValueChange={(val: "Produto" | "Serviço") => {
+                setItemType(val);
+                if (val === "Serviço" && (!category || category === "Produto")) {
+                  setCategory("Serviço");
+                } else if (val === "Produto" && category === "Serviço") {
+                  setCategory("");
+                }
+              }}
+              disabled={isReadOnly}
+            >
+              <SelectTrigger id="item-type-select" className="rounded-xl">
+                <SelectValue placeholder="Selecione o tipo..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Produto">Produto (Equipamento)</SelectItem>
+                <SelectItem value="Serviço">Serviço (Suporte/Mão de Obra)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           {(isFieldActive("sku") || isFieldActive("status")) && (
             <div className="grid grid-cols-2 gap-4">
               {isFieldActive("sku") && (
                 <div className={`space-y-2 ${isFieldActive("status") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("sku", "SKU/Código", "text"), sku, setSku)}
+                  {renderFieldInput(getFieldDef("sku", "Código", "text"), sku, setSku)}
                 </div>
               )}
               {isFieldActive("status") && (
@@ -355,18 +418,9 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             </div>
           )}
 
-          {(isFieldActive("category") || isFieldActive("model")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {isFieldActive("category") && (
-                <div className={`space-y-2 ${isFieldActive("model") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("category", "Categoria", "text"), category, setCategory)}
-                </div>
-              )}
-              {isFieldActive("model") && (
-                <div className={`space-y-2 ${isFieldActive("category") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("model", "Modelo / Nome", "text"), model, setModel)}
-                </div>
-              )}
+          {isFieldActive("model") && (
+            <div className="space-y-2">
+              {renderFieldInput(getFieldDef("model", "Modelo / Nome", "text"), model, setModel)}
             </div>
           )}
 
@@ -385,10 +439,38 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             </div>
           )}
 
-          {isFieldActive("description") && (
-            <div className="space-y-2">
-              {renderFieldInput(getFieldDef("description", "Descrição", "text"), description, setDescription)}
+          {itemType === "Serviço" ? (
+            <div className="space-y-4 animate-in fade-in duration-200">
+              <div className="space-y-2">
+                <Label htmlFor="service-description">Descrição do Serviço</Label>
+                <Textarea
+                  id="service-description"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                  placeholder="Digite a descrição detalhada do serviço..."
+                  className="resize-none h-24 rounded-xl"
+                  disabled={isReadOnly}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="service-observation">Observação do Serviço</Label>
+                <Textarea
+                  id="service-observation"
+                  value={observacao}
+                  onChange={(e) => setObservacao(e.target.value)}
+                  placeholder="Digite a observação do serviço..."
+                  className="resize-none h-24 rounded-xl"
+                  disabled={isReadOnly}
+                />
+              </div>
             </div>
+          ) : (
+            isFieldActive("description") && (
+              <div className="space-y-2">
+                {renderFieldInput(getFieldDef("description", "Descrição", "text"), description, setDescription)}
+              </div>
+            )
           )}
 
           {/* Dynamic Configuration Fields */}
@@ -409,21 +491,49 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess }: Pro
             </div>
           )}
 
-          <DialogFooter className="pt-6 gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => onOpenChange(false)}
-              disabled={loading}
-              className="rounded-xl"
-            >
-              Cancelar
-            </Button>
-            <Button type="submit" disabled={loading} className="rounded-xl font-bold">
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Salvar Item
-            </Button>
-          </DialogFooter>
+          {isReadOnly ? (
+            <DialogFooter className="pt-6 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenChange(false);
+                }}
+                className="rounded-xl animate-in fade-in"
+              >
+                Fechar
+              </Button>
+              <Button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsReadOnly(false);
+                }}
+                className="rounded-xl font-bold bg-primary hover:bg-primary/95 text-white border-none animate-in fade-in"
+              >
+                Editar
+              </Button>
+            </DialogFooter>
+          ) : (
+            <DialogFooter className="pt-6 gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                disabled={loading}
+                className="rounded-xl"
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={loading} className="rounded-xl font-bold">
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Salvar Item
+              </Button>
+            </DialogFooter>
+          )}
         </form>
       </DialogContent>
     </Dialog>

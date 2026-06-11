@@ -3,9 +3,9 @@
 import React, { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { ProposalWizard } from "@/components/ProposalWizard";
+import { ServiceWizard } from "@/components/ServiceWizard";
 import { getUserSettings } from "@/services/settingsService";
 import { toast } from "sonner";
-import { saveUserSettings } from "@/services/settingsService";
 import { DraftRecord } from "@/services/draftService";
 import { deleteDraft } from "@/services/draftService";
 
@@ -51,14 +51,26 @@ export default function WizardPage() {
   return (
     <div className="min-h-full py-8 px-4 flex items-center justify-center">
       <div className="w-full max-w-2xl">
-        <ProposalWizard
-          initialSellerData={sellerData}
-          onComplete={handleComplete}
-          onCancel={handleCancel}
-          initialData={stateDraft?.data}
-          initialStep={stateDraft?.step}
-          draftId={stateDraft?.id}
-        />
+        {stateDraft?.data?.proposalType === "service" ? (
+          <ServiceWizard
+            onCancel={handleCancel}
+            initialData={stateDraft?.data}
+            draftId={stateDraft?.id}
+            initialStep={stateDraft?.step}
+            onComplete={() => {
+              toast.success("Proposta de serviço gerada com sucesso!");
+            }}
+          />
+        ) : (
+          <ProposalWizard
+            initialSellerData={sellerData}
+            onComplete={handleComplete}
+            onCancel={handleCancel}
+            initialData={stateDraft?.data}
+            initialStep={stateDraft?.step}
+            draftId={stateDraft?.id}
+          />
+        )}
       </div>
     </div>
   );

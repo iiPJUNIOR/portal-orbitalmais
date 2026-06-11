@@ -32,7 +32,7 @@ const baseSystemFields = [
 
 for (let i = 0; i < 10; i++) {
   const numStr = i === 0 ? "" : String(i);
-  baseSystemFields.push({ value: `sku${numStr}`, label: `Código do Produto / SKU (Item ${i + 1})` });
+  baseSystemFields.push({ value: `sku${numStr}`, label: `Código do Produto (Item ${i + 1})` });
   baseSystemFields.push({ value: `qtd${numStr}`, label: `Quantidade (Item ${i + 1})` });
   baseSystemFields.push({ value: `valor_item${numStr}`, label: `Valor do Item (Item ${i + 1})` });
 }

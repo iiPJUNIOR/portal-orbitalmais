@@ -34,36 +34,6 @@ export function ProposalTypePicker({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-        {/* Proposta de Serviço */}
-        <button
-          id="btn-proposal-service"
-          onClick={onSelectService}
-          className="group relative p-8 bg-card border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 space-y-5 shadow-md overflow-hidden"
-        >
-          {/* Gradient glow */}
-          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
-
-          <div className="relative">
-            <div className="p-4 bg-primary/10 rounded-2xl w-fit group-hover:bg-primary transition-colors duration-300">
-              <Presentation className="h-10 w-10 text-primary group-hover:text-white transition-colors duration-300" />
-            </div>
-          </div>
-
-          <div className="relative space-y-2">
-            <h3 className="text-2xl font-black">Proposta de Serviço</h3>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              Assistente completo para criar orçamentos com seleção de produtos,
-              precificação e geração de documento em DOCX.
-            </p>
-          </div>
-
-          <div className="relative flex items-center gap-2 pt-2">
-            <span className="text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
-              Gera DOCX
-            </span>
-          </div>
-        </button>
-
         {/* Proposta de Qualificação */}
         <button
           id="btn-proposal-qualification"
@@ -82,13 +52,42 @@ export function ProposalTypePicker({
           <div className="relative space-y-2">
             <h3 className="text-2xl font-black">Proposta de Qualificação</h3>
             <p className="text-sm text-muted-foreground leading-relaxed">
-              Gere um documento de qualificação técnica para apresentar
-              a empresa ao cliente e iniciar o processo comercial.
+              Assistente completo para criar orçamentos com seleção de produtos,
+              precificação e geração de documento em DOCX.
             </p>
           </div>
 
           <div className="relative flex items-center gap-2 pt-2">
             <span className="text-xs font-bold uppercase tracking-widest text-[#f47321] bg-orange-100 dark:bg-orange-500/15 px-3 py-1 rounded-full">
+              Gera DOCX
+            </span>
+          </div>
+        </button>
+
+        {/* Proposta de Serviço */}
+        <button
+          id="btn-proposal-service"
+          onClick={onSelectService}
+          className="group relative p-8 bg-card border-2 border-primary/20 hover:border-primary rounded-3xl text-left transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 space-y-5 shadow-md overflow-hidden"
+        >
+          {/* Gradient glow */}
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 rounded-3xl" />
+
+          <div className="relative">
+            <div className="p-4 bg-primary/10 rounded-2xl w-fit group-hover:bg-primary transition-colors duration-300">
+              <Presentation className="h-10 w-10 text-primary group-hover:text-white transition-colors duration-300" />
+            </div>
+          </div>
+
+          <div className="relative space-y-2">
+            <h3 className="text-2xl font-black">Proposta de Serviço</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Gere uma proposta de serviço com novos passos e telas para detalhamento técnico e comercial.
+            </p>
+          </div>
+
+          <div className="relative flex items-center gap-2 pt-2">
+            <span className="text-xs font-bold uppercase tracking-widest text-primary bg-primary/10 px-3 py-1 rounded-full">
               Gera DOCX
             </span>
           </div>

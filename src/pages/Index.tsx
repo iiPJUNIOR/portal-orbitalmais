@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ProposalWizard } from "@/components/ProposalWizard";
 import { ProposalTypePicker } from "@/components/ProposalTypePicker";
 import { QualificationWizard } from "@/components/QualificationWizard";
+import { ServiceWizard } from "@/components/ServiceWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
 import { QuoteDetails } from "@/components/QuoteDetails";
 import { generateProposalDOCX } from "@/services/proposalService";
@@ -23,7 +24,7 @@ export default function Index() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useSession();
-  const [step, setStep] = useState<"welcome" | "proposal-type" | "wizard" | "qualification" | "history" | "details" | "drafts">("welcome");
+  const [step, setStep] = useState<"welcome" | "proposal-type" | "wizard" | "qualification" | "service-wizard" | "history" | "details" | "drafts">("welcome");
   const [selectedQuote, setSelectedQuote] = useState<Quote | null>(null);
   const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
   const [loadingDetails, setLoadingDetails] = useState(false);
@@ -262,7 +263,11 @@ export default function Index() {
       return;
     }
     setEditInitialData(quote.settings);
-    setStep("wizard");
+    if (quote.settings.proposalType === "service") {
+      setStep("service-wizard");
+    } else {
+      setStep("wizard");
+    }
   };
 
   return (
@@ -333,8 +338,8 @@ export default function Index() {
 
         {step === "proposal-type" && (
           <ProposalTypePicker
-            onSelectService={() => setStep("wizard")}
-            onSelectQualification={() => setStep("qualification")}
+            onSelectService={() => setStep("service-wizard")}
+            onSelectQualification={() => setStep("wizard")}
             onBack={() => setStep("welcome")}
           />
         )}
@@ -348,6 +353,20 @@ export default function Index() {
               initialData={editInitialData ?? undefined}
               initialStep={1}
               draftId={selectedQuote?.id ?? undefined}
+            />
+          </div>
+        )}
+
+        {step === "service-wizard" && (
+          <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <ServiceWizard
+              onCancel={() => (editInitialData ? setStep("details") : setStep("proposal-type"))}
+              initialData={editInitialData ?? undefined}
+              draftId={selectedQuote?.id ?? undefined}
+              onComplete={() => {
+                setEditInitialData(null);
+                setSelectedQuote(null);
+              }}
             />
           </div>
         )}
