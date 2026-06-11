@@ -140,6 +140,8 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
   const [loading, setLoading] = useState(false);
   const [allProducts, setAllProducts] = useState<any[]>([]);
   const [productSearch, setProductSearch] = useState("");
+  const [newRespClienteText, setNewRespClienteText] = useState("");
+  const [newRespOrbitalText, setNewRespOrbitalText] = useState("");
   const [templateUrl, setTemplateUrl] = useState<string>("/Solicitação de vistoria.docx");
   const lastFetchedCnpj = useRef<string>("");
   const cnpjDebounce = useRef<NodeJS.Timeout | null>(null);
@@ -792,6 +794,44 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
       }
     }
     setCurrentStep((p) => p + 1);
+  };
+
+  const handleAddQuickRespCliente = async () => {
+    const label = newRespClienteText.trim();
+    if (!label) return;
+    const newId = `resp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newItem: ResponsabilidadeDef = { id: newId, label };
+    const updated = [...respOptions.cliente, newItem];
+    
+    setRespOptions(prev => ({ ...prev, cliente: updated }));
+    setForm((prev: any) => ({ ...prev, respCliente: [...prev.respCliente, newId] }));
+    setNewRespClienteText("");
+
+    try {
+      await saveUserSettings({ responsabilidades_cliente: updated });
+      toast.success("Responsabilidade do cliente adicionada!");
+    } catch (err) {
+      console.warn("Failed to persist quick client responsibility:", err);
+    }
+  };
+
+  const handleAddQuickRespOrbital = async () => {
+    const label = newRespOrbitalText.trim();
+    if (!label) return;
+    const newId = `resp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const newItem: ResponsabilidadeDef = { id: newId, label };
+    const updated = [...respOptions.orbital, newItem];
+
+    setRespOptions(prev => ({ ...prev, orbital: updated }));
+    setForm((prev: any) => ({ ...prev, respOrbital: [...prev.respOrbital, newId] }));
+    setNewRespOrbitalText("");
+
+    try {
+      await saveUserSettings({ responsabilidades_orbital: updated });
+      toast.success("Responsabilidade Orbitalmais adicionada!");
+    } catch (err) {
+      console.warn("Failed to persist quick orbital responsibility:", err);
+    }
   };
 
   const handleSaveDraft = async () => {
@@ -1701,74 +1741,118 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
             )}
 
             {/* Seção de Responsabilidades */}
-            {(respOptions.cliente.length > 0 || respOptions.orbital.length > 0) && (
-              <div className="space-y-4 p-4 bg-muted/20 rounded-2xl border">
-                <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                  <ShieldCheck className="h-3.5 w-3.5" /> Responsabilidades
-                </h4>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  {/* Responsabilidades do Cliente */}
-                  {respOptions.cliente.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Do Cliente</p>
-                      {respOptions.cliente.map((r) => (
-                        <label key={r.id} className="flex items-start gap-2.5 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 accent-rose-600 h-4 w-4 rounded cursor-pointer shrink-0"
-                            checked={form.respCliente.includes(r.id)}
-                            onChange={(e) => {
-                              const current = form.respCliente as string[];
-                              if (e.target.checked) {
-                                set("respCliente", [...current, r.id]);
-                              } else {
-                                set("respCliente", current.filter((id: string) => id !== r.id));
-                              }
-                            }}
-                          />
-                          <span className="text-sm text-foreground group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors leading-snug">{r.label}</span>
-                        </label>
-                      ))}
-                      <div className="pt-3">
-                        <Label htmlFor="obs-resp-cliente" className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Observações das Responsabilidades</Label>
-                        <Textarea
-                          id="obs-resp-cliente"
-                          value={form.obsResponsabilidadeCliente || ""}
-                          onChange={(e) => set("obsResponsabilidadeCliente", e.target.value)}
-                          placeholder="Ex: Detalhes, ressalvas ou observações adicionais sobre as responsabilidades do cliente..."
-                          rows={2}
-                          className="text-xs bg-card rounded-xl mt-1 border-rose-200 dark:border-rose-950 focus-visible:ring-rose-500"
-                        />
-                      </div>
-                    </div>
-                  )}
-                  {/* Responsabilidades Orbitalmais */}
-                  {respOptions.orbital.length > 0 && (
-                    <div className="space-y-2">
-                      <p className="text-xs font-bold text-primary uppercase tracking-wider">Da Orbitalmais</p>
-                      {respOptions.orbital.map((r) => (
-                        <label key={r.id} className="flex items-start gap-2.5 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0"
-                            checked={form.respOrbital.includes(r.id)}
-                            onChange={(e) => {
-                              const current = form.respOrbital as string[];
-                              if (e.target.checked) {
-                                set("respOrbital", [...current, r.id]);
-                              } else {
-                                set("respOrbital", current.filter((id: string) => id !== r.id));
-                              }
-                            }}
-                          />
-                          <span className="text-sm text-foreground group-hover:text-primary transition-colors leading-snug">{r.label}</span>
-                        </label>
-                      ))}
-                    </div>
-                  )}
+            <div className="space-y-4 p-4 bg-muted/20 rounded-2xl border">
+              <h4 className="font-bold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <ShieldCheck className="h-3.5 w-3.5" /> Responsabilidades
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                {/* Responsabilidades do Cliente */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-rose-600 dark:text-rose-400 uppercase tracking-wider">Do Cliente</p>
+                  {respOptions.cliente.map((r) => (
+                    <label key={r.id} className="flex items-start gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-rose-600 h-4 w-4 rounded cursor-pointer shrink-0"
+                        checked={form.respCliente.includes(r.id)}
+                        onChange={(e) => {
+                          const current = form.respCliente as string[];
+                          if (e.target.checked) {
+                            set("respCliente", [...current, r.id]);
+                          } else {
+                            set("respCliente", current.filter((id: string) => id !== r.id));
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-foreground group-hover:text-rose-600 dark:group-hover:text-rose-400 transition-colors leading-snug">{r.label}</span>
+                    </label>
+                  ))}
+                  
+                  {/* Quick add Do Cliente */}
+                  <div className="flex gap-2 pt-2 items-center">
+                    <Input
+                      placeholder="Adicionar responsabilidade..."
+                      value={newRespClienteText}
+                      onChange={(e) => setNewRespClienteText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddQuickRespCliente();
+                        }
+                      }}
+                      className="h-8 text-xs rounded-xl bg-card border border-rose-200 dark:border-rose-950 focus-visible:ring-rose-500"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddQuickRespCliente}
+                      className="h-8 rounded-xl px-2.5 bg-rose-600 hover:bg-rose-700 text-white shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+
+                  <div className="pt-3">
+                    <Label htmlFor="obs-resp-cliente" className="text-[10px] font-black uppercase tracking-wider text-rose-600 dark:text-rose-400">Observações das Responsabilidades</Label>
+                    <Textarea
+                      id="obs-resp-cliente"
+                      value={form.obsResponsabilidadeCliente || ""}
+                      onChange={(e) => set("obsResponsabilidadeCliente", e.target.value)}
+                      placeholder="Ex: Detalhes, ressalvas ou observações adicionais sobre as responsabilidades do cliente..."
+                      rows={2}
+                      className="text-xs bg-card rounded-xl mt-1 border-rose-200 dark:border-rose-950 focus-visible:ring-rose-500"
+                    />
+                  </div>
+                </div>
+
+                {/* Responsabilidades Orbitalmais */}
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-primary uppercase tracking-wider">Da Orbitalmais</p>
+                  {respOptions.orbital.map((r) => (
+                    <label key={r.id} className="flex items-start gap-2.5 cursor-pointer group">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5 accent-primary h-4 w-4 rounded cursor-pointer shrink-0"
+                        checked={form.respOrbital.includes(r.id)}
+                        onChange={(e) => {
+                          const current = form.respOrbital as string[];
+                          if (e.target.checked) {
+                            set("respOrbital", [...current, r.id]);
+                          } else {
+                            set("respOrbital", current.filter((id: string) => id !== r.id));
+                          }
+                        }}
+                      />
+                      <span className="text-sm text-foreground group-hover:text-primary transition-colors leading-snug">{r.label}</span>
+                    </label>
+                  ))}
+
+                  {/* Quick add Da Orbitalmais */}
+                  <div className="flex gap-2 pt-2 items-center">
+                    <Input
+                      placeholder="Adicionar responsabilidade..."
+                      value={newRespOrbitalText}
+                      onChange={(e) => setNewRespOrbitalText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          handleAddQuickRespOrbital();
+                        }
+                      }}
+                      className="h-8 text-xs rounded-xl bg-card border border-primary/20 focus-visible:ring-primary"
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleAddQuickRespOrbital}
+                      className="h-8 rounded-xl px-2.5 bg-primary hover:bg-primary/90 text-white shrink-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
 
             {/* Prazo + Corpo de Prova / EPS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/20 rounded-2xl border">
