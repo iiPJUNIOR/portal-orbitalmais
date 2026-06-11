@@ -42,26 +42,28 @@ export async function scanDocxTemplate(url?: string): Promise<string[]> {
     const arrayBuffer = await resp.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
 
-    // DOCX content is in word/document.xml
-    const docXml = await zip.file("word/document.xml")?.async("string");
-    if (!docXml) return [];
-
-    // Robust token detection
-    // 1. Extract all text runs to handle fragmented tokens
-    const textNodeRegex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/gi;
-    const runs: string[] = [];
-    let match;
-    while ((match = textNodeRegex.exec(docXml)) !== null) {
-      runs.push(match[1] || "");
-    }
-    const fullText = runs.join("");
-
-    // 2. Find all {{tokens}}
-    const tokenRegex = /\{\{\s*([^}]+?)\s*\}\}/g;
     const tokens = new Set<string>();
-    let tokenMatch;
-    while ((tokenMatch = tokenRegex.exec(fullText)) !== null) {
-      tokens.add(tokenMatch[1].trim());
+    const xmlFiles = Object.keys(zip.files).filter(
+      (fn) => fn.startsWith("word/") && fn.endsWith(".xml")
+    );
+
+    for (const fn of xmlFiles) {
+      const docXml = await zip.file(fn)?.async("string");
+      if (!docXml) continue;
+
+      const textNodeRegex = /<w:t[^>]*>([\s\S]*?)<\/w:t>/gi;
+      const runs: string[] = [];
+      let match;
+      while ((match = textNodeRegex.exec(docXml)) !== null) {
+        runs.push(match[1] || "");
+      }
+      const fullText = runs.join("");
+
+      const tokenRegex = /\{\{\s*([^}]+?)\s*\}\}/g;
+      let tokenMatch;
+      while ((tokenMatch = tokenRegex.exec(fullText)) !== null) {
+        tokens.add(tokenMatch[1].trim());
+      }
     }
 
     return Array.from(tokens);
