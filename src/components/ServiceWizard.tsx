@@ -652,6 +652,11 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
         porcentagemfinal: form.porcentagemFinal ? `${form.porcentagemFinal}%` : "",
         diaspquitcao: form.diasQuitacao || "",
         obsresponsabildiadecliente: form.obsResponsabilidadeCliente || "",
+        numerodaproposta: (() => {
+          const match = String(form.proposalNumber || "").match(/OBM-\d+/i);
+          return match ? match[0].toUpperCase() : `OBM-${String(todaySequence).padStart(3, "0")}`;
+        })(),
+        numerorev: `REV${form.version || "0"}`,
 
         // Backward compatibility default keys
         nomevendedor: form.sellerName || "",

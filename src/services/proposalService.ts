@@ -167,6 +167,16 @@ function getFieldValue(field: string, data: ProposalData, settings?: any): any {
     }
     case "data": return formatDateForProposal(data.proposalDate);
     case "numeroproposta": return data.proposalNumber || "";
+    case "numerodaproposta": {
+      const match = String(data.proposalNumber || "").match(/OBM-\d+/i);
+      if (match) return match[0].toUpperCase();
+      const seqMatch = String(data.proposalNumber || "").match(/\d+/);
+      return seqMatch ? `OBM-${seqMatch[0].padStart(3, "0")}` : "OBM-001";
+    }
+    case "numerorev": {
+      const rev = String(data.version || "0");
+      return rev.startsWith("REV") ? rev.toUpperCase() : `REV${rev}`;
+    }
     case "versao": return data.version || "0";
     case "ensaios_inclusos": {
       const isIncluded = data.ensaiosInclusos ?? itemsSafe.some(it => it.ensaiosInclusos);

@@ -108,6 +108,8 @@ export default function Settings() {
     { value: "produto", label: "Descrição dos Produtos" },
     { value: "observacoes", label: "Observações" },
     { value: "numeroproposta", label: "Número do Orçamento (Nome do Arquivo)" },
+    { value: "numerodaproposta", label: "Número da Proposta (Sem Rev - {{numerodaproposta}})" },
+    { value: "numerorev", label: "Número da Revisão (REVX - {{numerorev}})" },
     { value: "versao", label: "Versão / Revisão" },
     { value: "data", label: "Data da Proposta" },
     { value: "valor", label: "Valor Total" },
@@ -144,6 +146,8 @@ export default function Settings() {
     { value: "porcentagemfinal", label: "Porcentagem Final ({{porcentagemfinal}})" },
     { value: "diaspquitcao", label: "Dias para Quitação ({{diaspquitcao}})" },
     { value: "obsresponsabildiadecliente", label: "Obs Responsabilidades Cliente ({{obsresponsabildiadecliente}})" },
+    { value: "numerodaproposta", label: "Número da Proposta (Sem Rev - {{numerodaproposta}})" },
+    { value: "numerorev", label: "Número da Revisão (REVX - {{numerorev}})" },
   ];
 
 
