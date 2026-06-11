@@ -672,7 +672,15 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
         produto: buildItemsText(),
         qtd: String(form.selectedProducts.length),
         valor: form.totalPrice || "",
-        numeroproposta: form.proposalNumber || "",
+        numeroproposta: (() => {
+          const num = form.proposalNumber || "";
+          const match = num.match(/OBM-\d+\s*-\s*REV\d+/i);
+          if (match) return match[0].toUpperCase();
+          const obm = num.match(/OBM-\d+/i);
+          const rev = num.match(/REV\d+/i);
+          if (obm && rev) return `${obm[0].toUpperCase()} - ${rev[0].toUpperCase()}`;
+          return num;
+        })(),
         versao: form.version || "",
         data: form.date || "",
         obs: form.observations || "",

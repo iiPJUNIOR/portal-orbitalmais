@@ -87,6 +87,15 @@ const formatCurrencyBRL = (val: number): string => {
   }).format(val);
 };
 
+export const cleanProposalNumber = (num: string): string => {
+  const match = num.match(/OBM-\d+\s*-\s*REV\d+/i);
+  if (match) return match[0].toUpperCase();
+  const obm = num.match(/OBM-\d+/i);
+  const rev = num.match(/REV\d+/i);
+  if (obm && rev) return `${obm[0].toUpperCase()} - ${rev[0].toUpperCase()}`;
+  return num;
+};
+
 function healDocxTokens(xml: string): string {
   if (!xml) return xml;
   const pRe = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
@@ -166,7 +175,9 @@ function getFieldValue(field: string, data: ProposalData, settings?: any): any {
       return formatCurrencyBRL(computedTotal);
     }
     case "data": return formatDateForProposal(data.proposalDate);
-    case "numeroproposta": return data.proposalNumber || "";
+    case "numeroproposta": {
+      return cleanProposalNumber(data.proposalNumber || "");
+    }
     case "numerodaproposta": {
       const match = String(data.proposalNumber || "").match(/OBM-\d+/i);
       if (match) return match[0].toUpperCase();
@@ -298,7 +309,7 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
       companyName: data.companyName || "",
       contactName: data.contactName || "",
       date: formatDateForProposal(data.proposalDate),
-      proposalNumber: data.proposalNumber || "",
+      proposalNumber: cleanProposalNumber(data.proposalNumber || ""),
       sellerName: data.sellerName || "",
       sellerRole: data.sellerRole || "",
       sellerEmail: data.sellerEmail || "",
@@ -437,7 +448,7 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   doc.setFontSize(14);
   doc.text(`A/C: ${data.contactName}`, 20, height * 0.75 + 20);
   doc.setFontSize(10);
-  doc.text(`NÚMERO: ${data.proposalNumber}`, width - 20, height - 15, { align: 'right' });
+  doc.text(`NÚMERO: ${cleanProposalNumber(data.proposalNumber || "")}`, width - 20, height - 15, { align: 'right' });
   doc.text(`DATA: ${formatDateForProposal(data.proposalDate)}`, width - 20, height - 10, { align: 'right' });
 
   doc.addPage();
