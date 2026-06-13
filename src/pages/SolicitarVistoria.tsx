@@ -156,6 +156,7 @@ export default function SolicitarVistoria() {
         Cidade: cidade || "",
         UF: uf || "",
         nomecliente: contatoNome || "",
+        nomedocliente: contatoNome || "",
         telcliente: contatoTelefone || "",
         produto: produto || "",
         qtd: quantidade || "",

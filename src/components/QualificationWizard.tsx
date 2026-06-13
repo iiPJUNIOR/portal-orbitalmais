@@ -192,6 +192,7 @@ export function QualificationWizard({ onCancel }: QualificationWizardProps) {
         Cidade: formData.cidade,
         UF: formData.uf,
         nomecliente: formData.contatoNome,
+        nomedocliente: formData.contatoNome,
         telcliente: formData.contatoTelefone,
         produto: formData.produto,
         qtd: formData.quantidade,

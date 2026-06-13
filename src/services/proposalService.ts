@@ -685,6 +685,7 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
     empresa: form.companyName || "",
     cnpj: form.cnpj || "",
     nomecliente: form.contactName || "",
+    nomedocliente: form.contactName || "",
     endereco: form.address || "",
     produto: buildItemsText(),
     qtd: String((form.selectedProducts || []).length),
