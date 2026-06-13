@@ -101,7 +101,7 @@ export default function Settings() {
     { value: "cnpj", label: "CNPJ" },
     { value: "empresa_phone", label: "Telefone do Vendedor" },
     { value: "empresa_email", label: "E-mail do Vendedor" },
-    { value: "contato_nome", label: "Nome do Contato" },
+    { value: "contato_nome", label: "Nome do Cliente" },
     { value: "contato_telefone", label: "Telefone do Contato" },
     { value: "endereco", label: "Endereço Completo" },
     { value: "quantidade", label: "Quantidade Total de Itens" },
