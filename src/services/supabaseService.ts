@@ -305,6 +305,7 @@ export const getProposalSequenceAndRevision = async (
         previousContact: latestQuote ? {
           companyName: latestQuote.company_name || latestQuote.companyName,
           contactName: latestQuote.contact_name || latestQuote.contactName,
+          contactGender: prevSettings?.contactGender || "",
           email: latestQuote.email,
           phone: latestQuote.phone,
           address: latestQuote.address,

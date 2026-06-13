@@ -20,6 +20,7 @@ export default function SolicitarVistoria() {
   const [empresaEmail, setEmpresaEmail] = useState("");
   const [empresaPhone, setEmpresaPhone] = useState("");
   const [contatoNome, setContatoNome] = useState("");
+  const [contatoGenero, setContatoGenero] = useState("");
   const [contatoTelefone, setContatoTelefone] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [produto, setProduto] = useState("");
@@ -155,8 +156,14 @@ export default function SolicitarVistoria() {
         Bairro: bairro || "",
         Cidade: cidade || "",
         UF: uf || "",
-        nomecliente: contatoNome || "",
-        nomedocliente: contatoNome || "",
+        nomecliente: (() => {
+          const prefix = contatoGenero === "M" ? "Sr. " : contatoGenero === "F" ? "Sra. " : "";
+          return prefix + contatoNome;
+        })(),
+        nomedocliente: (() => {
+          const prefix = contatoGenero === "M" ? "Sr. " : contatoGenero === "F" ? "Sra. " : "";
+          return prefix + contatoNome;
+        })(),
         telcliente: contatoTelefone || "",
         produto: produto || "",
         qtd: quantidade || "",
@@ -289,6 +296,15 @@ export default function SolicitarVistoria() {
           <div className="space-y-2">
             <Label className="text-xs font-bold uppercase text-muted-foreground">Contato / Telefone</Label>
             <div className="flex gap-2">
+              <select
+                value={contatoGenero}
+                onChange={(e) => setContatoGenero(e.target.value)}
+                className="w-24 h-10 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+              >
+                <option value="">Trat.</option>
+                <option value="M">Sr.</option>
+                <option value="F">Sra.</option>
+              </select>
               <Input className="flex-1" value={contatoNome} onChange={(e) => setContatoNome(e.target.value)} placeholder="Nome" />
               <Input className="w-40" value={contatoTelefone} onChange={handleContatoTelefoneChange} placeholder="(00) 00000-0000" />
             </div>

@@ -18,6 +18,7 @@ interface ProposalData {
   cnpj: string;
   companyName: string;
   contactName: string;
+  contactGender?: string;
   email: string;
   phone: string;
   address: string;
@@ -164,7 +165,10 @@ function getFieldValue(field: string, data: ProposalData, settings?: any): any {
     case "cnpj": return data.cnpj || "";
     case "empresa_phone": return data.sellerPhone || "";
     case "empresa_email": return data.sellerEmail || "";
-    case "contato_nome": return data.contactName || "";
+    case "contato_nome": {
+      const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
+      return prefix + (data.contactName || "");
+    }
     case "contato_telefone": return data.phone || "";
     case "rua": return data.address || "";
     case "endereco": return data.address || "";
@@ -310,7 +314,10 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
 
     const replacements: Record<string, any> = {
       companyName: data.companyName || "",
-      contactName: data.contactName || "",
+      contactName: (() => {
+        const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
+        return prefix + (data.contactName || "");
+      })(),
       date: formatDateForProposal(data.proposalDate),
       proposalNumber: cleanProposalNumber(data.proposalNumber || ""),
       sellerName: data.sellerName || "",
@@ -684,8 +691,14 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
     telvendedor: form.sellerPhone || "",
     empresa: form.companyName || "",
     cnpj: form.cnpj || "",
-    nomecliente: form.contactName || "",
-    nomedocliente: form.contactName || "",
+    nomecliente: (() => {
+      const prefix = form.contactGender === "M" ? "Sr. " : form.contactGender === "F" ? "Sra. " : "";
+      return prefix + (form.contactName || "");
+    })(),
+    nomedocliente: (() => {
+      const prefix = form.contactGender === "M" ? "Sr. " : form.contactGender === "F" ? "Sra. " : "";
+      return prefix + (form.contactName || "");
+    })(),
     endereco: form.address || "",
     produto: buildItemsText(),
     qtd: String((form.selectedProducts || []).length),

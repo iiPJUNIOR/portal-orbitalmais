@@ -56,6 +56,7 @@ export function QualificationWizard({ onCancel }: QualificationWizardProps) {
     empresa: "",
     cnpj: "",
     contatoNome: "",
+    contatoGenero: "",
     contatoTelefone: "",
     empresaEmail: "",
     // Address
@@ -191,8 +192,14 @@ export function QualificationWizard({ onCancel }: QualificationWizardProps) {
         Bairro: formData.bairro,
         Cidade: formData.cidade,
         UF: formData.uf,
-        nomecliente: formData.contatoNome,
-        nomedocliente: formData.contatoNome,
+        nomecliente: (() => {
+          const prefix = formData.contatoGenero === "M" ? "Sr. " : formData.contatoGenero === "F" ? "Sra. " : "";
+          return prefix + formData.contatoNome;
+        })(),
+        nomedocliente: (() => {
+          const prefix = formData.contatoGenero === "M" ? "Sr. " : formData.contatoGenero === "F" ? "Sra. " : "";
+          return prefix + formData.contatoNome;
+        })(),
         telcliente: formData.contatoTelefone,
         produto: formData.produto,
         qtd: formData.quantidade,
@@ -276,10 +283,22 @@ export function QualificationWizard({ onCancel }: QualificationWizardProps) {
                 <Input value={formData.empresaEmail} onChange={(e) => set("empresaEmail", e.target.value)} placeholder="email@empresa.com" type="email" />
               </div>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Tratamento</Label>
+                <select
+                  value={formData.contatoGenero}
+                  onChange={(e) => set("contatoGenero", e.target.value)}
+                  className="flex h-10 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Nenhum</option>
+                  <option value="M">Sr.</option>
+                  <option value="F">Sra.</option>
+                </select>
+              </div>
               <div className="space-y-2">
                 <Label>Nome do Contato</Label>
-                <Input value={formData.contatoNome} onChange={(e) => set("contatoNome", e.target.value)} placeholder="A/C: Nome" />
+                <Input value={formData.contatoNome} onChange={(e) => set("contatoNome", e.target.value)} placeholder="Nome completo" />
               </div>
               <div className="space-y-2">
                 <Label>Telefone do Contato</Label>

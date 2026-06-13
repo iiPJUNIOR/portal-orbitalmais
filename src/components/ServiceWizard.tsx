@@ -132,6 +132,7 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
     date: new Date().toISOString().split("T")[0],
     companyName: "",
     contactName: "",
+    contactGender: "",
     cnpj: "",
     address: "",
     email: "",
@@ -301,6 +302,7 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
           const pc = res.previousContact;
           if (pc.companyName && !prev.companyName) updated.companyName = pc.companyName;
           if (pc.contactName && !prev.contactName) updated.contactName = pc.contactName;
+          if (pc.contactGender && !prev.contactGender) updated.contactGender = pc.contactGender;
           if (pc.email && !prev.email) updated.email = pc.email;
           if (pc.phone && !prev.phone) updated.phone = pc.phone;
           if (pc.address && !prev.address) updated.address = pc.address;
@@ -438,6 +440,7 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
         version: String(nextRev),
         companyName: quoteToRevise.company_name || quoteToRevise.companyName || previousSettings.companyName || prev.companyName,
         contactName: quoteToRevise.contact_name || quoteToRevise.contactName || previousSettings.contactName || prev.contactName,
+        contactGender: quoteToRevise.settings?.contactGender || previousSettings.contactGender || prev.contactGender || "",
         email: quoteToRevise.email || previousSettings.email || prev.email,
         phone: quoteToRevise.phone || previousSettings.phone || prev.phone,
         address: quoteToRevise.address || previousSettings.address || prev.address,
@@ -858,15 +861,26 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
               </div>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-1.5">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="space-y-1.5 md:col-span-2">
                 <Label>Nome do Contato</Label>
-                <Input 
-                  placeholder="A/C: Nome" 
-                  value={form.contactName} 
-                  onChange={(e) => setForm((prev: any) => ({ ...prev, contactName: e.target.value }))} 
-                  className="rounded-xl" 
-                />
+                <div className="flex gap-2">
+                  <select
+                    value={form.contactGender || ""}
+                    onChange={(e) => setForm((prev: any) => ({ ...prev, contactGender: e.target.value }))}
+                    className="w-24 h-10 rounded-xl border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">Trat.</option>
+                    <option value="M">Sr.</option>
+                    <option value="F">Sra.</option>
+                  </select>
+                  <Input 
+                    placeholder="A/C: Nome" 
+                    value={form.contactName} 
+                    onChange={(e) => setForm((prev: any) => ({ ...prev, contactName: e.target.value }))} 
+                    className="flex-1 rounded-xl" 
+                  />
+                </div>
               </div>
               <div className="space-y-1.5 md:col-span-2">
                 <Label>Endereço</Label>

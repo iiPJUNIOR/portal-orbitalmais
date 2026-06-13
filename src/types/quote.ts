@@ -3,6 +3,7 @@ export interface Quote {
   cnpj: string;
   companyName: string;
   contactName: string;
+  contactGender?: string;
   email: string;
   phone: string;
   address: string;

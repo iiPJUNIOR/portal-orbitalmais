@@ -21,6 +21,7 @@ export interface ProposalFormData {
   cnpj: string;
   companyName: string;
   contactName: string;
+  contactGender?: string;
   email: string;
   phone: string;
   address: string;
@@ -52,6 +53,7 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
     cnpj: "",
     companyName: "",
     contactName: "",
+    contactGender: "",
     email: "",
     phone: "",
     address: "",
@@ -249,13 +251,25 @@ export function ProposalForm({ onSubmit, onCancel }: ProposalFormProps) {
             
             <div className="space-y-2">
               <Label htmlFor="contactName">Nome do Responsável *</Label>
-              <Input
-                id="contactName"
-                placeholder="Nome completo"
-                value={formData.contactName}
-                onChange={(e) => handleChange('contactName', e.target.value)}
-                required
-              />
+              <div className="flex gap-2">
+                <select
+                  value={formData.contactGender || ""}
+                  onChange={(e) => handleChange('contactGender', e.target.value)}
+                  className="w-24 h-10 rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Trat.</option>
+                  <option value="M">Sr.</option>
+                  <option value="F">Sra.</option>
+                </select>
+                <Input
+                  id="contactName"
+                  placeholder="Nome completo"
+                  value={formData.contactName}
+                  onChange={(e) => handleChange('contactName', e.target.value)}
+                  className="flex-1"
+                  required
+                />
+              </div>
             </div>
             
             <div className="space-y-2">
