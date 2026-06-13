@@ -2,28 +2,7 @@ import { Product, ProductFilters } from "@/types/product";
 import { supabase } from "@/integrations/supabase/client";
 
 // Mock data as fallback if the database table doesn't exist or is empty yet
-const mockProducts: Product[] = [
-  {
-    id: "1",
-    sku: "ORB-CFTV-001",
-    category: "Câmeras",
-    model: "Câmera Bullet IP",
-    description: "Câmera Bullet IP de alta definição com infravermelho 30m",
-    value_12m: 120.0,
-    value_24m: 95.0,
-    status: "Ativo",
-  },
-  {
-    id: "2",
-    sku: "ORB-ALM-002",
-    category: "Alarme",
-    model: "Central de Alarme Monitorada",
-    description: "Central de alarme com suporte a chip celular e bateria",
-    value_12m: 89.0,
-    value_24m: 75.0,
-    status: "Ativo",
-  },
-];
+const mockProducts: Product[] = [];
 
 /**
  * Fetch products from Supabase, applying filters.
