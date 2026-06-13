@@ -10,7 +10,7 @@ const mockProducts: Product[] = [];
  */
 export const fetchProducts = async (filters: ProductFilters = {}): Promise<Product[]> => {
   try {
-    let query = supabase.from("products").select("*");
+    let query = supabase.from("products").select("*").eq("status", "Ativo");
 
     if (filters.category) {
       query = query.eq("category", filters.category);
