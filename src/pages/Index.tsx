@@ -9,7 +9,7 @@ import { QualificationWizard } from "@/components/QualificationWizard";
 import { ServiceWizard } from "@/components/ServiceWizard";
 import { QuoteHistory } from "@/components/QuoteHistory";
 import { QuoteDetails } from "@/components/QuoteDetails";
-import { generateProposalDOCX } from "@/services/proposalService";
+import { generateProposalDOCX, generateServiceDOCX } from "@/services/proposalService";
 import { toast } from "sonner";
 import { saveAs } from "file-saver";
 import { MadeWithDyad } from "@/components/made-with-dyad";
@@ -225,7 +225,10 @@ export default function Index() {
 
     const loadToastId = toast.loading("Regenerando arquivo DOCX...");
     try {
-      const blob = await generateProposalDOCX(selectedQuote.settings);
+      const isService = selectedQuote.settings?.proposalType === "service";
+      const blob = isService 
+        ? await generateServiceDOCX(selectedQuote.settings)
+        : await generateProposalDOCX(selectedQuote.settings);
       
       const safeProposalNumber = String(selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
@@ -245,7 +248,10 @@ export default function Index() {
     }
     const loadToastId = toast.loading("Gerando proposta a partir do histórico...");
     try {
-      const blob = await generateProposalDOCX(quote.settings);
+      const isService = quote.settings?.proposalType === "service";
+      const blob = isService 
+        ? await generateServiceDOCX(quote.settings)
+        : await generateProposalDOCX(quote.settings);
       const safeProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
       saveAs(blob, fileName);

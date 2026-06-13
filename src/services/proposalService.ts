@@ -67,7 +67,10 @@ export const formatDateForProposal = (dateStr?: string | null): string => {
     } else {
       dt = dateStr.includes("T") ? parseISO(dateStr) : new Date(dateStr + "T12:00:00");
     }
-    return new Intl.DateTimeFormat('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' }).format(dt);
+    const day = String(dt.getDate()).padStart(2, "0");
+    const month = String(dt.getMonth() + 1).padStart(2, "0");
+    const year = dt.getFullYear();
+    return `${day}-${month}-${year}`;
   } catch { 
     return dateStr || ""; 
   }
@@ -604,4 +607,175 @@ export const generateProposalPDF = async (data: ProposalData): Promise<Blob> => 
   }
 
   return doc.output('blob');
+};
+
+export const generateServiceDOCX = async (form: any): Promise<Blob> => {
+  const settings = await getUserSettings();
+  const serviceMappings = settings?.service_docx_mappings || {};
+  const serviceDocxUrl = settings?.service_docx_url || "/service-template-default.docx";
+
+  const isServiceItem = (item: any) => {
+    const cat = (item.category || "").toLowerCase();
+    const desc = (item.description || "").toLowerCase();
+    const model = (item.model || item.name || "").toLowerCase();
+    return cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || model.includes("idpower");
+  };
+
+  const buildItemsText = (): string =>
+    (form.selectedProducts || []).map((p: any) => `• ${p.name || p.model} (Qtd: ${p.quantity})`).join("\n");
+
+  const serviceProducts = (form.selectedProducts || []).filter((p: any) => isServiceItem(p));
+  const combinedServiceDesc = serviceProducts
+    .map((p: any, idx: number) => {
+      const desc = (p.description || "").trim();
+      return desc ? `2.${idx + 1} ${desc}` : "";
+    })
+    .filter(Boolean)
+    .join("\n");
+
+  const combinedServiceObs = serviceProducts
+    .map((p: any, idx: number) => {
+      const obs = (p.custom_fields?.observacao || "").trim();
+      return obs ? `• 2.${idx + 1} ${obs}` : null;
+    })
+    .filter(Boolean)
+    .join("  ");
+
+  const formFields: Record<string, any> = {
+    datadoorçamento: formatDateForProposal(form.date),
+    razaosocial: form.companyName || "",
+    emaildocliente: form.email || "", 
+    tipodeservico: form.tipoServico || "",
+    dependencias: form.dependencias || "",
+    tipodematerial: form.tipoMaterial || "",
+    tipodejunta: form.tipoJunta || "",
+    descricaodoservico: combinedServiceDesc || form.observations || "",
+    numerodesoldas: form.numeroSoldas || "",
+    obsservicos: combinedServiceObs || form.observations || "",
+    responsabilidadeorbital: (form.respOrbital || [])
+      .map((id: string) => (settings?.responsabilidades_orbital || []).find((r) => r.id === id)?.label)
+      .filter(Boolean)
+      .map((label: string, idx: number) => `3.${idx + 1} ${label}`)
+      .join('\n') || "",
+    responsabilidadedocliente: (form.respCliente || [])
+      .map((id: string) => (settings?.responsabilidades_cliente || []).find((r) => r.id === id)?.label)
+      .filter(Boolean)
+      .map((label: string, idx: number) => `4.${idx + 1} ${label}`)
+      .join('\n') || "",
+    prazoexec: form.prazo || "",
+    corpodeprova: form.usaEpsOrbital === false
+      ? "+1 para mobilização e soldagem do mock-up"
+      : "",
+    precototal: form.totalPrice || "",
+    porcentagementrada: form.porcentagemEntrada ? `${form.porcentagemEntrada}%` : "",
+    porcentagemfinal: form.porcentagemFinal ? `${form.porcentagemFinal}%` : "",
+    diaspquitcao: form.diasQuitacao || "",
+    obsresponsabildiadecliente: form.obsResponsabilidadeCliente || "",
+    numerodaproposta: (() => {
+      const match = String(form.proposalNumber || "").match(/OBM-\d+/i);
+      return match ? match[0].toUpperCase() : `OBM-001`;
+    })(),
+    numerorev: `REV${form.version || "0"}`,
+
+    // Backward compatibility default keys
+    nomevendedor: form.sellerName || "",
+    cargovendedor: form.sellerRole || "",
+    emailvendedor: form.sellerEmail || "",
+    telvendedor: form.sellerPhone || "",
+    empresa: form.companyName || "",
+    cnpj: form.cnpj || "",
+    nomecliente: form.contactName || "",
+    endereco: form.address || "",
+    produto: buildItemsText(),
+    qtd: String((form.selectedProducts || []).length),
+    valor: form.totalPrice || "",
+    numeroproposta: (() => {
+      const num = form.proposalNumber || "";
+      const match = num.match(/OBM-\d+\s*-\s*REV\d+/i);
+      if (match) return match[0].toUpperCase();
+      const obm = num.match(/OBM-\d+/i);
+      const rev = num.match(/REV\d+/i);
+      if (obm && rev) return `${obm[0].toUpperCase()} - ${rev[0].toUpperCase()}`;
+      return num;
+    })(),
+    versao: form.version || "",
+    data: formatDateForProposal(form.date),
+    obs: form.observations || "",
+  };
+
+  const docxData: Record<string, any> = {};
+  
+  // 1. Resolve tokens through configured settings mappings
+  Object.entries(serviceMappings).forEach(([token, field]) => {
+    if (!token || !field || field === "none") return;
+    docxData[token] = formFields[field] || "";
+  });
+
+  // 2. Default fallback: directly map any key in formFields if not present in docxData
+  Object.entries(formFields).forEach(([k, v]) => {
+    if (docxData[k] === undefined) {
+      docxData[k] = v;
+    }
+  });
+
+  // Also inject lower/upper case variants to match Docxtemplater flexibility
+  const finalDocxData: Record<string, string> = {};
+  Object.entries(docxData).forEach(([k, v]) => {
+    finalDocxData[k] = String(v);
+    finalDocxData[k.toLowerCase()] = String(v);
+    finalDocxData[k.toUpperCase()] = String(v);
+  });
+
+  // Fetch the template
+  const safeUrl = serviceDocxUrl.startsWith("http") ? serviceDocxUrl : encodeURI(decodeURIComponent(serviceDocxUrl));
+  const res = await fetch(safeUrl);
+  if (!res.ok) throw new Error(`Template DOCX não encontrado: ${serviceDocxUrl}`);
+  const buf = await res.arrayBuffer();
+  const zip = new PizZip(buf);
+
+  const healDocxTokens = (xml: string): string => {
+    if (!xml) return xml;
+    const paragraphRegex = /<w:p(?: [\s\S]*?)?>([\s\S]*?)<\/w:p>/gi;
+    return xml.replace(paragraphRegex, (pFull, pContent) => {
+      if (!pContent.includes("{") && !pContent.includes("}")) return pFull;
+      const textNodeRegex = /(<w:t[^>]*>)([\s\S]*?)(<\/w:t>)/gi;
+      const runs: { open: string; text: string; close: string }[] = [];
+      let m;
+      while ((m = textNodeRegex.exec(pContent)) !== null) {
+        runs.push({ open: m[1], text: m[2], close: m[3] });
+      }
+      if (runs.length <= 1) return pFull;
+      let runIndex = 0;
+      const healedContent = pContent.replace(textNodeRegex, () => {
+        const r = runs[runIndex++];
+        if (runIndex === 1) {
+          const fullText = runs.map((run) => run.text).join("");
+          return r.open + fullText + r.close;
+        }
+        return r.open + r.close;
+      });
+      const pOpen = pFull.match(/^<w:p(?: [\s\S]*?)?>/i)?.[0] || "<w:p>";
+      return pOpen + healedContent + "</w:p>";
+    });
+  };
+
+  for (const fn of ["word/document.xml", "word/header1.xml", "word/header2.xml", "word/header3.xml"]) {
+    const f = zip.file(fn);
+    if (f) zip.file(fn, healDocxTokens(f.asText()));
+  }
+
+  const doc = new Docxtemplater(zip, {
+    paragraphLoop: true,
+    linebreaks: true,
+    nullGetter: () => "",
+    delimiters: { start: "{{", end: "}}" },
+  });
+
+  doc.setData(finalDocxData);
+  doc.render();
+
+  return doc.getZip().generate({
+    type: "blob",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  });
 };
