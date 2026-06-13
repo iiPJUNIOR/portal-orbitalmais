@@ -253,7 +253,7 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
     if (settings?.pptx_template_url) {
       candidateUrls.push(settings.pptx_template_url);
     }
-    candidateUrls.push(encodeURI("/Solicitação de vistoria.docx"));
+    candidateUrls.push(encodeURI("/proposal-template-default.docx"));
 
     let arrayBuffer: ArrayBuffer | null = null;
     let loadedUrl = "";

@@ -978,14 +978,14 @@ export default function Settings() {
                     <div className="space-y-1">
                       <p className="text-sm font-bold">Template Ativo:</p>
                       <p className="text-xs text-muted-foreground break-all max-w-md">
-                        {docxTemplateUrl ? docxTemplateUrl : "Padrão do Sistema (/Solicitação de vistoria.docx)"}
+                        {docxTemplateUrl ? docxTemplateUrl : "Padrão do Sistema (/proposal-template-default.docx)"}
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(docxTemplateUrl || "/proposal-template.docx", "_blank")}
+                        onClick={() => window.open(docxTemplateUrl || "/proposal-template-default.docx", "_blank")}
                         className="rounded-xl w-full sm:w-auto border-orange-200 text-orange-600 hover:bg-orange-50"
                       >
                         Ver/Baixar Arquivo
@@ -1169,16 +1169,15 @@ export default function Settings() {
                     <div className="space-y-1">
                       <p className="text-sm font-bold">Template Ativo:</p>
                       <p className="text-xs text-muted-foreground break-all max-w-md">
-                        {serviceDocxTemplateUrl ? serviceDocxTemplateUrl : "Padrão do Sistema (/Solicitação de vistoria.docx)"}
+                        {serviceDocxTemplateUrl ? serviceDocxTemplateUrl : "Padrão do Sistema (/service-template-default.docx)"}
                       </p>
                     </div>
                     <div className="flex gap-2 shrink-0 w-full sm:w-auto">
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => window.open(serviceDocxTemplateUrl || "/proposal-template.docx", "_blank")}
+                        onClick={() => window.open(serviceDocxTemplateUrl || "/service-template-default.docx", "_blank")}
                         className="rounded-xl w-full sm:w-auto"
-                        disabled={!serviceDocxTemplateUrl}
                       >
                         Ver/Baixar Arquivo
                       </Button>

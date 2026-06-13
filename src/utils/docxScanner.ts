@@ -22,7 +22,7 @@ export async function scanDocxTemplate(url?: string): Promise<string[]> {
 
   // Default template (with proper encoding for the accented filename)
   if (!targetUrl) {
-    targetUrl = encodeURI("/Solicitação de vistoria.docx");
+    targetUrl = encodeURI("/proposal-template-default.docx");
   }
 
   try {

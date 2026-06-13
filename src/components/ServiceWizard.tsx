@@ -142,7 +142,7 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
   const [productSearch, setProductSearch] = useState("");
   const [newRespClienteText, setNewRespClienteText] = useState("");
   const [newRespOrbitalText, setNewRespOrbitalText] = useState("");
-  const [templateUrl, setTemplateUrl] = useState<string>("/Solicitação de vistoria.docx");
+  const [templateUrl, setTemplateUrl] = useState<string>("/service-template-default.docx");
   const lastFetchedCnpj = useRef<string>("");
   const cnpjDebounce = useRef<NodeJS.Timeout | null>(null);
   const [todaySequence, setTodaySequence] = useState(1);
