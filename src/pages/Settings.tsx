@@ -149,6 +149,17 @@ export default function Settings() {
     { value: "numerodaproposta", label: "Número da Proposta (Sem Rev - {{numerodaproposta}})" },
     { value: "numerorev", label: "Número da Revisão (REVX - {{numerorev}})" },
   ];
+  
+  // Adiciona opções de baseFields e indexados (itens 1-10) que não estejam duplicados em SERVICO_FIELDS
+  baseFields.forEach(bf => {
+    const exists = SERVICO_FIELDS.some(sf => sf.value === bf.value);
+    if (!exists) {
+      SERVICO_FIELDS.push({
+        value: bf.value,
+        label: `${bf.label} ({{${bf.value}}})`
+      });
+    }
+  });
 
 
 
