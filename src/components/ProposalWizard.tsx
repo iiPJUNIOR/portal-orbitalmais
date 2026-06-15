@@ -789,7 +789,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                   type="text"
                   placeholder="(00) 00000-0000"
                   value={formData.phone || ""}
-                  onChange={(e) => setFormData((prev: any) => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 11);
+                    let f = "";
+                    if (val.length > 0) f = "(" + val.slice(0, 2);
+                    if (val.length > 2) f += ") " + val.slice(2, val.length > 10 ? 7 : 6);
+                    if (val.length > 6) f += "-" + val.slice(val.length > 10 ? 7 : 6);
+                    setFormData((prev: any) => ({ ...prev, phone: f }));
+                  }}
                   className="rounded-xl"
                 />
               </div>
