@@ -715,7 +715,29 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
     versao: form.version || "",
     data: formatDateForProposal(form.date),
     obs: form.observations || "",
+    
+    // Mapeamento dos campos do baseFields para suportar novos modelos de serviços mapeáveis
+    vendedor: form.sellerName || "",
+    empresa_phone: form.sellerPhone || "",
+    empresa_email: form.sellerEmail || "",
+    contato_nome: (() => {
+      const prefix = form.contactGender === "M" ? "Sr. " : form.contactGender === "F" ? "Sra. " : "";
+      return prefix + (form.contactName || "");
+    })(),
+    contato_telefone: form.phone || "",
   };
+
+  // Mapeamento dinâmico para os campos indexados de 1 a 10
+  for (let i = 0; i < 10; i++) {
+    const numStr = i === 0 ? "" : String(i);
+    const it = (form.selectedProducts || [])[i];
+    
+    formFields[`sku${numStr}`] = it ? (it.sku || it.name || "") : "";
+    formFields[`qtd${numStr}`] = it ? (it.quantity || 0) : "";
+    formFields[`valor_item${numStr}`] = it 
+      ? (it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice || 0)) 
+      : "";
+  }
 
   const docxData: Record<string, any> = {};
   
