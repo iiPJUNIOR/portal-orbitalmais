@@ -318,6 +318,14 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
         const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
         return prefix + (data.contactName || "");
       })(),
+      nomecliente: (() => {
+        const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
+        return prefix + (data.contactName || "");
+      })(),
+      nomedocliente: (() => {
+        const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
+        return prefix + (data.contactName || "");
+      })(),
       date: formatDateForProposal(data.proposalDate),
       proposalNumber: cleanProposalNumber(data.proposalNumber || ""),
       sellerName: data.sellerName || "",
