@@ -1,0 +1,17 @@
+name: Keep Supabase Alive
+
+on:
+  schedule:
+    # Executa às 00:00 a cada 3 dias (Supabase free desativa após 7 dias de inatividade)
+    - cron: '0 0 */3 * *'
+  workflow_dispatch: # Permite execução manual pelo painel do GitHub Actions
+
+jobs:
+  keep_alive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase API (Query Products Table)
+        run: |
+          curl -i -X GET "https://jfbjeavkedcojarfygzf.supabase.co/rest/v1/products?select=id&limit=1" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
