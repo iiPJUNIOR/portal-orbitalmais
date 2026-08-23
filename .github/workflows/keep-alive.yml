@@ -13,5 +13,5 @@ jobs:
       - name: Ping Supabase API (Query Products Table)
         run: |
           curl -i -X GET "https://jfbjeavkedcojarfygzf.supabase.co/rest/v1/products?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
