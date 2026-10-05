@@ -360,7 +360,7 @@ export default function SolicitarVistoria() {
           <Button variant="secondary" onClick={() => {
             const body = encodeURIComponent(buildEmailBody());
             const sub = encodeURIComponent(subject);
-            window.location.href = `mailto:vistoria@controlid.com.br?subject=${sub}&body=${body}`;
+            window.location.href = `mailto:orbitalmais@orbitalmais.com.br?subject=${sub}&body=${body}`;
           }} className="flex-1 md:flex-none">
             <Mail className="h-4 w-4 mr-2" /> Abrir E-mail
           </Button>

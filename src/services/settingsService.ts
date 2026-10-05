@@ -81,37 +81,42 @@ export interface ProductFieldDef {
 }
 
 export const defaultFields: ProductFieldDef[] = [
-  { key: "sku", label: "Código", type: "text", isCustom: false, isActive: true },
+  { key: "sku", label: "SKU/Código", type: "text", isCustom: false, isActive: true },
+  { key: "status", label: "Status", type: "dropdown", options: ["Ativo", "Inativo"], isCustom: false, isActive: true },
   { key: "model", label: "Modelo / Nome", type: "text", isCustom: false, isActive: true },
-  { key: "status", label: "Status", type: "text", isCustom: false, isActive: true },
-  { key: "category", label: "Categoria", type: "text", isCustom: false, isActive: true },
+  { key: "category", label: "Categoria", type: "text", isCustom: false, isActive: false },
   { key: "description", label: "Descrição", type: "text", isCustom: false, isActive: true },
-  { key: "value_12m", label: "Valor Mensal (12m)", type: "number", isCustom: false, isActive: true },
-  { key: "value_24m", label: "Valor Mensal (24m)", type: "number", isCustom: false, isActive: true },
-  { key: "colors", label: "Cores", type: "text", isCustom: false, isActive: true },
-  { key: "biometrics", label: "Biometria", type: "boolean", isCustom: false, isActive: true },
-  { key: "facial", label: "Reconhecimento Facial", type: "text", isCustom: false, isActive: true },
-  { key: "proximity", label: "Proximidade / RFID", type: "text", isCustom: false, isActive: true },
-  { key: "urn", label: "Urna Coletora", type: "boolean", isCustom: false, isActive: true },
-  { key: "qr", label: "Leitor QR Code", type: "boolean", isCustom: false, isActive: true },
+  { key: "colors", label: "Cores", type: "text", isCustom: true, isActive: true },
+  { key: "valor", label: "Valor", type: "currency", isCustom: true, isActive: true },
+  { key: "diametro", label: "Diametro", type: "text", isCustom: true, isActive: true },
 ];
+
+const OBSOLETE_CONTROL_ID_KEYS = new Set([
+  "biometrics",
+  "facial",
+  "proximity",
+  "urn",
+  "qr",
+  "value_12m",
+  "value_24m",
+]);
 
 export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
   if (!Array.isArray(savedFields) || savedFields.length === 0) {
     return defaultFields;
   }
 
-  // Mapeia campos salvos por chave
+  // Mapeia campos salvos por chave ignorando campos legados da Control iD
   const savedMap = new Map<string, ProductFieldDef>();
   savedFields.forEach((field) => {
-    if (field && typeof field.key === "string") {
+    if (field && typeof field.key === "string" && !OBSOLETE_CONTROL_ID_KEYS.has(field.key)) {
       savedMap.set(field.key, field);
     }
   });
 
   const merged: ProductFieldDef[] = [];
 
-  // Garante que todos os campos padrão obrigatórios/nativos existam
+  // Garante que todos os campos padrão da Orbital existam
   defaultFields.forEach((def) => {
     if (savedMap.has(def.key)) {
       const saved = savedMap.get(def.key)!;
@@ -119,7 +124,7 @@ export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
         ...def,
         ...saved,
         key: def.key,
-        isCustom: false,
+        isCustom: def.isCustom,
         isActive: saved.isActive !== undefined ? Boolean(saved.isActive) : def.isActive,
       });
       savedMap.delete(def.key);
@@ -128,7 +133,7 @@ export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
     }
   });
 
-  // Acrescenta quaisquer campos customizados adicionados pelo usuário
+  // Acrescenta quaisquer outros campos customizados criados pelo usuário
   savedMap.forEach((field) => {
     merged.push({
       ...field,
@@ -146,7 +151,17 @@ export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
   return merged;
 }
 
-const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
+export const ADMIN_EMAILS = [
+  "junior.8350i@gmail.com",
+  "orbitalmais@orbitalmais.com.br",
+  "paulo.sergio@controlid.com.br",
+];
+
+export const isSuperAdminEmail = (email?: string | null): boolean => {
+  if (!email) return false;
+  const clean = String(email).trim().toLowerCase();
+  return ADMIN_EMAILS.some((adm) => adm.toLowerCase() === clean);
+};
 const LOCAL_SETTINGS_KEY = "local_user_settings_v1";
 const DOCX_MAP_KEY = "docx_token_map";
 
@@ -337,11 +352,11 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       if (!error && data) {
         baseSettings = data as UserSettings;
         rawProductFields = data.product_fields;
-        if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+        if (isSuperAdminEmail(user.email)) {
           baseSettings.can_view_history = true;
           baseSettings.can_access_settings = true;
         }
-      } else if (String(user.email).toLowerCase() === PAULO_EMAIL) {
+      } else if (isSuperAdminEmail(user.email)) {
         baseSettings = {
           user_id: user.id,
           seller_email: user.email,

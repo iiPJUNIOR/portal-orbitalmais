@@ -92,8 +92,12 @@ export default function Settings() {
   const [typeFormName, setTypeFormName] = useState("");
   const [typeFormProperties, setTypeFormProperties] = useState<Record<string, any>>({});
 
-  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
-  const isSuperAdmin = String(user?.email || "").toLowerCase() === PAULO_EMAIL;
+  const ADMIN_EMAILS = [
+    "junior.8350i@gmail.com",
+    "orbitalmais@orbitalmais.com.br",
+    "paulo.sergio@controlid.com.br",
+  ];
+  const isSuperAdmin = ADMIN_EMAILS.some((adm) => adm.toLowerCase() === String(user?.email || "").toLowerCase().trim());
 
   const baseFields = [
     { value: "vendedor", label: "Vendedor (Nome)" },

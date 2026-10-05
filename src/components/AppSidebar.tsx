@@ -37,8 +37,6 @@ export function AppSidebar() {
   const [canViewHistory, setCanViewHistory] = useState<boolean>(true);
   const [canAccessSettings, setCanAccessSettings] = useState<boolean>(true);
 
-  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
-
   useEffect(() => {
     let mounted = true;
 

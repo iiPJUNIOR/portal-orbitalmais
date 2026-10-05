@@ -42,8 +42,6 @@ export default function Index() {
 
   const [editInitialData, setEditInitialData] = useState<any | null>(null);
 
-  const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
-
   useEffect(() => {
     const loadSettings = async () => {
       try {

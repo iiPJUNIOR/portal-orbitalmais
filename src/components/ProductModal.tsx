@@ -69,15 +69,13 @@ export function ProductModal({
   const [category, setCategory] = useState("");
   const [model, setModel] = useState("");
   const [description, setDescription] = useState("");
-  const [value12m, setValue12m] = useState("");
-  const [value24m, setValue24m] = useState("");
   const [status, setStatus] = useState<"Ativo" | "Inativo">("Ativo");
   
   // Conditionally render description for services
   const [itemType, setItemType] = useState<"Produto" | "Serviço">("Produto");
   const [observacao, setObservacao] = useState("");
   
-  // Dynamic fields configuration and values - SEMPRE inicializado com campos padrão para evitar tela branca
+  // Dynamic fields configuration and values - SEMPRE inicializado com campos padrão da Orbital para evitar tela branca
   const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>(
     propFieldsConfig && propFieldsConfig.length > 0 ? propFieldsConfig : defaultFields
   );
@@ -117,15 +115,13 @@ export function ProductModal({
       setCategory(product.category);
       setModel(product.model);
       setDescription(product.description || "");
-      setValue12m(formatInitialCurrency(product.value_12m));
-      setValue24m(formatInitialCurrency(product.value_24m));
       setStatus(product.status);
 
       // Detect if it is a service
       const cat = (product.category || "").toLowerCase();
       const desc = (product.description || "").toLowerCase();
       const mdl = (product.model || "").toLowerCase();
-      const isService = cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software") || desc.includes("idsocial") || desc.includes("idsecure") || mdl.includes("idpower");
+      const isService = cat.includes("serviço") || cat.includes("suporte") || cat.includes("instalação") || desc.includes("software");
       setItemType(isService ? "Serviço" : "Produto");
       const rawObs = product.custom_fields?.observacao || "";
       setObservacao(rawObs);
@@ -134,7 +130,10 @@ export function ProductModal({
       const initialDynValues: Record<string, any> = {};
       fieldsConfig.forEach((field) => {
         if (field.isCustom) {
-          const rawVal = product.custom_fields?.[field.key] ?? "";
+          let rawVal = product.custom_fields?.[field.key] ?? "";
+          if ((rawVal === undefined || rawVal === "" || rawVal === null) && field.key === "valor" && product.value_12m) {
+            rawVal = product.value_12m;
+          }
           initialDynValues[field.key] = field.type === "currency" ? formatInitialCurrency(rawVal) : rawVal;
         } else {
           // Standard fields mapping
@@ -152,8 +151,6 @@ export function ProductModal({
       setCategory("");
       setModel("");
       setDescription("");
-      setValue12m("");
-      setValue24m("");
       setStatus("Ativo");
       setItemType("Produto");
       setObservacao("");
@@ -161,7 +158,7 @@ export function ProductModal({
       // Reset dynamic values to defaults
       const initialDynValues: Record<string, any> = {};
       fieldsConfig.forEach((field) => {
-        initialDynValues[field.key] = field.type === "boolean" ? false : "";
+        initialDynValues[field.key] = field.type === "currency" ? "" : (field.type === "boolean" ? false : "");
       });
       setDynamicValues(initialDynValues);
     }
@@ -176,23 +173,11 @@ export function ProductModal({
     if (isReadOnly) return;
     // Validate only if active
     if (isFieldActive("sku") && !sku) {
-      toast.error("Por favor, preencha o campo Código.");
+      toast.error("Por favor, preencha o campo SKU/Código.");
       return;
     }
     if (isFieldActive("model") && !model) {
       toast.error("Por favor, preencha o campo Modelo/Nome.");
-      return;
-    }
-    if (isFieldActive("category") && !category) {
-      toast.error("Por favor, preencha o campo Categoria.");
-      return;
-    }
-    if (isFieldActive("value_12m") && !value12m) {
-      toast.error("Por favor, preencha o campo Valor Mensal (12m).");
-      return;
-    }
-    if (isFieldActive("value_24m") && !value24m) {
-      toast.error("Por favor, preencha o campo Valor Mensal (24m).");
       return;
     }
 
@@ -204,13 +189,16 @@ export function ProductModal({
       ? description.trim()
       : (isFieldActive("description") ? description.trim() : "");
 
+    const rawValor = dynamicValues["valor"] ?? dynamicValues["custom_valor"] ?? "";
+    const parsedValor = parseCurrencyBRLToNumber(String(rawValor));
+
     const payload: Omit<Product, "id"> = {
       sku: isFieldActive("sku") ? sku.trim() : `ORB-${Date.now()}`,
       category: itemType,
       model: isFieldActive("model") ? model.trim() : "Item Sem Nome",
       description: finalDescription,
-      value_12m: isFieldActive("value_12m") ? parseCurrencyBRLToNumber(value12m) : 0,
-      value_24m: isFieldActive("value_24m") ? parseCurrencyBRLToNumber(value24m) : 0,
+      value_12m: parsedValor,
+      value_24m: parsedValor,
       status: isFieldActive("status") ? status : "Ativo",
     };
 
@@ -221,22 +209,11 @@ export function ProductModal({
         if (field.type === "currency") {
           customFieldsPayload[field.key] = parseCurrencyBRLToNumber(String(val));
         } else {
-          customFieldsPayload[field.key] = field.type === "number" ? Number(val || 0) : val;
+          customFieldsPayload[field.key] = field.type === "number" ? Number(val || 0) : (val ?? "");
         }
       } else {
-        // Standard fields mapped back to their root columns
         if (field.key === "colors") {
           payload.colors = typeof val === "string" ? val.split(",").map((c) => c.trim()).filter(Boolean) : [];
-        } else if (field.key === "biometrics") {
-          payload.biometrics = !!val;
-        } else if (field.key === "facial") {
-          payload.facial = val || "None";
-        } else if (field.key === "proximity") {
-          payload.proximity = val || "None";
-        } else if (field.key === "urn") {
-          payload.urn = !!val;
-        } else if (field.key === "qr") {
-          payload.qr = !!val;
         }
       }
     });
@@ -423,7 +400,7 @@ export function ProductModal({
             <div className="grid grid-cols-2 gap-4">
               {isFieldActive("sku") && (
                 <div className={`space-y-2 ${isFieldActive("status") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("sku", "Código", "text"), sku, setSku)}
+                  {renderFieldInput(getFieldDef("sku", "SKU/Código", "text"), sku, setSku)}
                 </div>
               )}
               {isFieldActive("status") && (
@@ -437,21 +414,6 @@ export function ProductModal({
           {isFieldActive("model") && (
             <div className="space-y-2">
               {renderFieldInput(getFieldDef("model", "Modelo / Nome", "text"), model, setModel)}
-            </div>
-          )}
-
-          {(isFieldActive("value_12m") || isFieldActive("value_24m")) && (
-            <div className="grid grid-cols-2 gap-4">
-              {isFieldActive("value_12m") && (
-                <div className={`space-y-2 ${isFieldActive("value_24m") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("value_12m", "Valor Mensal (12m)", "currency"), value12m, setValue12m)}
-                </div>
-              )}
-              {isFieldActive("value_24m") && (
-                <div className={`space-y-2 ${isFieldActive("value_12m") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("value_24m", "Valor Mensal (24m)", "currency"), value24m, setValue24m)}
-                </div>
-              )}
             </div>
           )}
 

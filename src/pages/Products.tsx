@@ -228,8 +228,6 @@ export default function Products() {
     (isFieldActive("sku") ? 1 : 0) +
     (isFieldActive("model") ? 1 : 0) +
     (isFieldActive("category") ? 1 : 0) +
-    (isFieldActive("value_12m") ? 1 : 0) +
-    (isFieldActive("value_24m") ? 1 : 0) +
     (isFieldActive("status") ? 1 : 0);
   const colSpanCount = baseCount + activeCustomFields.length;
 
@@ -283,14 +281,12 @@ export default function Products() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "Código")}</TableHead>}
+                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "SKU/Código")}</TableHead>}
                   {isFieldActive("model") && <TableHead className="font-bold">{getFieldLabel("model", "Modelo / Nome")}</TableHead>}
                   {isFieldActive("category") && <TableHead className="font-bold">{getFieldLabel("category", "Categoria")}</TableHead>}
                   {activeCustomFields.map((f) => (
                     <TableHead key={f.key} className="font-bold">{f.label}</TableHead>
                   ))}
-                  {isFieldActive("value_12m") && <TableHead className="font-bold text-right">{getFieldLabel("value_12m", "Valor 12m")}</TableHead>}
-                  {isFieldActive("value_24m") && <TableHead className="font-bold text-right">{getFieldLabel("value_24m", "Valor 24m")}</TableHead>}
                   {isFieldActive("status") && <TableHead className="font-bold text-center w-[100px]">{getFieldLabel("status", "Status")}</TableHead>}
                   <TableHead className="font-bold text-center w-[120px]">Ações</TableHead>
                 </TableRow>
@@ -320,7 +316,7 @@ export default function Products() {
                       {isFieldActive("category") && <TableCell className="text-muted-foreground">{p.category}</TableCell>}
 
                       {activeCustomFields.map((f) => {
-                        const val = p.custom_fields?.[f.key];
+                        const val = p.custom_fields?.[f.key] ?? (f.key === "valor" ? p.value_12m : "");
                         let renderedVal = "";
                         if (val !== undefined && val !== null && val !== "") {
                           if (f.type === "boolean") renderedVal = val ? "Sim" : "Não";
@@ -330,16 +326,6 @@ export default function Products() {
                         return <TableCell key={f.key} className="text-muted-foreground">{renderedVal}</TableCell>;
                       })}
 
-                      {isFieldActive("value_12m") && (
-                        <TableCell className="text-right">
-                          R$ {p.value_12m.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </TableCell>
-                      )}
-                      {isFieldActive("value_24m") && (
-                        <TableCell className="text-right">
-                          R$ {p.value_24m.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </TableCell>
-                      )}
                       {isFieldActive("status") && (
                         <TableCell className="text-center">
                           <span className={`inline-block px-2.5 py-1 rounded-full text-xs font-bold ${
