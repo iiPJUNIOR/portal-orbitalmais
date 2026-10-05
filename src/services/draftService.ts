@@ -31,7 +31,11 @@ export async function saveDraft(payload: { data: any; step?: number }): Promise<
       totalPrice: d.totalPrice ?? 0,
       status: "rascunho",
       observations: d.observations || "",
-      settings: { ...d, step: payload.step ?? 1 },
+      settings: { 
+        ...d, 
+        proposalType: d.proposalType || (d.tipoServico ? "service" : "qualification"),
+        step: payload.step ?? 1 
+      },
     };
 
     const items = (d.selectedProducts || d.items || []).map((it: any) => ({

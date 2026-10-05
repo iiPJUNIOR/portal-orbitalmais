@@ -14,6 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Quote, QuoteItem } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
+import { getProposalKindBadgeInfo } from "@/utils/proposalType";
 
 interface QuoteDetailsProps {
   quote: Quote;
@@ -24,6 +25,7 @@ interface QuoteDetailsProps {
 }
 
 export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: QuoteDetailsProps) {
+  const kindInfo = getProposalKindBadgeInfo(quote);
   const getStatusBadge = (status: Quote['status']) => {
     switch (status) {
       case 'rascunho':
@@ -44,9 +46,14 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
       <Card>
         <CardHeader>
           <div className="flex justify-between items-start">
-            <div>
-              <CardTitle>Detalhes do Orçamento</CardTitle>
-              <p className="text-muted-foreground">Número: {quote.proposalNumber}</p>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <CardTitle>Detalhes do Orçamento</CardTitle>
+                <Badge variant="outline" className={`${kindInfo.badgeClass} font-bold text-xs rounded-lg`}>
+                  {kindInfo.label}
+                </Badge>
+              </div>
+              <p className="text-muted-foreground text-sm">Número: {quote.proposalNumber}</p>
             </div>
             <div className="flex space-x-2">
               <Button variant="outline" onClick={onBack}>
@@ -82,6 +89,7 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
             <div>
               <h3 className="font-semibold mb-2">Dados do Orçamento</h3>
               <div className="space-y-1">
+                <p><strong>Tipo de Proposta:</strong> {kindInfo.fullLabel}</p>
                 <p><strong>Data:</strong> {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}</p>
                 <p><strong>Status:</strong> {getStatusBadge(quote.status)}</p>
                 <p><strong>Valor Total:</strong> {formatCurrencyBRL(quote.totalPrice)}</p>

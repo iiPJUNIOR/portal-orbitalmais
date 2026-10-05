@@ -8,6 +8,7 @@ import { getUserSettings } from "@/services/settingsService";
 import { toast } from "sonner";
 import { DraftRecord } from "@/services/draftService";
 import { deleteDraft } from "@/services/draftService";
+import { getProposalKind } from "@/utils/proposalType";
 
 export default function WizardPage() {
   const location = useLocation();
@@ -51,7 +52,7 @@ export default function WizardPage() {
   return (
     <div className="min-h-full py-8 px-4 flex items-center justify-center">
       <div className="w-full max-w-2xl">
-        {stateDraft?.data?.proposalType === "service" ? (
+        {getProposalKind(stateDraft?.data) === "service" ? (
           <ServiceWizard
             onCancel={handleCancel}
             initialData={stateDraft?.data}

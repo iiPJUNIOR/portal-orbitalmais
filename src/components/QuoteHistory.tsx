@@ -17,6 +17,7 @@ import { Search } from "lucide-react";
 import { getQuotesByCnpj } from "@/services/supabaseService";
 import { Quote } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
+import { getProposalKind, getProposalKindBadgeInfo, ProposalKind } from "@/utils/proposalType";
 
 interface QuoteHistoryProps {
   onQuoteSelect: (quote: Quote) => void;
@@ -25,6 +26,7 @@ interface QuoteHistoryProps {
 
 export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHistoryProps) {
   const [cnpj, setCnpj] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | ProposalKind>("all");
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -117,82 +119,127 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
     }
   };
 
+  const filteredQuotes = quotes.filter((q) => {
+    if (typeFilter === "all") return true;
+    return getProposalKind(q) === typeFilter;
+  });
+
   return (
     <Card>
-      <CardHeader>
-        <CardTitle>Histórico de Orçamentos</CardTitle>
+      <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <CardTitle>Histórico de Orçamentos</CardTitle>
+          <p className="text-sm text-muted-foreground mt-1">Consulte propostas de Qualificação e Prestação de Serviço salvas.</p>
+        </div>
+        <div className="flex items-center gap-1 bg-muted/40 p-1 rounded-xl border">
+          <Button
+            size="sm"
+            variant={typeFilter === "all" ? "default" : "ghost"}
+            className="rounded-lg text-xs font-semibold h-8"
+            onClick={() => setTypeFilter("all")}
+          >
+            Todos ({quotes.length})
+          </Button>
+          <Button
+            size="sm"
+            variant={typeFilter === "qualification" ? "default" : "ghost"}
+            className="rounded-lg text-xs font-semibold h-8"
+            onClick={() => setTypeFilter("qualification")}
+          >
+            Qualificação ({quotes.filter((q) => getProposalKind(q) === "qualification").length})
+          </Button>
+          <Button
+            size="sm"
+            variant={typeFilter === "service" ? "default" : "ghost"}
+            className="rounded-lg text-xs font-semibold h-8"
+            onClick={() => setTypeFilter("service")}
+          >
+            Serviço ({quotes.filter((q) => getProposalKind(q) === "service").length})
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         <div className="flex gap-2 mb-4">
           <div className="relative flex-1">
             <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Pesquisar por CNPJ (ou deixe vazio para ver os últimos)"
+              placeholder="Pesquisar por CNPJ ou Razão Social (ou deixe vazio para ver os últimos)..."
               value={cnpj}
               onChange={(e) => setCnpj(e.target.value)}
-              className="pl-8"
+              className="pl-8 rounded-xl"
             />
           </div>
-          <Button onClick={handleSearch} disabled={loading}>
+          <Button onClick={handleSearch} disabled={loading} className="rounded-xl font-bold">
             {loading ? "Buscando..." : "Buscar"}
           </Button>
         </div>
 
         {error && (
-          <div className="text-destructive mb-4">{error}</div>
+          <div className="text-destructive mb-4 text-sm">{error}</div>
         )}
 
-        <div className="border rounded-md">
+        <div className="border rounded-2xl overflow-hidden bg-card">
           <Table>
-            <TableHeader>
+            <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Empresa</TableHead>
-                <TableHead>Data</TableHead>
-                <TableHead>Valor</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
+                <TableHead className="font-bold">Número</TableHead>
+                <TableHead className="font-bold">Tipo</TableHead>
+                <TableHead className="font-bold">Empresa</TableHead>
+                <TableHead className="font-bold">Data</TableHead>
+                <TableHead className="font-bold">Valor</TableHead>
+                <TableHead className="font-bold text-center">Status</TableHead>
+                <TableHead className="text-right font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {quotes.map((quote) => (
-                <TableRow key={quote.id}>
-                  <TableCell className="font-medium">{quote.proposalNumber}</TableCell>
-                  <TableCell>{quote.companyName}</TableCell>
-                  <TableCell>
-                    {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}
-                  </TableCell>
-                  <TableCell>{formatCurrencyBRL(quote.totalPrice)}</TableCell>
-                  <TableCell>{getStatusBadge(quote.status)}</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <Button 
-                        variant="outline" 
-                        size="sm"
-                        onClick={() => onQuoteSelect(quote)}
-                      >
-                        Visualizar
-                      </Button>
-
-                      {onRegenerateFromHistory ? (
+              {filteredQuotes.map((quote) => {
+                const kindInfo = getProposalKindBadgeInfo(quote);
+                return (
+                  <TableRow key={quote.id} className="hover:bg-muted/50 transition-colors">
+                    <TableCell className="font-mono text-xs font-medium">{quote.proposalNumber}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`${kindInfo.badgeClass} font-bold rounded-lg text-xs`}>
+                        {kindInfo.label}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="font-semibold">{quote.companyName}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {new Date(quote.proposalDate).toLocaleDateString('pt-BR')}
+                    </TableCell>
+                    <TableCell className="font-medium">{formatCurrencyBRL(quote.totalPrice)}</TableCell>
+                    <TableCell className="text-center">{getStatusBadge(quote.status)}</TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
                         <Button 
+                          variant="outline" 
                           size="sm"
-                          onClick={() => onRegenerateFromHistory(quote)}
+                          className="rounded-lg"
+                          onClick={() => onQuoteSelect(quote)}
                         >
-                          DOCX
+                          Visualizar
                         </Button>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
 
-              {quotes.length === 0 && !loading && (
+                        {onRegenerateFromHistory ? (
+                          <Button 
+                            size="sm"
+                            className="rounded-lg font-bold"
+                            onClick={() => onRegenerateFromHistory(quote)}
+                          >
+                            DOCX
+                          </Button>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {filteredQuotes.length === 0 && !loading && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {cnpj 
-                      ? "Nenhum orçamento encontrado para este CNPJ"
-                      : "Nenhum orçamento recente disponível"}
+                      ? "Nenhum orçamento encontrado com os filtros informados"
+                      : "Nenhum orçamento disponível nesta categoria"}
                   </TableCell>
                 </TableRow>
               )}

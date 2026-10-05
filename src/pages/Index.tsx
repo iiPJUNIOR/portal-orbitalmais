@@ -19,6 +19,7 @@ import { FileText, PlusCircle, History as HistoryIcon, Settings as SettingsIcon,
 import { Quote, QuoteItem } from "@/types/quote";
 import { useSession } from "@/contexts/SessionProvider";
 import DraftsPage from "@/pages/Drafts";
+import { getProposalKind } from "@/utils/proposalType";
 
 export default function Index() {
   const navigate = useNavigate();
@@ -165,7 +166,10 @@ export default function Index() {
           totalPrice: payload.totalPrice,
           status: "enviada",
           observations: payload.observations || "",
-          settings: payload,
+          settings: {
+            ...payload,
+            proposalType: "qualification",
+          },
         },
         payload.items.map((it: any) => ({
           sku: it.product.part_number || it.product.description,
@@ -246,7 +250,7 @@ export default function Index() {
     }
     const loadToastId = toast.loading("Gerando proposta a partir do histórico...");
     try {
-      const isService = quote.settings?.proposalType === "service";
+      const isService = getProposalKind(quote) === "service";
       const blob = isService 
         ? await generateServiceDOCX(quote.settings)
         : await generateProposalDOCX(quote.settings);
@@ -267,7 +271,7 @@ export default function Index() {
       return;
     }
     setEditInitialData(quote.settings);
-    if (quote.settings.proposalType === "service") {
+    if (getProposalKind(quote) === "service") {
       setStep("service-wizard");
     } else {
       setStep("wizard");
