@@ -220,19 +220,56 @@ export default function Index() {
   };
 
   const handleRegenerateQuote = async () => {
-    if (!selectedQuote || !selectedQuote.settings) {
+    if (!selectedQuote) {
       toast.error("Configurações originais não encontradas para este orçamento.");
       return;
     }
 
     const loadToastId = toast.loading("Regenerando arquivo DOCX...");
     try {
-      const isService = selectedQuote.settings?.proposalType === "service";
+      const isService = (selectedQuote.settings?.proposalType === "service") || (getProposalKind(selectedQuote) === "service");
+
+      const mergedData: any = {
+        ...selectedQuote,
+        ...selectedQuote.settings,
+        companyName: selectedQuote.companyName || selectedQuote.settings?.companyName,
+        contactName: selectedQuote.contactName || selectedQuote.settings?.contactName,
+        cnpj: selectedQuote.cnpj || selectedQuote.settings?.cnpj,
+        email: selectedQuote.email || selectedQuote.settings?.email,
+        phone: selectedQuote.phone || selectedQuote.settings?.phone,
+        address: selectedQuote.address || selectedQuote.settings?.address,
+        proposalDate: selectedQuote.proposalDate || selectedQuote.settings?.proposalDate || selectedQuote.settings?.date,
+        proposalNumber: selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber,
+        totalPrice: selectedQuote.totalPrice ?? selectedQuote.settings?.totalPrice,
+        observations: selectedQuote.observations || selectedQuote.settings?.observations,
+        sellerName: selectedQuote.settings?.sellerName || sellerInfo.name,
+        sellerRole: selectedQuote.settings?.sellerRole || sellerInfo.role,
+        sellerEmail: selectedQuote.settings?.sellerEmail || sellerInfo.email,
+        sellerPhone: selectedQuote.settings?.sellerPhone || sellerInfo.phone,
+        items: (selectedQuote.settings?.items && selectedQuote.settings.items.length > 0)
+          ? selectedQuote.settings.items
+          : (quoteItems && quoteItems.length > 0)
+            ? quoteItems.map(qi => ({
+                product: {
+                  description: qi.productDescription,
+                  part_number: qi.sku,
+                  model: qi.productDescription,
+                },
+                sku: qi.sku,
+                description: qi.productDescription,
+                quantity: qi.quantity,
+                unitPrice: qi.unitPrice,
+                subtotal: qi.subtotal,
+                bonificado: qi.bonificado
+              }))
+            : selectedQuote.settings?.selectedProducts || [],
+      };
+
       const blob = isService 
-        ? await generateServiceDOCX(selectedQuote.settings)
-        : await generateProposalDOCX(selectedQuote.settings);
+        ? await generateServiceDOCX(mergedData)
+        : await generateProposalDOCX(mergedData);
       
-      const safeProposalNumber = String(selectedQuote.proposalNumber || selectedQuote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+      const safeProposalNumber = String(selectedQuote.proposalNumber || mergedData.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
       saveAs(blob, fileName);
 
@@ -244,17 +281,54 @@ export default function Index() {
   };
 
   const handleRegenerateFromHistory = async (quote: Quote) => {
-    if (!quote || !quote.settings) {
+    if (!quote) {
       toast.error("Dados da proposta ausentes. Não é possível regenerar.");
       return;
     }
     const loadToastId = toast.loading("Gerando proposta a partir do histórico...");
     try {
-      const isService = getProposalKind(quote) === "service";
+      const dbItems = await getQuoteItems(quote.id);
+      const isService = (quote.settings?.proposalType === "service") || (getProposalKind(quote) === "service");
+      const mergedData: any = {
+        ...quote,
+        ...quote.settings,
+        companyName: quote.companyName || quote.settings?.companyName,
+        contactName: quote.contactName || quote.settings?.contactName,
+        cnpj: quote.cnpj || quote.settings?.cnpj,
+        email: quote.email || quote.settings?.email,
+        phone: quote.phone || quote.settings?.phone,
+        address: quote.address || quote.settings?.address,
+        proposalDate: quote.proposalDate || quote.settings?.proposalDate || quote.settings?.date,
+        proposalNumber: quote.proposalNumber || quote.settings?.proposalNumber,
+        totalPrice: quote.totalPrice ?? quote.settings?.totalPrice,
+        observations: quote.observations || quote.settings?.observations,
+        sellerName: quote.settings?.sellerName || sellerInfo.name,
+        sellerRole: quote.settings?.sellerRole || sellerInfo.role,
+        sellerEmail: quote.settings?.sellerEmail || sellerInfo.email,
+        sellerPhone: quote.settings?.sellerPhone || sellerInfo.phone,
+        items: (quote.settings?.items && quote.settings.items.length > 0)
+          ? quote.settings.items
+          : (dbItems && dbItems.length > 0)
+            ? dbItems.map(qi => ({
+                product: {
+                  description: qi.productDescription,
+                  part_number: qi.sku,
+                  model: qi.productDescription,
+                },
+                sku: qi.sku,
+                description: qi.productDescription,
+                quantity: qi.quantity,
+                unitPrice: qi.unitPrice,
+                subtotal: qi.subtotal,
+                bonificado: qi.bonificado
+              }))
+            : quote.settings?.selectedProducts || [],
+      };
+
       const blob = isService 
-        ? await generateServiceDOCX(quote.settings)
-        : await generateProposalDOCX(quote.settings);
-      const safeProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
+        ? await generateServiceDOCX(mergedData)
+        : await generateProposalDOCX(mergedData);
+      const safeProposalNumber = String(quote.proposalNumber || mergedData.proposalNumber || "Orçamento").replace(/[\/\\:*?"<>|]/g, "_");
       const fileName = `${safeProposalNumber}.docx`;
       saveAs(blob, fileName);
 

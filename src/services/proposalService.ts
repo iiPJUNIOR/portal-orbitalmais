@@ -71,7 +71,7 @@ export const formatDateForProposal = (dateStr?: string | null): string => {
     const day = String(dt.getDate()).padStart(2, "0");
     const month = String(dt.getMonth() + 1).padStart(2, "0");
     const year = dt.getFullYear();
-    return `${day}-${month}-${year}`;
+    return `${day}/${month}/${year}`;
   } catch { 
     return dateStr || ""; 
   }
@@ -205,6 +205,11 @@ function getFieldValue(field: string, data: ProposalData, settings?: any): any {
 }
 
 function wrapRowsInLoop(xml: string, docxMappings: Record<string, string>): string {
+  // If the document already contains an items loop, do not wrap it again!
+  if (xml.includes("{{#items}}") || xml.includes("{{#items")) {
+    return xml;
+  }
+
   const itemLevelFields = ["sku", "produto", "quantidade", "qtd", "valor_item", "valor"];
   
   const itemTokens = Object.entries(docxMappings)
@@ -249,7 +254,8 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
       ? Number(data.overrideTotal)
       : (data.totalPrice || 0);
 
-    const formattedTotal = new Intl.NumberFormat("pt-BR", { 
+    const formattedTotal = formatCurrencyBRL(computedTotal);
+    const formattedTotalRaw = new Intl.NumberFormat("pt-BR", { 
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
       useGrouping: true
@@ -312,61 +318,170 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
       delimiters: { start: "{{", end: "}}" },
     });
 
+    const proposalDateVal = data.proposalDate || (data as any).date;
+    const formattedProposalDate = formatDateForProposal(proposalDateVal);
+    const cleanProposalNum = cleanProposalNumber(data.proposalNumber || (data as any).number || "");
+    const contactWithPrefix = (() => {
+      const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
+      return prefix + (data.contactName || "");
+    })();
+
+    const rawItems: any[] = (data.items && data.items.length > 0)
+      ? data.items
+      : ((data as any).selectedProducts && (data as any).selectedProducts.length > 0)
+        ? (data as any).selectedProducts
+        : [];
+
+    const isEnsaioIncluded = data.ensaiosInclusos ?? rawItems.some((it: any) => it.ensaiosInclusos);
+    const ensaiolabVal = isEnsaioIncluded ? ensaiosYes : ensaiosNo;
+
     const replacements: Record<string, any> = {
-      companyName: data.companyName || "",
-      contactName: (() => {
-        const prefix = data.contactGender === "M" ? "Sr. " : data.contactGender === "F" ? "Sra. " : "";
-        return prefix + (data.contactName || "");
-      })(),
-      date: formatDateForProposal(data.proposalDate),
-      proposalNumber: cleanProposalNumber(data.proposalNumber || ""),
-      sellerName: data.sellerName || "",
-      sellerRole: data.sellerRole || "",
-      sellerEmail: data.sellerEmail || "",
-      sellerPhone: data.sellerPhone || "",
+      // Data
+      data: formattedProposalDate,
+      date: formattedProposalDate,
+      datada_proposta: formattedProposalDate,
+      datadoorçamento: formattedProposalDate,
+      datadoorcamento: formattedProposalDate,
+
+      // Proposta
+      numerodaproposta: cleanProposalNum,
+      numeroproposta: cleanProposalNum,
+      proposalNumber: cleanProposalNum,
+      numerorev: String(data.version || "0").toUpperCase().startsWith("REV") ? String(data.version).toUpperCase() : `REV${data.version || "0"}`,
+      versao: String(data.version || "0"),
+
+      // Cliente / Contato
+      nomedocliente: contactWithPrefix,
+      nomecliente: contactWithPrefix,
+      contato_nome: contactWithPrefix,
+      contactName: contactWithPrefix,
+
+      // Empresa
+      razaosocial: data.companyName || (data as any).empresa || "",
+      empresa: data.companyName || (data as any).empresa || "",
+      companyName: data.companyName || (data as any).empresa || "",
+
+      // Documentos e Endereço
+      cnpj: data.cnpj || "",
       CNPJ: data.cnpj || "",
-      endereço: data.address || "",
+      endereco: data.address || (data as any).endereco || "",
+      endereço: data.address || (data as any).endereco || "",
+      rua: data.address || (data as any).endereco || "",
+
+      // Contato direto
+      email: data.email || "",
+      emaildocliente: data.email || "",
+      telefone: data.phone || (data as any).telefone || "",
+      contato_telefone: data.phone || (data as any).telefone || "",
+
+      // Vendedor
+      vendedor: data.sellerName || "",
+      sellerName: data.sellerName || "",
+      cargovendedor: data.sellerRole || "",
+      sellerRole: data.sellerRole || "",
+      emailvendedor: data.sellerEmail || "",
+      sellerEmail: data.sellerEmail || "",
+      empresa_email: data.sellerEmail || "",
+      telvendedor: data.sellerPhone || "",
+      sellerPhone: data.sellerPhone || "",
+      empresa_phone: data.sellerPhone || "",
+
+      // Totais
+      valtotal: formattedTotal,
+      valor: formattedTotal,
+      valortotal: formattedTotal,
+      totalPrice: formattedTotal,
+      precototal: formattedTotalRaw,
+
+      // Ensaios
+      ensaiolab: ensaiolabVal,
+      ensaios_inclusos: ensaiolabVal,
+      ensaiosInclusos: ensaiolabVal,
+
+      // Observações
+      observacoes: data.observations || "",
+      observacao: data.observations || "",
+      obs: data.observations || "",
+      observations: data.observations || "",
+
       users: data.users || 0,
       devices: data.devices || 0,
-      totalPrice: formattedTotal,
       approvalLink: data.approvalLink || "",
-      observations: data.observations || "",
+      quantidade: rawItems.reduce((sum, it) => sum + (Number(it.quantity ?? it.qtd ?? 1) || 0), 0),
     };
 
-    const itemsSafe = data.items || [];
-
     // Add item list variables for loops
-    replacements["items"] = itemsSafe.map((it, idx) => {
+    replacements["items"] = rawItems.map((it: any, idx: number) => {
+      const skuVal = String(it.product?.part_number || it.product?.sku || it.sku || it.part_number || it.codigo || "").trim();
+      const descVal = String(it.product?.description || it.productDescription || it.description || it.name || it.product?.model || it.model || "").trim();
+      const modelVal = String(it.product?.model || it.model || descVal).trim();
+      const qtyVal = Number(it.quantity ?? it.qtd ?? 1) || 1;
+      const unitPriceVal = it.bonificado ? 0 : Number(it.unitPrice ?? it.price ?? it.product?.value_12m ?? it.product?.value_24m ?? 0) || 0;
+      const totalItemPriceVal = unitPriceVal * qtyVal;
+      const obsVal = String(it.product?.custom_fields?.observacao || it.custom_fields?.observacao || it.observacao || it.observacoes || it.obs || "").trim();
+      const isItemEnsaio = !!(it.ensaiosInclusos || data.ensaiosInclusos);
+
       const itemObj: Record<string, any> = {
         index: idx + 1,
-        description: it.product?.description || "",
-        observacao: it.product?.custom_fields?.observacao || "",
-        observacoes: it.product?.custom_fields?.observacao || "",
-        model: it.product?.model || "",
-        category: it.product?.category || "",
-        sku: it.product?.part_number || it.product?.description || "",
-        quantity: it.quantity || 0,
+
+        // Código (exact default template token: codidodoitem)
+        codidodoitem: skuVal,
+        codigodoitem: skuVal,
+        cod_item: skuVal,
+        codigo: skuVal,
+        cod: skuVal,
+        sku: skuVal,
+        part_number: skuVal,
+
+        // Descrição (exact default template token: descricaodoitem)
+        descricaodoitem: descVal,
+        descricao: descVal,
+        descrição: descVal,
+        description: descVal,
+        produto: descVal,
+        model: modelVal,
+        category: it.product?.category || it.category || "",
+
+        // Quantidade (exact default template token: qtd)
+        qtd: qtyVal,
+        quantidade: qtyVal,
+        quantity: qtyVal,
+
+        // Valor (exact default template token: valor)
+        valor: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(unitPriceVal),
+        valor_item: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(unitPriceVal),
+        unitPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(unitPriceVal),
+        subtotal: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(totalItemPriceVal),
+        totalItemPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(totalItemPriceVal),
+
+        // Observação (exact default template token: obs)
+        obs: obsVal,
+        observacao: obsVal,
+        observacoes: obsVal,
+        observação: obsVal,
+        observações: obsVal,
+
         bonificado: it.bonificado ? "Sim" : "Não",
-        ensaiosInclusos: it.ensaiosInclusos ? ensaiosYes : ensaiosNo,
-        unitPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0),
-        totalItemPrice: it.bonificado ? "R$ 0,00" : formatCurrencyBRL((it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0) * (it.quantity || 0)),
+        ensaiosInclusos: isItemEnsaio ? ensaiosYes : ensaiosNo,
+        ensaios_inclusos: isItemEnsaio ? ensaiosYes : ensaiosNo,
+        ensaiolab: isItemEnsaio ? ensaiosYes : ensaiosNo,
       };
 
       // Inject resolved mapped fields into the item scope
       Object.entries(docxMappings).forEach(([token, field]) => {
         if (token && !token.startsWith("__") && field && field !== "none") {
           if (field === "sku") {
-            itemObj[token] = it.product?.part_number || it.product?.description || "";
+            itemObj[token] = skuVal;
           } else if (field === "produto") {
-            itemObj[token] = it.product?.description || it.product?.model || "";
+            itemObj[token] = descVal;
           } else if (field === "quantidade" || field === "qtd") {
-            itemObj[token] = it.quantity || 0;
-          } else if (field === "valor_item") {
-            const price = it.bonificado ? 0 : (it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0);
-            itemObj[token] = formatCurrencyBRL(price);
-          } else if (field === "valor") {
-            const price = it.bonificado ? 0 : (it.unitPrice ?? it.product?.value_12m ?? it.product?.value_24m ?? 0);
-            itemObj[token] = formatCurrencyBRL(price * (it.quantity || 0));
+            itemObj[token] = qtyVal;
+          } else if (field === "valor_item" || field === "valor") {
+            itemObj[token] = it.bonificado ? "R$ 0,00" : formatCurrencyBRL(unitPriceVal);
+          } else if (field === "observacoes" || field === "obs") {
+            itemObj[token] = obsVal;
+          } else if (field === "ensaios_inclusos") {
+            itemObj[token] = isItemEnsaio ? ensaiosYes : ensaiosNo;
           }
         }
       });
@@ -375,17 +490,23 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
     });
 
     // Flatten items for legacy template compatibility
-    replacements["items_list"] = itemsSafe[0] ? (itemsSafe[0].product?.description || "") : "";
-    replacements["qtd"] = itemsSafe[0] ? (itemsSafe[0].quantity || 0) : "";
-    replacements["items_list1"] = itemsSafe[1] ? (itemsSafe[1].product?.description || "") : "";
-    replacements["qtd1"] = itemsSafe[1] ? (itemsSafe[1].quantity || 0) : "";
-    replacements["items_list2"] = itemsSafe[2] ? (itemsSafe[2].product?.description || "") : "";
-    replacements["qtd2"] = itemsSafe[2] ? (itemsSafe[2].quantity || 0) : "";
+    const firstItem = rawItems[0];
+    const secondItem = rawItems[1];
+    const thirdItem = rawItems[2];
+    replacements["items_list"] = firstItem ? (firstItem.product?.description || firstItem.productDescription || firstItem.name || "") : "";
+    replacements["qtd"] = firstItem ? (firstItem.quantity ?? firstItem.qtd ?? 1) : "";
+    replacements["items_list1"] = secondItem ? (secondItem.product?.description || secondItem.productDescription || secondItem.name || "") : "";
+    replacements["qtd1"] = secondItem ? (secondItem.quantity ?? secondItem.qtd ?? 1) : "";
+    replacements["items_list2"] = thirdItem ? (thirdItem.product?.description || thirdItem.productDescription || thirdItem.name || "") : "";
+    replacements["qtd2"] = thirdItem ? (thirdItem.quantity ?? thirdItem.qtd ?? 1) : "";
 
     // Custom user settings mappings
     Object.entries(docxMappings).forEach(([token, field]) => {
       if (!token || !field || field === "none") return;
-      replacements[token] = getFieldValue(field, data, settings);
+      const customVal = getFieldValue(field, data, settings);
+      if (customVal !== undefined && customVal !== "") {
+        replacements[token] = customVal;
+      }
     });
 
     // Robust fallback casing
@@ -649,8 +770,8 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
     .join("  ");
 
   const formFields: Record<string, any> = {
-    datadoorçamento: formatDateForProposal(form.date),
-    razaosocial: form.companyName || "",
+    datadoorçamento: formatDateForProposal(form.date || form.proposalDate),
+    razaosocial: form.companyName || form.empresa || "",
     emaildocliente: form.email || "", 
     tipodeservico: form.tipoServico || "",
     dependencias: form.dependencias || "",
@@ -713,7 +834,7 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
       return num;
     })(),
     versao: form.version || "",
-    data: formatDateForProposal(form.date),
+    data: formatDateForProposal(form.date || form.proposalDate),
     obs: form.observations || "",
     
     // Mapeamento dos campos do baseFields para suportar novos modelos de serviços mapeáveis
