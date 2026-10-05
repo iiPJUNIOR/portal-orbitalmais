@@ -81,7 +81,7 @@ export interface ProductFieldDef {
 }
 
 export const defaultFields: ProductFieldDef[] = [
-  { key: "sku", label: "SKU/Código", type: "text", isCustom: false, isActive: true },
+  { key: "sku", label: "Código", type: "text", isCustom: false, isActive: true },
   { key: "status", label: "Status", type: "dropdown", options: ["Ativo", "Inativo"], isCustom: false, isActive: true },
   { key: "model", label: "Modelo / Nome", type: "text", isCustom: false, isActive: true },
   { key: "category", label: "Categoria", type: "text", isCustom: false, isActive: false },
@@ -120,9 +120,13 @@ export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
   defaultFields.forEach((def) => {
     if (savedMap.has(def.key)) {
       const saved = savedMap.get(def.key)!;
+      const label = (def.key === "sku" && (saved.label === "SKU/Código" || !saved.label))
+        ? def.label
+        : (saved.label || def.label);
       merged.push({
         ...def,
         ...saved,
+        label,
         key: def.key,
         isCustom: def.isCustom,
         isActive: saved.isActive !== undefined ? Boolean(saved.isActive) : def.isActive,

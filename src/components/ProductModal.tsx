@@ -173,7 +173,7 @@ export function ProductModal({
     if (isReadOnly) return;
     // Validate only if active
     if (isFieldActive("sku") && !sku) {
-      toast.error("Por favor, preencha o campo SKU/Código.");
+      toast.error("Por favor, preencha o campo Código.");
       return;
     }
     if (isFieldActive("model") && !model) {
@@ -244,7 +244,12 @@ export function ProductModal({
   };
 
   const getFieldDef = (key: string, label: string, type: "text" | "number" | "boolean" | "currency" | "dropdown") => {
-    return fieldsConfig.find((f) => f.key === key) || { key, label, type, isCustom: false, isActive: true };
+    const found = fieldsConfig.find((f) => f.key === key);
+    if (!found) return { key, label, type, isCustom: false, isActive: true };
+    if (key === "sku" && found.label === "SKU/Código") {
+      return { ...found, label: "Código" };
+    }
+    return found;
   };
 
   // Render any input field dynamically based on its definition
@@ -400,7 +405,7 @@ export function ProductModal({
             <div className="grid grid-cols-2 gap-4">
               {isFieldActive("sku") && (
                 <div className={`space-y-2 ${isFieldActive("status") ? "col-span-2 sm:col-span-1" : "col-span-2"}`}>
-                  {renderFieldInput(getFieldDef("sku", "SKU/Código", "text"), sku, setSku)}
+                  {renderFieldInput(getFieldDef("sku", "Código", "text"), sku, setSku)}
                 </div>
               )}
               {isFieldActive("status") && (

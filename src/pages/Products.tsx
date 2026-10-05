@@ -219,7 +219,9 @@ export default function Products() {
 
   const getFieldLabel = (key: string, fallback: string) => {
     const field = fieldsConfig.find((f) => f.key === key);
-    return field ? field.label : fallback;
+    if (!field) return fallback;
+    if (key === "sku" && field.label === "SKU/Código") return "Código";
+    return field.label;
   };
 
   const activeCustomFields = fieldsConfig.filter((f) => f.isActive && f.isCustom);
@@ -281,7 +283,7 @@ export default function Products() {
             <Table>
               <TableHeader className="bg-muted/30">
                 <TableRow>
-                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "SKU/Código")}</TableHead>}
+                  {isFieldActive("sku") && <TableHead className="font-bold w-[120px]">{getFieldLabel("sku", "Código")}</TableHead>}
                   {isFieldActive("model") && <TableHead className="font-bold">{getFieldLabel("model", "Modelo / Nome")}</TableHead>}
                   {isFieldActive("category") && <TableHead className="font-bold">{getFieldLabel("category", "Categoria")}</TableHead>}
                   {activeCustomFields.map((f) => (
