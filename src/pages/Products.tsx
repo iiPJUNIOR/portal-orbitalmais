@@ -168,6 +168,7 @@ export default function Products() {
       const prods = await fetchProducts({
         search: search.trim() || undefined,
         category: selectedCategory || undefined,
+        includeInactive: true,
       });
       setProducts(prods);
 
@@ -318,12 +319,17 @@ export default function Products() {
                       {isFieldActive("category") && <TableCell className="text-muted-foreground">{p.category}</TableCell>}
 
                       {activeCustomFields.map((f) => {
-                        const val = p.custom_fields?.[f.key] ?? (f.key === "valor" ? p.value_12m : "");
                         let renderedVal = "";
-                        if (val !== undefined && val !== null && val !== "") {
-                          if (f.type === "boolean") renderedVal = val ? "Sim" : "Não";
-                          else if (f.type === "currency") renderedVal = "R$ " + Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
-                          else renderedVal = String(val);
+                        if (f.key === "colors") {
+                          const cVal = p.colors && p.colors.length > 0 ? p.colors : p.custom_fields?.colors;
+                          renderedVal = Array.isArray(cVal) ? cVal.join(", ") : String(cVal || "");
+                        } else {
+                          const val = p.custom_fields?.[f.key] ?? (f.key === "valor" ? p.value_12m : "");
+                          if (val !== undefined && val !== null && val !== "") {
+                            if (f.type === "boolean") renderedVal = val ? "Sim" : "Não";
+                            else if (f.type === "currency") renderedVal = "R$ " + Number(val).toLocaleString("pt-BR", { minimumFractionDigits: 2 });
+                            else renderedVal = String(val);
+                          }
                         }
                         return <TableCell key={f.key} className="text-muted-foreground">{renderedVal}</TableCell>;
                       })}

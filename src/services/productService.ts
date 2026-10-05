@@ -10,7 +10,13 @@ const mockProducts: Product[] = [];
  */
 export const fetchProducts = async (filters: ProductFilters = {}): Promise<Product[]> => {
   try {
-    let query = supabase.from("products").select("*").eq("status", "Ativo");
+    let query = supabase.from("products").select("*");
+
+    if (filters.status) {
+      query = query.eq("status", filters.status);
+    } else if (!filters.includeInactive) {
+      query = query.eq("status", "Ativo");
+    }
 
     if (filters.category) {
       query = query.eq("category", filters.category);
@@ -112,10 +118,59 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
 };
 
 /**
+ * Known columns in public.products table to prevent PostgreSQL column 42703 errors
+ */
+const DB_PRODUCT_COLUMNS = new Set([
+  "sku",
+  "category",
+  "model",
+  "description",
+  "value_12m",
+  "value_24m",
+  "status",
+  "colors",
+  "custom_fields",
+  "part_number",
+  "biometrics",
+  "facial",
+  "proximity",
+  "urn",
+  "qr",
+]);
+
+function sanitizeProductPayload(raw: any): Record<string, any> {
+  const sanitized: Record<string, any> = {};
+  const customFields: Record<string, any> = { ...(raw.custom_fields || {}) };
+
+  for (const [key, val] of Object.entries(raw)) {
+    if (key === "id") continue;
+    if (DB_PRODUCT_COLUMNS.has(key)) {
+      sanitized[key] = val;
+    } else {
+      // Guarda dinamicamente qualquer outro atributo dentro de custom_fields
+      customFields[key] = val;
+    }
+  }
+
+  // Garante que colors seja array se informado (PostgreSQL text[])
+  if (sanitized.colors !== undefined) {
+    if (typeof sanitized.colors === "string") {
+      sanitized.colors = sanitized.colors.split(",").map((c: string) => c.trim()).filter(Boolean);
+    } else if (!Array.isArray(sanitized.colors)) {
+      sanitized.colors = [];
+    }
+  }
+
+  sanitized.custom_fields = customFields;
+  return sanitized;
+}
+
+/**
  * Save a new product to Supabase
  */
 export const createProduct = async (product: Omit<Product, "id">): Promise<Product> => {
-  const { data, error } = await supabase.from("products").insert([product]).select().single();
+  const payload = sanitizeProductPayload(product);
+  const { data, error } = await supabase.from("products").insert([payload]).select().single();
   if (error) {
     console.error("createProduct failed:", error);
     throw error;
@@ -127,7 +182,8 @@ export const createProduct = async (product: Omit<Product, "id">): Promise<Produ
  * Update an existing product in Supabase
  */
 export const updateProduct = async (id: string, product: Partial<Product>): Promise<Product> => {
-  const { data, error } = await supabase.from("products").update(product).eq("id", id).select().single();
+  const payload = sanitizeProductPayload(product);
+  const { data, error } = await supabase.from("products").update(payload).eq("id", id).select().single();
   if (error) {
     console.error("updateProduct failed:", error);
     throw error;

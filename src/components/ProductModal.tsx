@@ -129,7 +129,10 @@ export function ProductModal({
       // Initialize dynamic values
       const initialDynValues: Record<string, any> = {};
       fieldsConfig.forEach((field) => {
-        if (field.isCustom) {
+        if (field.key === "colors") {
+          const colVal = product.colors && product.colors.length > 0 ? product.colors : product.custom_fields?.colors;
+          initialDynValues[field.key] = Array.isArray(colVal) ? colVal.join(", ") : (colVal || "");
+        } else if (field.isCustom) {
           let rawVal = product.custom_fields?.[field.key] ?? "";
           if ((rawVal === undefined || rawVal === "" || rawVal === null) && field.key === "valor" && product.value_12m) {
             rawVal = product.value_12m;
@@ -138,11 +141,7 @@ export function ProductModal({
         } else {
           // Standard fields mapping
           const key = field.key as keyof Product;
-          if (field.key === "colors") {
-            initialDynValues[field.key] = Array.isArray(product.colors) ? product.colors.join(", ") : "";
-          } else {
-            initialDynValues[field.key] = product[key] ?? (field.type === "boolean" ? false : "");
-          }
+          initialDynValues[field.key] = product[key] ?? (field.type === "boolean" ? false : "");
         }
       });
       setDynamicValues(initialDynValues);
@@ -205,15 +204,15 @@ export function ProductModal({
     // Populate payload with configured dynamic values
     fieldsConfig.forEach((field) => {
       const val = dynamicValues[field.key];
-      if (field.isCustom) {
+      if (field.key === "colors") {
+        const parsedColors = typeof val === "string" ? val.split(",").map((c) => c.trim()).filter(Boolean) : (val || []);
+        payload.colors = parsedColors;
+        customFieldsPayload["colors"] = parsedColors;
+      } else if (field.isCustom) {
         if (field.type === "currency") {
           customFieldsPayload[field.key] = parseCurrencyBRLToNumber(String(val));
         } else {
           customFieldsPayload[field.key] = field.type === "number" ? Number(val || 0) : (val ?? "");
-        }
-      } else {
-        if (field.key === "colors") {
-          payload.colors = typeof val === "string" ? val.split(",").map((c) => c.trim()).filter(Boolean) : [];
         }
       }
     });
