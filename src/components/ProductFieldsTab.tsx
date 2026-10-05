@@ -13,7 +13,7 @@ import { toast } from "sonner";
 import { Plus, Trash2, Settings, Loader2, Edit2 } from "lucide-react";
 
 export function ProductFieldsTab() {
-  const [fields, setFields] = useState<ProductFieldDef[]>([]);
+  const [fields, setFields] = useState<ProductFieldDef[]>(defaultFields);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -103,7 +103,7 @@ export function ProductFieldsTab() {
     async function loadSettings() {
       try {
         const settings = await getUserSettings();
-        if (Array.isArray(settings?.product_fields)) {
+        if (Array.isArray(settings?.product_fields) && settings.product_fields.length > 0) {
           setFields(settings.product_fields);
         } else {
           setFields(defaultFields);

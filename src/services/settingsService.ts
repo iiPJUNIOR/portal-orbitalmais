@@ -97,10 +97,53 @@ export const defaultFields: ProductFieldDef[] = [
 ];
 
 export function mergeFieldsWithDefaults(savedFields: any[]): ProductFieldDef[] {
-  if (Array.isArray(savedFields)) {
-    return savedFields;
+  if (!Array.isArray(savedFields) || savedFields.length === 0) {
+    return defaultFields;
   }
-  return defaultFields;
+
+  // Mapeia campos salvos por chave
+  const savedMap = new Map<string, ProductFieldDef>();
+  savedFields.forEach((field) => {
+    if (field && typeof field.key === "string") {
+      savedMap.set(field.key, field);
+    }
+  });
+
+  const merged: ProductFieldDef[] = [];
+
+  // Garante que todos os campos padrão obrigatórios/nativos existam
+  defaultFields.forEach((def) => {
+    if (savedMap.has(def.key)) {
+      const saved = savedMap.get(def.key)!;
+      merged.push({
+        ...def,
+        ...saved,
+        key: def.key,
+        isCustom: false,
+        isActive: saved.isActive !== undefined ? Boolean(saved.isActive) : def.isActive,
+      });
+      savedMap.delete(def.key);
+    } else {
+      merged.push({ ...def });
+    }
+  });
+
+  // Acrescenta quaisquer campos customizados adicionados pelo usuário
+  savedMap.forEach((field) => {
+    merged.push({
+      ...field,
+      isCustom: true,
+      isActive: field.isActive !== undefined ? Boolean(field.isActive) : true,
+    });
+  });
+
+  // Se por algum motivo nenhum campo estiver ativo, garante os campos padrão
+  const hasActiveFields = merged.some((f) => f.isActive);
+  if (!hasActiveFields) {
+    return defaultFields;
+  }
+
+  return merged;
 }
 
 const PAULO_EMAIL = "paulo.sergio@controlid.com.br";
@@ -306,16 +349,50 @@ export async function getUserSettings(): Promise<UserSettings | null> {
           can_access_settings: true,
         } as UserSettings;
       }
+
+      // Se este usuário ainda não tiver product_fields customizados configurados, busca as configurações mestras do sistema
+      const hasCustomFields = rawProductFields && (
+        (Array.isArray(rawProductFields) && rawProductFields.length > 0) ||
+        (typeof rawProductFields === "object" && Array.isArray(rawProductFields.fields) && rawProductFields.fields.length > 0)
+      );
+
+      if (!hasCustomFields) {
+        try {
+          const { data: masterData } = await supabase
+            .from("user_settings")
+            .select("product_fields, slide_mappings")
+            .not("product_fields", "is", null)
+            .order("updated_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (masterData?.product_fields) {
+            rawProductFields = masterData.product_fields;
+            if (!baseSettings) {
+              baseSettings = { user_id: user.id, seller_email: user.email } as UserSettings;
+            }
+            baseSettings.product_fields = rawProductFields;
+          }
+        } catch (masterErr) {
+          console.warn("settingsService: falha ao buscar master settings", masterErr);
+        }
+      }
     }
 
     if (!baseSettings) {
       baseSettings = readLocalSettings();
     }
 
+    if (!baseSettings) {
+      baseSettings = {
+        product_fields: defaultFields,
+      } as UserSettings;
+    }
+
     if (baseSettings) {
       let docxM = {};
       let slideM = {};
-      let finalFields = defaultFields;
+      let finalFields: ProductFieldDef[] = defaultFields;
       let serviceDocxUrl = null;
       let serviceDocxM = {};
       let tiposServico: any[] = ["Instalação", "Manutenção Preventiva", "Manutenção Corretiva", "Suporte Técnico", "Consultoria"];
@@ -330,7 +407,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       if (baseSettings.product_fields) {
         if (!Array.isArray(baseSettings.product_fields) && typeof baseSettings.product_fields === 'object') {
           const obj = baseSettings.product_fields as any;
-          finalFields = Array.isArray(obj.fields) ? obj.fields : defaultFields;
+          finalFields = Array.isArray(obj.fields) && obj.fields.length > 0 ? obj.fields : defaultFields;
           docxM = obj.docx_mappings || {};
           slideM = obj.slide_mappings || {};
           serviceDocxUrl = obj.service_docx_url || null;
@@ -343,7 +420,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
           camposTipoMaterial = obj.campos_tipo_material || [];
           responsabilidadesCliente = obj.responsabilidades_cliente || [];
           responsabilidadesOrbital = obj.responsabilidades_orbital || [];
-        } else if (Array.isArray(baseSettings.product_fields)) {
+        } else if (Array.isArray(baseSettings.product_fields) && baseSettings.product_fields.length > 0) {
           finalFields = baseSettings.product_fields;
           docxM = getLocalDocxMappings();
           slideM = (baseSettings as any).slide_mappings || {};
@@ -415,7 +492,12 @@ export async function getUserSettings(): Promise<UserSettings | null> {
   } catch (err) {
     console.error("settingsService.getUserSettings unexpected error", err);
     const local = readLocalSettings();
-    return local;
+    if (local && Array.isArray(local.product_fields) && local.product_fields.length > 0) {
+      return local;
+    }
+    return {
+      product_fields: defaultFields,
+    } as UserSettings;
   }
 }
 

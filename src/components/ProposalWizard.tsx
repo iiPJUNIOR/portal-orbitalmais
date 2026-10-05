@@ -101,7 +101,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   });
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [allProducts, setAllProducts] = useState<any[]>([]);
-  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>([]);
+  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>(defaultFields);
   const [productSearch, setProductSearch] = useState("");
   const lastFetchedCnpj = useRef<string>("");
   const [totalPriceInput, setTotalPriceInput] = useState("");
@@ -284,7 +284,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
     const loadData = async () => {
       try {
         const settings = await getUserSettings();
-        if (Array.isArray(settings?.product_fields)) {
+        if (Array.isArray(settings?.product_fields) && settings.product_fields.length > 0) {
           setFieldsConfig(settings.product_fields);
         } else {
           setFieldsConfig(defaultFields);

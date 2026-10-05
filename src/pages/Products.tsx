@@ -137,7 +137,8 @@ export default function Products() {
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("");
   const [loading, setLoading] = useState(true);
-  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>([]);
+  // Inicializa SEMPRE com defaultFields para nunca colapsar as colunas da tabela
+  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>(defaultFields);
 
   // Edit modal
   const [modalOpen, setModalOpen] = useState(false);
@@ -149,6 +150,20 @@ export default function Products() {
 
   const loadData = async () => {
     setLoading(true);
+
+    // Carrega configurações de campos de forma isolada para garantir a integridade da tabela
+    try {
+      const settings = await getUserSettings();
+      if (Array.isArray(settings?.product_fields) && settings.product_fields.length > 0) {
+        setFieldsConfig(settings.product_fields);
+      } else {
+        setFieldsConfig(defaultFields);
+      }
+    } catch (err) {
+      console.warn("Falha ao carregar configurações de campos do catálogo", err);
+      setFieldsConfig(defaultFields);
+    }
+
     try {
       const prods = await fetchProducts({
         search: search.trim() || undefined,
@@ -158,13 +173,6 @@ export default function Products() {
 
       const cats = await getCategories();
       setCategories(cats);
-
-      const settings = await getUserSettings();
-      if (Array.isArray(settings?.product_fields)) {
-        setFieldsConfig(settings.product_fields);
-      } else {
-        setFieldsConfig(defaultFields);
-      }
     } catch {
       toast.error("Erro ao carregar catálogo de produtos.");
     } finally {
@@ -380,6 +388,7 @@ export default function Products() {
         onOpenChange={setModalOpen}
         product={selectedProduct}
         onSaveSuccess={loadData}
+        fieldsConfig={fieldsConfig}
       />
 
       {/* Delete Confirmation Modal */}

@@ -47,9 +47,17 @@ interface ProductModalProps {
   product?: Product | null;
   onSaveSuccess: () => void;
   initialReadOnly?: boolean;
+  fieldsConfig?: ProductFieldDef[];
 }
 
-export function ProductModal({ open, onOpenChange, product, onSaveSuccess, initialReadOnly }: ProductModalProps) {
+export function ProductModal({
+  open,
+  onOpenChange,
+  product,
+  onSaveSuccess,
+  initialReadOnly,
+  fieldsConfig: propFieldsConfig,
+}: ProductModalProps) {
   const [isReadOnly, setIsReadOnly] = useState(false);
 
   useEffect(() => {
@@ -69,30 +77,38 @@ export function ProductModal({ open, onOpenChange, product, onSaveSuccess, initi
   const [itemType, setItemType] = useState<"Produto" | "Serviço">("Produto");
   const [observacao, setObservacao] = useState("");
   
-  // Dynamic fields configuration and values
-  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>([]);
+  // Dynamic fields configuration and values - SEMPRE inicializado com campos padrão para evitar tela branca
+  const [fieldsConfig, setFieldsConfig] = useState<ProductFieldDef[]>(
+    propFieldsConfig && propFieldsConfig.length > 0 ? propFieldsConfig : defaultFields
+  );
   const [dynamicValues, setDynamicValues] = useState<Record<string, any>>({});
   
   const [loading, setLoading] = useState(false);
 
-  // Load fields configuration on open
+  // Load fields configuration on open or when prop updates
   useEffect(() => {
+    if (propFieldsConfig && propFieldsConfig.length > 0) {
+      setFieldsConfig(propFieldsConfig);
+      return;
+    }
+
     async function loadFieldsConfig() {
       try {
         const settings = await getUserSettings();
-        if (Array.isArray(settings?.product_fields)) {
+        if (Array.isArray(settings?.product_fields) && settings.product_fields.length > 0) {
           setFieldsConfig(settings.product_fields);
         } else {
           setFieldsConfig(defaultFields);
         }
       } catch (err) {
         console.error("Failed to load fields configuration in modal", err);
+        setFieldsConfig(defaultFields);
       }
     }
     if (open) {
       loadFieldsConfig();
     }
-  }, [open]);
+  }, [open, propFieldsConfig]);
 
   // Set values when product changes or modal opens
   useEffect(() => {
