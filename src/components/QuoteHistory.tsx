@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
 import { getQuotesByCnpj } from "@/services/supabaseService";
 import { Quote } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
@@ -28,6 +28,8 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
   const [cnpj, setCnpj] = useState("");
   const [typeFilter, setTypeFilter] = useState<"all" | ProposalKind>("all");
   const [quotes, setQuotes] = useState<Quote[]>([]);
+  const [sortField, setSortField] = useState<'proposalNumber' | 'type' | 'companyName' | 'proposalDate' | 'totalPrice' | 'status'>('proposalDate');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,10 +121,86 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
     }
   };
 
+  const handleSort = (field: 'proposalNumber' | 'type' | 'companyName' | 'proposalDate' | 'totalPrice' | 'status') => {
+    if (sortField === field) {
+      setSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      // Para valores monetários e datas, o padrão mais comum ao clicar é do maior para o menor (desc)
+      setSortDirection(field === 'totalPrice' || field === 'proposalDate' ? 'desc' : 'asc');
+    }
+  };
+
   const filteredQuotes = quotes.filter((q) => {
     if (typeFilter === "all") return true;
     return getProposalKind(q) === typeFilter;
   });
+
+  const sortedQuotes = React.useMemo(() => {
+    return [...filteredQuotes].sort((a, b) => {
+      let comparison = 0;
+      switch (sortField) {
+        case 'proposalNumber':
+          comparison = (a.proposalNumber || '').localeCompare(b.proposalNumber || '', undefined, { numeric: true });
+          break;
+        case 'type': {
+          const kindA = getProposalKind(a);
+          const kindB = getProposalKind(b);
+          comparison = kindA.localeCompare(kindB);
+          break;
+        }
+        case 'companyName':
+          comparison = (a.companyName || '').localeCompare(b.companyName || '', 'pt-BR', { sensitivity: 'base' });
+          break;
+        case 'proposalDate': {
+          const dateA = new Date(a.proposalDate).getTime() || 0;
+          const dateB = new Date(b.proposalDate).getTime() || 0;
+          comparison = dateA - dateB;
+          break;
+        }
+        case 'totalPrice': {
+          const priceA = Number(a.totalPrice) || 0;
+          const priceB = Number(b.totalPrice) || 0;
+          comparison = priceA - priceB;
+          break;
+        }
+        case 'status':
+          comparison = (a.status || '').localeCompare(b.status || '');
+          break;
+        default:
+          comparison = 0;
+      }
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredQuotes, sortField, sortDirection]);
+
+  const renderSortableHeader = (
+    field: 'proposalNumber' | 'type' | 'companyName' | 'proposalDate' | 'totalPrice' | 'status',
+    label: string,
+    alignClass?: string
+  ) => {
+    const isActive = sortField === field;
+    return (
+      <TableHead
+        className={`font-bold cursor-pointer select-none group hover:text-foreground transition-colors ${alignClass || ''}`}
+        onClick={() => handleSort(field)}
+        title={`Ordenar por ${label} (${isActive && sortDirection === 'desc' ? 'menor para o maior' : 'maior para o menor'})`}
+      >
+        <div className={`flex items-center gap-1.5 ${alignClass?.includes('center') ? 'justify-center' : ''}`}>
+          <span>{label}</span>
+          {isActive ? (
+            sortDirection === 'desc' ? (
+              <ArrowDown className="h-4 w-4 text-primary shrink-0 transition-transform" />
+            ) : (
+              <ArrowUp className="h-4 w-4 text-primary shrink-0 transition-transform" />
+            )
+          ) : (
+            <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/30 group-hover:text-muted-foreground shrink-0 transition-colors" />
+          )}
+        </div>
+      </TableHead>
+    );
+  };
 
   return (
     <Card>
@@ -182,17 +260,17 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
           <Table>
             <TableHeader className="bg-muted/30">
               <TableRow>
-                <TableHead className="font-bold">Número</TableHead>
-                <TableHead className="font-bold">Tipo</TableHead>
-                <TableHead className="font-bold">Empresa</TableHead>
-                <TableHead className="font-bold">Data</TableHead>
-                <TableHead className="font-bold">Valor</TableHead>
-                <TableHead className="font-bold text-center">Status</TableHead>
+                {renderSortableHeader('proposalNumber', 'Número')}
+                {renderSortableHeader('type', 'Tipo')}
+                {renderSortableHeader('companyName', 'Empresa')}
+                {renderSortableHeader('proposalDate', 'Data')}
+                {renderSortableHeader('totalPrice', 'Valor')}
+                {renderSortableHeader('status', 'Status', 'text-center')}
                 <TableHead className="text-right font-bold">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredQuotes.map((quote) => {
+              {sortedQuotes.map((quote) => {
                 const kindInfo = getProposalKindBadgeInfo(quote);
                 return (
                   <TableRow key={quote.id} className="hover:bg-muted/50 transition-colors">
@@ -234,7 +312,7 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
                 );
               })}
 
-              {filteredQuotes.length === 0 && !loading && (
+              {sortedQuotes.length === 0 && !loading && (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
                     {cnpj 
