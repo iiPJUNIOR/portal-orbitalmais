@@ -109,8 +109,12 @@ export default function Settings() {
     { value: "contato_telefone", label: "Telefone do Contato" },
     { value: "endereco", label: "Endereço Completo" },
     { value: "quantidade", label: "Quantidade Total de Itens" },
-    { value: "produto", label: "Descrição dos Produtos" },
-    { value: "observacoes", label: "Observações" },
+    { value: "produto", label: "Descrição do Produto (Item)" },
+    { value: "sku", label: "Código do Produto (Item)" },
+    { value: "qtd", label: "Quantidade do Item" },
+    { value: "valor_item", label: "Valor do Item" },
+    { value: "obs", label: "Observação do Item" },
+    { value: "observacoes", label: "Observações Gerais do Orçamento (Passo 2)" },
     { value: "numeroproposta", label: "Número do Orçamento (Nome do Arquivo)" },
     { value: "numerodaproposta", label: "Número da Proposta (Sem Rev - {{numerodaproposta}})" },
     { value: "numerorev", label: "Número da Revisão (REVX - {{numerorev}})" },
@@ -120,11 +124,13 @@ export default function Settings() {
     { value: "ensaios_inclusos", label: "Ensaios de Laboratório Inclusos (Sim/Não)" },
   ];
 
-  for (let i = 0; i < 10; i++) {
-    const numStr = i === 0 ? "" : String(i);
-    baseFields.push({ value: `sku${numStr}`, label: `Código do Produto (Item ${i + 1})` });
-    baseFields.push({ value: `qtd${numStr}`, label: `Quantidade (Item ${i + 1})` });
-    baseFields.push({ value: `valor_item${numStr}`, label: `Valor do Item (Item ${i + 1})` });
+  // Itens Fixos adicionais (2 a 10) para suporte legado
+  for (let i = 1; i < 10; i++) {
+    const numStr = String(i);
+    baseFields.push({ value: `sku${numStr}`, label: `Código do Produto (Item Fixo ${i + 1})` });
+    baseFields.push({ value: `qtd${numStr}`, label: `Quantidade (Item Fixo ${i + 1})` });
+    baseFields.push({ value: `valor_item${numStr}`, label: `Valor do Item (Item Fixo ${i + 1})` });
+    baseFields.push({ value: `obs${numStr}`, label: `Observação (Item Fixo ${i + 1})` });
   }
 
   const VISTORIA_FIELDS = baseFields;

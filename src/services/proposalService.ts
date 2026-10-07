@@ -172,7 +172,10 @@ function getFieldValue(field: string, data: ProposalData, settings?: any): any {
     case "contato_telefone": return data.phone || "";
     case "rua": return data.address || "";
     case "endereco": return data.address || "";
-    case "observacoes": return data.observations || "";
+    case "obs":
+    case "observacao_item": return (itemsSafe[0]?.product?.custom_fields?.observacao || itemsSafe[0]?.observacao || itemsSafe[0]?.obs || "");
+    case "observacoes":
+    case "obsorca": return data.observations || "";
     case "quantidade": return itemsSafe.reduce((sum, it) => sum + (it.quantity || 0), 0);
     case "produto": return itemsSafe.map(it => `${it.product?.description || ""} (Qtd: ${it.quantity || 0})`).join(", ");
     case "valor": {
@@ -210,7 +213,7 @@ function wrapRowsInLoop(xml: string, docxMappings: Record<string, string>): stri
     return xml;
   }
 
-  const itemLevelFields = ["sku", "produto", "quantidade", "qtd", "valor_item", "valor"];
+  const itemLevelFields = ["sku", "produto", "quantidade", "qtd", "valor_item", "valor", "obs", "observacao_item"];
   
   const itemTokens = Object.entries(docxMappings)
     .filter(([token, field]) => itemLevelFields.includes(field) && !token.startsWith("__"))
@@ -859,7 +862,11 @@ export const generateServiceDOCX = async (form: any): Promise<Blob> => {
     formFields[`valor_item${numStr}`] = it 
       ? (it.bonificado ? "R$ 0,00" : formatCurrencyBRL(it.unitPrice || 0)) 
       : "";
+    formFields[`obs${numStr}`] = it ? (it.custom_fields?.observacao || it.observacao || it.observacoes || it.obs || "") : "";
   }
+
+  formFields["obs"] = (form.selectedProducts || [])[0]?.custom_fields?.observacao || form.observations || "";
+  formFields["observacao_item"] = (form.selectedProducts || [])[0]?.custom_fields?.observacao || "";
 
   const docxData: Record<string, any> = {};
   
