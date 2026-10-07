@@ -13,7 +13,7 @@ import { generateProposalDOCX, generateServiceDOCX } from "@/services/proposalSe
 import { toast } from "sonner";
 import { saveAs } from "file-saver";
 import { MadeWithDyad } from "@/components/made-with-dyad";
-import { saveQuote, getQuoteItems } from "@/services/supabaseService";
+import { saveQuote, getQuoteItems, deleteQuote } from "@/services/supabaseService";
 import { getUserSettings } from "@/services/settingsService";
 import { FileText, PlusCircle, History as HistoryIcon, Settings as SettingsIcon, ArrowLeft } from "lucide-react";
 import { Quote, QuoteItem } from "@/types/quote";
@@ -418,6 +418,24 @@ export default function Index() {
     }
   };
 
+  const handleDeleteQuote = async (quote: Quote) => {
+    const num = quote.proposalNumber || "este orçamento";
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente ${num}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+    const tId = toast.loading("Excluindo orçamento...");
+    try {
+      await deleteQuote(quote.id);
+      toast.success("Orçamento excluído com sucesso!", { id: tId });
+      setSelectedQuote(null);
+      setQuoteItems([]);
+      setStep(canViewHistory ? "history" : "welcome");
+    } catch (err: any) {
+      console.error("Falha ao excluir orçamento:", err);
+      toast.error("Falha ao excluir orçamento.", { id: tId });
+    }
+  };
+
   return (
     <div className="min-h-full flex flex-col">
       <main className="flex-1 container mx-auto py-10 px-4">
@@ -554,6 +572,7 @@ export default function Index() {
               onBack={() => setStep(canViewHistory ? "history" : "welcome")} 
               onRegenerate={handleRegenerateQuote}
               onEdit={() => handleEditQuote(selectedQuote)}
+              onDelete={() => handleDeleteQuote(selectedQuote)}
             />
           </div>
         )}

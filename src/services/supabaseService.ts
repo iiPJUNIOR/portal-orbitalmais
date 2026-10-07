@@ -98,6 +98,16 @@ export const saveQuote = async (
   }
 };
 
+export const deleteQuote = async (id: string): Promise<void> => {
+  try {
+    await supabase.from("quote_items").delete().eq("quote_id", id);
+  } catch (err) {
+    console.warn("Failed to delete related quote_items before deleting quote", err);
+  }
+  const { error } = await supabase.from("quotes").delete().eq("id", id);
+  if (error) throw error;
+};
+
 export const getQuotesByCnpj = async (query: string): Promise<QuoteType[]> => {
   try {
     const rawSearch = query.trim();

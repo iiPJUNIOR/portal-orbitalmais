@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
-import { Search, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react";
-import { getQuotesByCnpj } from "@/services/supabaseService";
+import { Search, ArrowUpDown, ArrowUp, ArrowDown, Trash2 } from "lucide-react";
+import { getQuotesByCnpj, deleteQuote } from "@/services/supabaseService";
 import { Quote } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { getProposalKind, getProposalKindBadgeInfo, ProposalKind } from "@/utils/proposalType";
+import { toast } from "sonner";
 
 interface QuoteHistoryProps {
   onQuoteSelect: (quote: Quote) => void;
@@ -104,6 +105,23 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
       debounceRef.current = null;
     }
     await doSearch(cnpj);
+  };
+
+  const handleDeleteQuote = async (quote: Quote) => {
+    const num = quote.proposalNumber || "este orçamento";
+    if (!window.confirm(`Tem certeza que deseja excluir permanentemente ${num}? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    const tId = toast.loading("Excluindo orçamento...");
+    try {
+      await deleteQuote(quote.id);
+      setQuotes((prev) => prev.filter((q) => q.id !== quote.id));
+      toast.success("Orçamento excluído com sucesso!", { id: tId });
+    } catch (err: any) {
+      console.error("Falha ao excluir orçamento:", err);
+      toast.error("Falha ao excluir orçamento do banco de dados.", { id: tId });
+    }
   };
 
   const getStatusBadge = (status: Quote['status']) => {
@@ -306,6 +324,16 @@ export function QuoteHistory({ onQuoteSelect, onRegenerateFromHistory }: QuoteHi
                             DOCX
                           </Button>
                         ) : null}
+
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          className="rounded-lg border-destructive/20 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => handleDeleteQuote(quote)}
+                          title="Excluir orçamento permanentemente"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </TableCell>
                   </TableRow>

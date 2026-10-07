@@ -15,6 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Quote, QuoteItem } from "@/types/quote";
 import { formatCurrencyBRL } from "@/lib/formatters";
 import { getProposalKindBadgeInfo } from "@/utils/proposalType";
+import { Trash2 } from "lucide-react";
 
 interface QuoteDetailsProps {
   quote: Quote;
@@ -22,9 +23,10 @@ interface QuoteDetailsProps {
   onBack: () => void;
   onRegenerate: () => void;
   onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: QuoteDetailsProps) {
+export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit, onDelete }: QuoteDetailsProps) {
   const kindInfo = getProposalKindBadgeInfo(quote);
   const getStatusBadge = (status: Quote['status']) => {
     switch (status) {
@@ -69,6 +71,12 @@ export function QuoteDetails({ quote, items, onBack, onRegenerate, onEdit }: Quo
               <Button className="bg-primary hover:bg-primary/95 text-white font-bold" onClick={onRegenerate}>
                 Baixar DOCX
               </Button>
+
+              {onDelete ? (
+                <Button variant="destructive" onClick={onDelete} className="font-bold">
+                  <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                </Button>
+              ) : null}
             </div>
           </div>
         </CardHeader>

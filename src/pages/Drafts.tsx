@@ -40,13 +40,29 @@ export default function DraftsPage() {
   };
 
   const handleDelete = async (d: DraftRecord) => {
-    if (!confirm("Remover rascunho permanentemente?")) return;
+    if (!confirm("Remover este rascunho permanentemente?")) return;
     try {
       await deleteDraft(d.id);
       await load();
       toast.success("Rascunho removido");
     } catch (err) {
       toast.error("Falha ao remover rascunho");
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    if (drafts.length === 0) return;
+    if (!confirm(`Tem certeza que deseja remover todos os ${drafts.length} rascunhos permanentemente?`)) return;
+    const tId = toast.loading("Removendo todos os rascunhos...");
+    try {
+      for (const d of drafts) {
+        await deleteDraft(d.id);
+      }
+      await load();
+      toast.success("Todos os rascunhos foram removidos com sucesso.", { id: tId });
+    } catch (err) {
+      console.error(err);
+      toast.error("Falha ao remover rascunhos.", { id: tId });
     }
   };
 
@@ -142,6 +158,11 @@ export default function DraftsPage() {
             <Button onClick={handleSyncAll} disabled={isSyncingAll} className="bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl">
               <RefreshCw className={`mr-2 h-4 w-4 ${isSyncingAll ? "animate-spin" : ""}`} /> Sincronizar Todos
             </Button>
+            {drafts.length > 0 && (
+              <Button onClick={handleDeleteAll} variant="outline" className="rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 font-semibold">
+                <Trash2 className="mr-2 h-4 w-4" /> Excluir Todos
+              </Button>
+            )}
             <Button onClick={load} variant="outline" className="rounded-xl"><RefreshCw className="mr-2 h-4 w-4" /> Recarregar</Button>
             <Button onClick={() => navigate("/")} className="rounded-xl font-bold">Ir para o Gerador</Button>
           </div>
