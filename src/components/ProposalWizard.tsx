@@ -11,7 +11,7 @@ import { generateProposalNumber, generateProposalPDF } from "@/services/proposal
 import { getProposalSequenceAndRevision } from "@/services/supabaseService";
 import { fetchProducts } from "@/services/productService";
 import { formatCurrencyBRL } from "@/lib/formatters";
-import { saveDraft, updateDraft } from "@/services/draftService";
+import { saveDraft, updateDraft, deleteDraft } from "@/services/draftService";
 import { saveUserSettings, getUserSettings, ProductFieldDef, defaultFields } from "@/services/settingsService";
 import {
   Select,
@@ -598,9 +598,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
     if (draftId) {
       try {
-        await updateDraft(draftId, { data: formData, step: currentStep });
+        await deleteDraft(draftId);
       } catch (err) {
-        console.warn("Failed to update draft on finish", err);
+        console.warn("Failed to delete draft on finish", err);
       }
     }
 
