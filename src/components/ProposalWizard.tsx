@@ -460,11 +460,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   
     const fetchCnpjData = async (rawCnpj: string) => {
       if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
-      lastFetchedCnpj.current = rawCnpj;
       const toastId = toast.loading("Buscando CNPJ...");
       try {
         const { fetchCnpjData: lookupCnpj } = await import("@/services/cnpjService");
         const data = await lookupCnpj(rawCnpj);
+        lastFetchedCnpj.current = rawCnpj;
         setFormData((prev: any) => ({
           ...prev,
           companyName: data.companyName || prev.companyName,
@@ -474,8 +474,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         }));
         toast.success("Dados preenchidos!", { id: toastId });
       } catch (error: any) {
+        lastFetchedCnpj.current = "";
         console.warn("CNPJ lookup info:", error?.message);
-        toast.info(error?.message || "CNPJ não localizado. Preencha os dados manualmente.", { id: toastId, duration: 4000 });
+        toast.info(error?.message || "Não foi possível localizar o CNPJ automaticamente. Preencha os dados manualmente.", { id: toastId, duration: 4000 });
       }
     };
  
@@ -504,7 +505,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
      const digits = String(formData.cnpj || "").replace(/\D/g, "");
      if (digits.length === 14) {
        cnpjDebounce.current = setTimeout(() => {
-         fetchCnpjData(digits);
+         lastFetchedCnpj.current = "";
+        fetchCnpjData(digits);
        }, 600);
      }
      return () => { if (cnpjDebounce.current) clearTimeout(cnpjDebounce.current); };

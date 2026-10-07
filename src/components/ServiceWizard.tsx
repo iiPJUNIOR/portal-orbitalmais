@@ -399,11 +399,11 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
 
   const fetchCnpjData = async (rawCnpj: string) => {
     if (rawCnpj.length !== 14 || lastFetchedCnpj.current === rawCnpj) return;
-    lastFetchedCnpj.current = rawCnpj;
     const toastId = toast.loading("Buscando CNPJ...");
     try {
       const { fetchCnpjData: lookupCnpj } = await import("@/services/cnpjService");
       const data = await lookupCnpj(rawCnpj);
+      lastFetchedCnpj.current = rawCnpj;
       setForm((prev: any) => ({
         ...prev,
         companyName: data.companyName || prev.companyName,
@@ -413,8 +413,9 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
       }));
       toast.success("Dados preenchidos!", { id: toastId });
     } catch (error: any) {
+      lastFetchedCnpj.current = "";
       console.warn("CNPJ lookup info:", error?.message);
-      toast.info(error?.message || "CNPJ não localizado. Preencha os dados manualmente.", { id: toastId, duration: 4000 });
+      toast.info(error?.message || "Não foi possível localizar o CNPJ automaticamente. Preencha os dados manualmente.", { id: toastId, duration: 4000 });
     }
   };
 
