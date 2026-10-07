@@ -403,6 +403,7 @@ export const generateProposalDOCX = async (data: ProposalData): Promise<Blob> =>
       observacao: data.observations || "",
       obs: data.observations || "",
       observations: data.observations || "",
+      obsorca: data.observations || "",
 
       users: data.users || 0,
       devices: data.devices || 0,

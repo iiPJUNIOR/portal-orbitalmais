@@ -654,8 +654,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       totalPrice: formData.totalPrice || calculatedSum
     });
 
-    if (currentStep === 3) {
-      setCurrentStep(4);
+    if (currentStep === 4) {
+      setCurrentStep(5);
     }
   };
 
@@ -726,7 +726,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       }
     }
 
-    if (currentStep === 2) {
+    if (currentStep === 3) {
       if ((formData.selectedProducts || []).length === 0) {
         toast.warning("Nenhum item foi selecionado para o orçamento.");
       }
@@ -896,6 +896,22 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           </div>
         );
       case 2:
+        return (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="font-semibold text-xs text-muted-foreground uppercase tracking-wider">
+                Observações do Orçamento
+              </Label>
+              <Textarea
+                placeholder="Observações gerais do orçamento (opcional)"
+                value={formData.observations || ""}
+                onChange={(e) => setFormData((prev: any) => ({ ...prev, observations: e.target.value }))}
+                className="h-32 rounded-xl resize-none"
+              />
+            </div>
+          </div>
+        );
+      case 3:
         return (
           <div className="space-y-6">
             <div className="relative w-full">
@@ -1150,7 +1166,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             </div>
           </div>
         );
-      case 3:
+      case 4:
         return (
           <div className="space-y-6">
             {/* Items list with bonus toggle */}
@@ -1381,7 +1397,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           </div>
         );
 
-      case 4:
+      case 5:
         return (
           <div className="py-10 flex flex-col items-center justify-center text-center space-y-6 animate-in zoom-in-95 duration-500">
             <div className="p-4 bg-green-100 rounded-full">
@@ -1432,15 +1448,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           <div className="flex justify-between items-center">
             <div>
               <CardTitle className="text-xl md:text-2xl font-black">
-                {currentStep === 4 ? "Concluído" : `Passo ${currentStep}`}
+                {currentStep === 5 ? "Concluído" : `Passo ${currentStep}`}
               </CardTitle>
               <CardDescription className="text-white/70 text-xs md:text-sm">
-                {currentStep === 4 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
+                {currentStep === 5 ? "Ações disponíveis" : `Gerenciando ${(formData.selectedProducts || []).length} itens no orçamento.`}
               </CardDescription>
             </div>
-            {currentStep < 4 && (
+            {currentStep < 5 && (
               <div className="text-xs bg-white/20 px-3 py-1 rounded-full text-white">
-                {currentStep}/3
+                {currentStep}/4
               </div>
             )}
           </div>
@@ -1448,7 +1464,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         <CardContent className="p-5 md:p-6">
           {renderStep()}
 
-          {currentStep < 4 && (
+          {currentStep < 5 && (
             <div className="flex justify-between mt-5 pt-4 border-t">
               <div className="flex gap-2">
                 <Button variant="ghost" className="rounded-xl px-2.5 sm:px-4" onClick={currentStep === 1 ? onCancel : () => setCurrentStep((prev) => prev - 1)}>
@@ -1464,7 +1480,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               </div>
 
               <div className="flex gap-2">
-                {currentStep === 3 ? (
+                {currentStep === 4 ? (
                   <Button className="rounded-xl px-2.5 sm:px-6 font-bold" onClick={() => handleFinish()} title="Gerar DOCX">
                     <FileText className="h-4 w-4" />
                     <span className="hidden sm:inline ml-2">Gerar DOCX</span>
