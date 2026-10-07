@@ -627,6 +627,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             bonificado: false,
             ensaiosInclusos: !!formData.ensaiosInclusos,
             unitPrice: effectivePrice,
+            observacoes: p.observacoes || "",
           });
         }
 
@@ -643,6 +644,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
             bonificado: true,
             ensaiosInclusos: !!formData.ensaiosInclusos,
             unitPrice: 0,
+            observacoes: p.observacoes || "",
           });
         }
 
@@ -1173,12 +1175,14 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                   return (
                     <div
                       key={p.baseId}
-                      className={`flex flex-row items-center justify-between gap-3 p-4 transition-colors ${
+                      className={`flex flex-col gap-3 p-4 transition-colors ${
                         p.bonificado
                           ? "bg-amber-50 dark:bg-amber-900/10"
                           : "hover:bg-muted/30"
                       }`}
                     >
+                      <div className="flex flex-row items-center justify-between gap-3">
+
                       {/* Item info */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
@@ -1302,6 +1306,24 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                             {p.bonificado ? "Bonificado" : "Bonificar"}
                           </span>
                         </button>
+                      </div>
+                      </div>
+                      
+                      {/* Observações do item */}
+                      <div className="w-full">
+                        <Input
+                          placeholder="Observações adicionais do item (opcional)"
+                          value={p.observacoes || ""}
+                          onChange={(e) => setFormData((prev: any) => ({
+                            ...prev,
+                            selectedProducts: prev.selectedProducts.map((sp: any) =>
+                              sp.baseId === p.baseId
+                                ? { ...sp, observacoes: e.target.value }
+                                : sp
+                            ),
+                          }))}
+                          className="h-8 text-xs bg-background/50 border-muted-foreground/20 rounded-lg placeholder:text-muted-foreground/50"
+                        />
                       </div>
                     </div>
                   );

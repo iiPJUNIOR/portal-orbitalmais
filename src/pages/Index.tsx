@@ -180,6 +180,7 @@ export default function Index() {
           unitPrice: it.bonificado ? 0 : (it.unitPrice || 0),
           priceModel: payload.priceModel,
           bonificado: !!it.bonificado,
+          observacao: it.observacoes || "",
         }))
       );
 
