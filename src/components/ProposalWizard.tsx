@@ -722,6 +722,8 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           return;
         }
       }
+    }
+
     if (currentStep === 2) {
       if ((formData.selectedProducts || []).length === 0) {
         toast.warning("Nenhum item foi selecionado para o orçamento.");
