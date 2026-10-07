@@ -69,6 +69,80 @@ const parseCurrencyBRLToNumber = (formattedStr: string): number => {
   return Number(cleanStr) / 100;
 };
 
+export const parseAnyPrice = (val: any): number => {
+  if (val === undefined || val === null || val === "") return 0;
+  if (typeof val === "number") return isNaN(val) ? 0 : val;
+  const str = String(val).trim();
+  if (!str) return 0;
+  if (/^-?\d+(\.\d+)?$/.test(str)) {
+    const n = parseFloat(str);
+    return isNaN(n) ? 0 : n;
+  }
+  let s = str.replace(/[^\d,.-]/g, "");
+  if (s.includes(",") && s.includes(".")) {
+    s = s.replace(/\./g, "").replace(",", ".");
+  } else if (s.includes(",")) {
+    s = s.replace(",", ".");
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+};
+
+export const getProductDefaultPrice = (p: any, fieldsConfig?: ProductFieldDef[], catalog?: any[]): number => {
+  if (!p) return 0;
+
+  // 1. If explicit unitPrice is set on the item and > 0
+  if (p.unitPrice !== undefined && p.unitPrice !== null && p.unitPrice !== "") {
+    const val = parseAnyPrice(p.unitPrice);
+    if (val > 0) return val;
+  }
+
+  const extractFromObject = (obj: any): number => {
+    if (!obj) return 0;
+    // Dynamic currency field from fieldsConfig if available
+    const currencyField = fieldsConfig?.find((f) => f.isActive && f.type === "currency");
+    if (currencyField) {
+      const customVal = obj.custom_fields?.[currencyField.key];
+      const rootVal = obj[currencyField.key];
+      const resolved = parseAnyPrice(customVal !== undefined && customVal !== "" ? customVal : rootVal);
+      if (resolved > 0) return resolved;
+    }
+
+    // Check known custom_fields keys
+    if (obj.custom_fields && typeof obj.custom_fields === "object") {
+      for (const key of ["valor", "price", "preco", "unit_price", "valor_unitario", "custom_valor"]) {
+        if (obj.custom_fields[key] !== undefined && obj.custom_fields[key] !== null && obj.custom_fields[key] !== "") {
+          const parsed = parseAnyPrice(obj.custom_fields[key]);
+          if (parsed > 0) return parsed;
+        }
+      }
+    }
+
+    // Check root keys
+    for (const key of ["valor", "price", "preco", "unit_price", "value_12m", "value_24m"]) {
+      if (obj[key] !== undefined && obj[key] !== null && obj[key] !== "") {
+        const parsed = parseAnyPrice(obj[key]);
+        if (parsed > 0) return parsed;
+      }
+    }
+    return 0;
+  };
+
+  const selfPrice = extractFromObject(p);
+  if (selfPrice > 0) return selfPrice;
+
+  // If not found directly, check matching item from catalog
+  if (catalog && catalog.length > 0) {
+    const match = catalog.find((item: any) => (item.id === (p.baseId || p.id)) || (item.sku && p.sku && item.sku === p.sku));
+    if (match) {
+      const catPrice = extractFromObject(match);
+      if (catPrice > 0) return catPrice;
+    }
+  }
+
+  return 0;
+};
+
 export function ProposalWizard({ initialSellerData, onComplete, onCancel, initialData, initialStep, draftId }: WizardProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [formData, setFormData] = useState<any>({
@@ -106,29 +180,26 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   const lastFetchedCnpj = useRef<string>("");
   const [totalPriceInput, setTotalPriceInput] = useState("");
   const prevCalculatedSum = useRef(0);
+  const isTotalOverridden = useRef(false);
   const [showRevisionModal, setShowRevisionModal] = useState(false);
   const [revisionData, setRevisionData] = useState<any>(null);
   const [selectedQuoteForRevision, setSelectedQuoteForRevision] = useState<any | null>(null);
   const [revisionModalStep, setRevisionModalStep] = useState<"choose-mode" | "select-quote" | "confirm-revision">("choose-mode");
 
   const calculatedSum = React.useMemo(() => {
-    const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
     return (formData.selectedProducts || []).reduce((sum: number, p: any) => {
-      const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
-      const regularQty = Math.max(0, (p.quantity || 1) - bonifiedQty);
+      const itemQty = Number(p.quantity) || 1;
+      const bonifiedQty = p.bonificado ? Math.min(Number(p.bonificadoQty ?? itemQty) || 0, itemQty) : 0;
+      const regularQty = Math.max(0, itemQty - bonifiedQty);
       if (regularQty <= 0) return sum;
       
-      const price = currencyField 
-        ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
-        : 0;
-      const defaultPrice = price || p.value_12m || p.value_24m || 0;
-      const effectivePrice = Number(p.unitPrice ?? defaultPrice);
+      const effectivePrice = getProductDefaultPrice(p, fieldsConfig, allProducts);
       return sum + (effectivePrice * regularQty);
     }, 0);
-  }, [formData.selectedProducts, fieldsConfig]);
+  }, [formData.selectedProducts, fieldsConfig, allProducts]);
 
   useEffect(() => {
-    if (formData.totalPrice === 0 || formData.totalPrice === prevCalculatedSum.current) {
+    if (!isTotalOverridden.current || formData.totalPrice === 0 || formData.totalPrice === prevCalculatedSum.current) {
       setFormData((prev: any) => ({ ...prev, totalPrice: calculatedSum }));
       setTotalPriceInput(formatInitialCurrency(calculatedSum));
       prevCalculatedSum.current = calculatedSum;
@@ -136,7 +207,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   }, [calculatedSum]);
 
   useEffect(() => {
-    if (formData.totalPrice && !totalPriceInput) {
+    if (formData.totalPrice !== undefined && formData.totalPrice !== null && !totalPriceInput) {
       setTotalPriceInput(formatInitialCurrency(formData.totalPrice));
     }
   }, [formData.totalPrice]);
@@ -414,11 +485,25 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
 
   const handleProductToggle = (product: any) => {
     setFormData((prev: any) => {
-      const exists = prev.selectedProducts.find((p: any) => p.baseId === product.id);
+      const exists = prev.selectedProducts.find((p: any) => (p.baseId || p.id) === product.id);
       if (exists) {
-        return { ...prev, selectedProducts: prev.selectedProducts.filter((p: any) => p.baseId !== product.id) };
+        return { ...prev, selectedProducts: prev.selectedProducts.filter((p: any) => (p.baseId || p.id) !== product.id) };
       }
-      return { ...prev, selectedProducts: [...prev.selectedProducts, { ...product, baseId: product.id, name: product.model, quantity: 1, ensaiosInclusos: false }] };
+      const initialUnitPrice = getProductDefaultPrice(product, fieldsConfig, allProducts);
+      return {
+        ...prev,
+        selectedProducts: [
+          ...prev.selectedProducts,
+          {
+            ...product,
+            baseId: product.id,
+            name: product.model || product.name || product.description,
+            quantity: 1,
+            unitPrice: initialUnitPrice,
+            ensaiosInclusos: false
+          }
+        ]
+      };
     });
   };
 
@@ -523,42 +608,36 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       ...formData,
       proposalNumber,
       items: (formData.selectedProducts || []).flatMap((p: any) => {
-        let fallbackPrice = 0;
-        if (currencyField) {
-          const rawVal = currencyField.isCustom
-            ? p.custom_fields?.[currencyField.key]
-            : p[currencyField.key];
-          fallbackPrice = Number(rawVal) || 0;
-        }
-
-        const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
-        const regularQty = p.quantity - bonifiedQty;
+        const effectivePrice = getProductDefaultPrice(p, fieldsConfig, allProducts);
+        const itemQty = Number(p.quantity) || 1;
+        const bonifiedQty = p.bonificado ? Math.min(Number(p.bonificadoQty ?? itemQty) || 0, itemQty) : 0;
+        const regularQty = itemQty - bonifiedQty;
         const itemsToReturn = [];
 
         if (regularQty > 0) {
           itemsToReturn.push({
             product: {
-              id: p.id,
-              description: p.name,
-              model: p.name,
+              id: p.id || p.baseId,
+              description: p.name || p.description,
+              model: p.name || p.model,
               category: p.category,
-              part_number: p.sku
+              part_number: p.sku || p.part_number
             },
             quantity: regularQty,
             bonificado: false,
             ensaiosInclusos: !!formData.ensaiosInclusos,
-            unitPrice: p.unitPrice ?? (fallbackPrice || p.value_12m || p.value_24m || 0),
+            unitPrice: effectivePrice,
           });
         }
 
         if (bonifiedQty > 0) {
           itemsToReturn.push({
             product: {
-              id: p.id,
-              description: `${p.name} (Bonificado)`,
-              model: p.name,
+              id: p.id || p.baseId,
+              description: `${p.name || p.description} (Bonificado)`,
+              model: p.name || p.model,
               category: p.category,
-              part_number: p.sku
+              part_number: p.sku || p.part_number
             },
             quantity: bonifiedQty,
             bonificado: true,
@@ -570,7 +649,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
         return itemsToReturn;
       }),
       proposalDate: formData.date,
-      totalPrice: formData.totalPrice
+      totalPrice: formData.totalPrice || calculatedSum
     });
 
     if (currentStep === 3) {
@@ -642,6 +721,15 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           toast.error("CNPJ inválido. Deve possuir 14 dígitos.");
           return;
         }
+      }
+    if (currentStep === 2) {
+      if ((formData.selectedProducts || []).length === 0) {
+        toast.warning("Nenhum item foi selecionado para o orçamento.");
+      }
+      if (!isTotalOverridden.current || formData.totalPrice === 0) {
+        setFormData((prev: any) => ({ ...prev, totalPrice: calculatedSum }));
+        setTotalPriceInput(formatInitialCurrency(calculatedSum));
+        prevCalculatedSum.current = calculatedSum;
       }
     }
 
@@ -883,11 +971,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               <Label className="font-bold text-lg">Itens Selecionados ({(formData.selectedProducts || []).length})</Label>
               <div className="grid grid-cols-1 gap-3">
                 {(formData.selectedProducts || []).map((p: any) => {
-                  const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
-                  const price = currencyField 
-                    ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
-                    : 0;
-                  const defaultPrice = Number(price || p.value_12m || p.value_24m || 0);
+                  const defaultPrice = getProductDefaultPrice(p, fieldsConfig, allProducts);
+                  const currentPrice = (p.unitPrice !== undefined && p.unitPrice !== null && Number(p.unitPrice) > 0)
+                    ? Number(p.unitPrice)
+                    : defaultPrice;
+                  const itemQty = Number(p.quantity) || 1;
+                  const itemSubtotal = itemQty * currentPrice;
 
                   return (
                     <div key={p.baseId} className="p-3 bg-orange-500/5 border border-orange-500/10 rounded-xl">
@@ -993,7 +1082,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                             <Input
                               type="text"
                               className="h-8 text-xs bg-card text-right font-bold"
-                              value={formatInitialCurrency(p.unitPrice ?? defaultPrice)}
+                              value={formatInitialCurrency(currentPrice)}
                               onChange={(e) => {
                                 const masked = handleCurrencyInput(e.target.value);
                                 const numericVal = parseCurrencyBRLToNumber(masked);
@@ -1005,6 +1094,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                                 }));
                               }}
                             />
+                          </div>
+                          <div className="flex flex-col gap-1 w-24 text-right">
+                            <Label className="text-[10px] text-muted-foreground uppercase font-bold">Subtotal</Label>
+                            <div className="h-8 flex items-center justify-end text-xs font-black text-orange-600">
+                              {formatCurrencyBRL(itemSubtotal)}
+                            </div>
                           </div>
                           <div className="flex items-end h-8 mt-auto">
                             <Button variant="ghost" size="sm" className="h-8 w-8 p-0" onClick={() => setFormData((prev: any) => ({ ...prev, selectedProducts: prev.selectedProducts.filter((sp: any) => sp.baseId !== p.baseId) }))}>
@@ -1066,15 +1161,11 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               )}
               <div className="divide-y border rounded-2xl overflow-hidden bg-card">
                 {(formData.selectedProducts || []).map((p: any) => {
-                  const bonifiedQty = p.bonificado ? Math.min(p.bonificadoQty ?? p.quantity, p.quantity) : 0;
-                  const regularQty = p.quantity - bonifiedQty;
+                  const itemQty = Number(p.quantity) || 1;
+                  const bonifiedQty = p.bonificado ? Math.min(Number(p.bonificadoQty ?? itemQty) || 0, itemQty) : 0;
+                  const regularQty = Math.max(0, itemQty - bonifiedQty);
                   
-                  const currencyField = fieldsConfig.find(f => f.isActive && f.type === "currency");
-                  const price = currencyField 
-                    ? (currencyField.isCustom ? p.custom_fields?.[currencyField.key] : p[currencyField.key])
-                    : 0;
-                  const defaultPrice = Number(price) || p.value_12m || p.value_24m || 0;
-                  const unitPrice = p.unitPrice ?? defaultPrice;
+                  const unitPrice = getProductDefaultPrice(p, fieldsConfig, allProducts);
                   const regularTotal = unitPrice * regularQty;
 
                   return (
@@ -1092,12 +1183,12 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                           <span className="font-bold text-sm truncate">{p.name}</span>
                           {p.bonificado && (
                             <span className="text-[10px] font-black uppercase tracking-widest bg-amber-400 text-amber-900 px-2 py-0.5 rounded-full">
-                              {bonifiedQty === p.quantity ? "Bonificado" : "Parcialmente Bonificado"}
+                              {bonifiedQty === itemQty ? "Bonificado" : "Parcialmente Bonificado"}
                             </span>
                           )}
                         </div>
                         <span className="text-xs text-muted-foreground block mt-1">
-                          Qtd: <strong>{p.quantity}</strong>
+                          Qtd: <strong>{itemQty}</strong>
                           {bonifiedQty > 0 && (
                             <span className="text-amber-600 dark:text-amber-400 ml-1.5 font-semibold">
                               ({bonifiedQty} bonif.
@@ -1107,13 +1198,16 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                           <span className="ml-2">
                             · Vlr. Unitário: <strong>{formatCurrencyBRL(unitPrice)}</strong>
                           </span>
+                          <span className="ml-2 font-bold text-foreground">
+                            · Subtotal: <strong className="text-orange-600">{formatCurrencyBRL(regularTotal)}</strong>
+                          </span>
                           {bonifiedQty > 0 && (
                             <span className="ml-2 text-amber-600 dark:text-amber-400 font-semibold block sm:inline mt-0.5 sm:mt-0">
-                              · Subtotal no doc: {regularQty > 0 ? (
+                              · Detalhe: {regularQty > 0 ? (
                                 <span>
                                   {formatCurrencyBRL(regularTotal)} <span className="text-muted-foreground font-normal">({regularQty}x)</span> + R$ 0,00 <span className="text-muted-foreground font-normal">({bonifiedQty}x bonif.)</span>
                                 </span>
-                              ) : "R$ 0,00"}
+                              ) : "R$ 0,00 (100% bonificado)"}
                             </span>
                           )}
                         </span>
@@ -1215,26 +1309,50 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
               {(formData.selectedProducts || []).some((p: any) => p.bonificado) && (
                 <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
                   ★ Itens bonificados aparecem com valor <strong>R$ 0,00</strong> no documento gerado.
-                  O total deve ser ajustado manualmente abaixo.
+                  O valor da proposta é calculado considerando apenas as unidades pagas.
                 </p>
               )}
             </div>
 
             {/* Total price */}
-            <div className="p-6 bg-[#f47321] text-white rounded-2xl space-y-1">
-              <Label className="text-white/80 text-xs uppercase tracking-widest font-bold">Valor Total da Proposta</Label>
+            <div className="p-6 bg-[#f47321] text-white rounded-2xl space-y-2">
+              <div className="flex items-center justify-between">
+                <Label className="text-white/90 text-xs uppercase tracking-widest font-bold">Valor Total da Proposta</Label>
+                {isTotalOverridden.current && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[10px] text-white hover:text-white hover:bg-white/20 px-2 py-0 font-bold rounded-lg border border-white/30"
+                    onClick={() => {
+                      isTotalOverridden.current = false;
+                      setFormData((prev: any) => ({ ...prev, totalPrice: calculatedSum }));
+                      setTotalPriceInput(formatInitialCurrency(calculatedSum));
+                      prevCalculatedSum.current = calculatedSum;
+                      toast.info("Total recalculado pela soma dos itens.");
+                    }}
+                  >
+                    <RefreshCw className="h-3 w-3 mr-1" /> Recalcular soma ({formatCurrencyBRL(calculatedSum)})
+                  </Button>
+                )}
+              </div>
               <Input
                 type="text"
                 placeholder="R$ 0,00"
                 className="bg-transparent border-none text-4xl font-black p-0 h-auto focus-visible:ring-0 w-full text-white placeholder:text-white/40"
-                value={totalPriceInput}
+                value={totalPriceInput || (calculatedSum > 0 ? formatInitialCurrency(calculatedSum) : "")}
                 onChange={(e) => {
                   const masked = handleCurrencyInput(e.target.value);
                   setTotalPriceInput(masked);
                   const numericVal = parseCurrencyBRLToNumber(masked);
+                  isTotalOverridden.current = true;
                   setFormData((prev: any) => ({ ...prev, totalPrice: numericVal }));
                 }}
               />
+              <div className="flex items-center justify-between text-white/90 text-xs pt-2 border-t border-white/20">
+                <span>Itens: {(formData.selectedProducts || []).length} selecionado(s)</span>
+                <span>Soma dos itens: <strong>{formatCurrencyBRL(calculatedSum)}</strong></span>
+              </div>
             </div>
           </div>
         );

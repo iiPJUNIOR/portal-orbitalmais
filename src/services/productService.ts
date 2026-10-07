@@ -1,5 +1,6 @@
 import { Product, ProductFilters } from "@/types/product";
 import { supabase } from "@/integrations/supabase/client";
+import { parseSpreadsheetNumber } from "@/lib/formatters";
 
 // Mock data as fallback if the database table doesn't exist or is empty yet
 const mockProducts: Product[] = [];
@@ -31,24 +32,37 @@ export const fetchProducts = async (filters: ProductFilters = {}): Promise<Produ
     
     if (error) throw error;
 
-    let products = (data || []).map((p: any) => ({
-      id: p.id,
-      sku: p.sku,
-      category: p.category,
-      model: p.model,
-      description: p.description || "",
-      value_12m: Number(p.value_12m || 0),
-      value_24m: Number(p.value_24m || 0),
-      part_number: p.part_number || "",
-      status: p.status || "Ativo",
-      colors: p.colors || [],
-      biometrics: !!p.biometrics,
-      facial: p.facial || "None",
-      proximity: p.proximity || "None",
-      urn: !!p.urn,
-      qr: !!p.qr,
-      custom_fields: p.custom_fields || {},
-    })) as Product[];
+    let products = (data || []).map((p: any) => {
+      const custom_fields = { ...(p.custom_fields || {}) };
+      if (p.valor !== undefined && p.valor !== null && custom_fields.valor === undefined) {
+        custom_fields.valor = p.valor;
+      }
+      if (p.price !== undefined && p.price !== null && custom_fields.price === undefined) {
+        custom_fields.price = p.price;
+      }
+      const rawVal = p.value_12m ?? custom_fields.valor ?? p.valor ?? custom_fields.price ?? p.price ?? 0;
+      const numVal = parseSpreadsheetNumber(rawVal);
+
+      return {
+        ...p,
+        id: p.id,
+        sku: p.sku,
+        category: p.category,
+        model: p.model,
+        description: p.description || "",
+        value_12m: numVal,
+        value_24m: parseSpreadsheetNumber(p.value_24m ?? numVal),
+        part_number: p.part_number || "",
+        status: p.status || "Ativo",
+        colors: p.colors || [],
+        biometrics: !!p.biometrics,
+        facial: p.facial || "None",
+        proximity: p.proximity || "None",
+        urn: !!p.urn,
+        qr: !!p.qr,
+        custom_fields,
+      };
+    }) as Product[];
 
     // Apply client-side filters if necessary (like min/max price ranges)
     if (filters.minPrice !== undefined || filters.maxPrice !== undefined) {
@@ -92,14 +106,25 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
     const { data, error } = await supabase.from("products").select("*").eq("id", id).maybeSingle();
     if (error) throw error;
     if (data) {
+      const custom_fields = { ...(data.custom_fields || {}) };
+      if (data.valor !== undefined && data.valor !== null && custom_fields.valor === undefined) {
+        custom_fields.valor = data.valor;
+      }
+      if (data.price !== undefined && data.price !== null && custom_fields.price === undefined) {
+        custom_fields.price = data.price;
+      }
+      const rawVal = data.value_12m ?? custom_fields.valor ?? data.valor ?? custom_fields.price ?? data.price ?? 0;
+      const numVal = parseSpreadsheetNumber(rawVal);
+
       return {
+        ...data,
         id: data.id,
         sku: data.sku,
         category: data.category,
         model: data.model,
         description: data.description || "",
-        value_12m: Number(data.value_12m || 0),
-        value_24m: Number(data.value_24m || 0),
+        value_12m: numVal,
+        value_24m: parseSpreadsheetNumber(data.value_24m ?? numVal),
         part_number: data.part_number || "",
         status: data.status || "Ativo",
         colors: data.colors || [],
@@ -108,7 +133,7 @@ export const getProductById = async (id: string): Promise<Product | undefined> =
         proximity: data.proximity || "None",
         urn: !!data.urn,
         qr: !!data.qr,
-        custom_fields: data.custom_fields || {},
+        custom_fields,
       } as Product;
     }
   } catch (err) {
