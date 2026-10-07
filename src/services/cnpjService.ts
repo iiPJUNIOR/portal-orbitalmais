@@ -14,23 +14,23 @@ interface ApiProvider {
 
 const providers: ApiProvider[] = [
   {
+    name: "Minha Receita",
+    url: (cnpj) => `https://minhareceita.org/${cnpj}`,
+    transform: (data) => ({
+      companyName: data.razao_social || data.nome_fantasia || "",
+      email: data.email || "",
+      phone: [data.ddd_telefone_1, data.ddd_telefone_2].filter(Boolean).join(" / ") || data.telefone || "",
+      address: buildAddress(data),
+      cnpj: data.cnpj || "",
+    }),
+  },
+  {
     name: "BrasilAPI",
     url: (cnpj) => `https://brasilapi.com.br/api/cnpj/v1/${cnpj}`,
     transform: (data) => ({
       companyName: data.razao_social || data.nome || data.nome_fantasia || data.fantasia || "",
       email: data.email || data.e_mail || data.contato_email || "",
       phone: data.telefone || data.telefones || data.ddd_telefone || data.telefone_principal || "",
-      address: buildAddress(data),
-      cnpj: data.cnpj || "",
-    }),
-  },
-  {
-    name: "ReceitaWS",
-    url: (cnpj) => `https://www.receitaws.com.br/v1/cnpj/${cnpj}`,
-    transform: (data) => ({
-      companyName: data.nome || data.fantasia || "",
-      email: data.email || "",
-      phone: data.telefone || "",
       address: buildAddress(data),
       cnpj: data.cnpj || "",
     }),

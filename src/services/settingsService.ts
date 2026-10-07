@@ -380,8 +380,6 @@ export async function getUserSettings(): Promise<UserSettings | null> {
           const { data: masterData } = await supabase
             .from("user_settings")
             .select("product_fields, slide_mappings")
-            .not("product_fields", "is", null)
-            .order("updated_at", { ascending: false })
             .limit(1)
             .maybeSingle();
 
