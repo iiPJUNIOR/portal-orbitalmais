@@ -341,11 +341,76 @@ export default function Index() {
   };
 
   const handleEditQuote = (quote: Quote) => {
-    if (!quote || !quote.settings) {
+    if (!quote) {
       toast.error("Não há dados para editar nesta proposta.");
       return;
     }
-    setEditInitialData(quote.settings);
+
+    // Identificar a revisão atual e avançar para a próxima revisão (ex: REV0 -> REV1, REV1 -> REV2)
+    const currentProposalNumber = String(quote.proposalNumber || quote.settings?.proposalNumber || "");
+    const revMatch = currentProposalNumber.match(/REV(\d+)/i);
+    let currentRev = 0;
+    if (revMatch) {
+      currentRev = parseInt(revMatch[1], 10);
+    } else if (quote.settings?.version !== undefined && quote.settings?.version !== null && quote.settings?.version !== "") {
+      const parsed = parseInt(String(quote.settings.version).replace(/\D/g, ""), 10);
+      if (!isNaN(parsed)) currentRev = parsed;
+    }
+
+    const nextRev = currentRev + 1;
+
+    // Identificar sequência OBM
+    const obmMatch = currentProposalNumber.match(/OBM-(\d+)/i);
+    const seq = obmMatch ? parseInt(obmMatch[1], 10) : (parseInt(String(quote.settings?.todaySequence || "1"), 10) || 1);
+    const formattedSeq = String(seq).padStart(3, "0");
+
+    // Gerar novo número da proposta com a próxima revisão
+    let nextProposalNumber = "";
+    if (currentProposalNumber && /REV\d+/i.test(currentProposalNumber)) {
+      nextProposalNumber = currentProposalNumber.replace(/REV\d+/i, `REV${nextRev}`);
+    } else if (currentProposalNumber.trim()) {
+      nextProposalNumber = `${currentProposalNumber.trim()} - REV${nextRev}`;
+    } else {
+      nextProposalNumber = `${quote.companyName || "Proposta"} - OBM-${formattedSeq} - REV${nextRev}`;
+    }
+
+    const existingProducts = (quote.settings?.selectedProducts && quote.settings.selectedProducts.length > 0)
+      ? quote.settings.selectedProducts
+      : (quote.settings?.items && quote.settings.items.length > 0)
+        ? quote.settings.items
+        : (quoteItems && quoteItems.length > 0)
+          ? quoteItems.map((qi: any) => ({
+              id: qi.id,
+              name: qi.productDescription,
+              description: qi.productDescription,
+              sku: qi.sku,
+              part_number: qi.sku,
+              quantity: qi.quantity,
+              unitPrice: qi.unitPrice,
+              subtotal: qi.subtotal,
+              bonificado: qi.bonificado,
+              observacoes: qi.observacao || "",
+            }))
+          : [];
+
+    const editData = {
+      ...(quote.settings || {}),
+      companyName: quote.companyName || quote.settings?.companyName || "",
+      contactName: quote.contactName || quote.settings?.contactName || "",
+      contactGender: quote.contactGender || quote.settings?.contactGender || "",
+      cnpj: quote.cnpj || quote.settings?.cnpj || "",
+      email: quote.email || quote.settings?.email || "",
+      phone: quote.phone || quote.settings?.phone || "",
+      address: quote.address || quote.settings?.address || "",
+      observations: quote.observations || quote.settings?.observations || "",
+      selectedProducts: existingProducts,
+      version: String(nextRev),
+      proposalNumber: nextProposalNumber,
+      todaySequence: seq,
+      isEditingRevision: true,
+    };
+
+    setEditInitialData(editData);
     if (getProposalKind(quote) === "service") {
       setStep("service-wizard");
     } else {
@@ -435,7 +500,6 @@ export default function Index() {
               onCancel={() => (editInitialData ? setStep("details") : setStep("proposal-type"))}
               initialData={editInitialData ?? undefined}
               initialStep={1}
-              draftId={selectedQuote?.id ?? undefined}
             />
           </div>
         )}
@@ -445,7 +509,6 @@ export default function Index() {
             <ServiceWizard
               onCancel={() => (editInitialData ? setStep("details") : setStep("proposal-type"))}
               initialData={editInitialData ?? undefined}
-              draftId={selectedQuote?.id ?? undefined}
               onComplete={() => {
                 setEditInitialData(null);
                 setSelectedQuote(null);

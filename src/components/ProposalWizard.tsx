@@ -235,6 +235,18 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
   // Get sequence and revision on mount or when CNPJ changes
   useEffect(() => {
     async function loadSequenceAndRevision() {
+      if (initialData) {
+        const cleanInitialCnpj = String(initialData.cnpj || "").replace(/\D/g, "");
+        const cleanCurrentCnpj = (formData.cnpj || "").replace(/\D/g, "");
+        if (cleanCurrentCnpj === cleanInitialCnpj || !cleanCurrentCnpj) {
+          const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
+          if (obmMatch) {
+            setTodaySequence(parseInt(obmMatch[1], 10));
+          }
+          return;
+        }
+      }
+
       if (isInitialMount.current && initialData) {
         isInitialMount.current = false;
         const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
@@ -325,11 +337,25 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
       try {
         // Increment version when editing an existing finalized proposal, keep it same for drafts
         const currentVersion = parseInt(initialData.version ?? "0", 10);
-        const nextVersion = draftId ? (isNaN(currentVersion) ? 0 : currentVersion) : (isNaN(currentVersion) ? 1 : currentVersion + 1);
+        const nextVersion = (initialData.isEditingRevision || draftId)
+          ? (isNaN(currentVersion) ? 0 : currentVersion)
+          : (isNaN(currentVersion) ? 1 : currentVersion + 1);
+
+        const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
+        if (obmMatch) {
+          setTodaySequence(parseInt(obmMatch[1], 10));
+        }
+
+        let updatedProposalNumber = initialData.proposalNumber || "";
+        if (updatedProposalNumber && /REV\d+/i.test(updatedProposalNumber)) {
+          updatedProposalNumber = updatedProposalNumber.replace(/REV\d+/i, `REV${nextVersion}`);
+        }
+
         setFormData((prev: any) => ({
           ...prev,
           ...initialData,
           version: String(nextVersion),
+          proposalNumber: updatedProposalNumber || prev.proposalNumber,
         }));
         // Mark number as edited so auto-gen doesn't overwrite, but allow re-gen with new version
         // We'll re-trigger auto-gen by keeping isProposalNumberEdited false

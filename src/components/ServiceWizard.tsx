@@ -269,6 +269,18 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
   // Get sequence and revision on mount or when CNPJ changes
   useEffect(() => {
     async function loadSequenceAndRevision() {
+      if (initialData) {
+        const cleanInitialCnpj = String(initialData.cnpj || "").replace(/\D/g, "");
+        const cleanCurrentCnpj = (form.cnpj || "").replace(/\D/g, "");
+        if (cleanCurrentCnpj === cleanInitialCnpj || !cleanCurrentCnpj) {
+          const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
+          if (obmMatch) {
+            setTodaySequence(parseInt(obmMatch[1], 10));
+          }
+          return;
+        }
+      }
+
       if (isInitialMount.current && initialData) {
         isInitialMount.current = false;
         const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
@@ -346,11 +358,25 @@ export function ServiceWizard({ onCancel, draftId, initialData, initialStep, onC
     if (initialData) {
       try {
         const currentVersion = parseInt(initialData.version ?? "0", 10);
-        const nextVersion = draftId ? (isNaN(currentVersion) ? 0 : currentVersion) : (isNaN(currentVersion) ? 1 : currentVersion + 1);
+        const nextVersion = (initialData.isEditingRevision || draftId)
+          ? (isNaN(currentVersion) ? 0 : currentVersion)
+          : (isNaN(currentVersion) ? 1 : currentVersion + 1);
+
+        const obmMatch = String(initialData.proposalNumber || "").match(/OBM-(\d+)/i);
+        if (obmMatch) {
+          setTodaySequence(parseInt(obmMatch[1], 10));
+        }
+
+        let updatedProposalNumber = initialData.proposalNumber || "";
+        if (updatedProposalNumber && /REV\d+/i.test(updatedProposalNumber)) {
+          updatedProposalNumber = updatedProposalNumber.replace(/REV\d+/i, `REV${nextVersion}`);
+        }
+
         setForm((prev: any) => ({
           ...prev,
           ...initialData,
           version: String(nextVersion),
+          proposalNumber: updatedProposalNumber || prev.proposalNumber,
           wizardVersion: 2,
         }));
       } catch (err) {
