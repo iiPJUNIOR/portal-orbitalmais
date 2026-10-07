@@ -74,19 +74,58 @@ function buildAddress(data: any): string {
   return parts.filter(Boolean).join(" - ");
 }
 
+export function isValidCNPJ(cnpj: string): boolean {
+  const digits = cnpj.replace(/\D/g, "");
+  if (digits.length !== 14) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+
+  let size = 12;
+  let numbers = digits.substring(0, size);
+  const digitsCheck = digits.substring(size);
+  let pos = size - 7;
+  let sum = 0;
+  for (let i = size; i >= 1; i--) {
+    sum += Number(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== Number(digitsCheck.charAt(0))) return false;
+
+  size = 13;
+  numbers = digits.substring(0, size);
+  sum = 0;
+  pos = size - 7;
+  for (let i = size; i >= 1; i--) {
+    sum += Number(numbers.charAt(size - i)) * pos--;
+    if (pos < 2) pos = 9;
+  }
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== Number(digitsCheck.charAt(1))) return false;
+
+  return true;
+}
+
 export async function fetchCnpjData(cnpj: string): Promise<CnpjData> {
   const digits = cnpj.replace(/\D/g, "");
   if (digits.length !== 14) {
-    throw new Error("CNPJ deve ter 14 dígitos");
+    throw new Error("CNPJ deve conter 14 dígitos.");
   }
 
+  if (!isValidCNPJ(digits)) {
+    throw new Error("CNPJ inválido (dígitos incorretos). Preencha manualmente.");
+  }
+
+  let isNotFound = false;
   let lastError: Error | null = null;
 
   for (const provider of providers) {
     try {
       const res = await fetch(provider.url(digits), {
-        signal: AbortSignal.timeout(8000),
+        signal: AbortSignal.timeout(6000),
       });
+      if (res.status === 404 || res.status === 400) {
+        isNotFound = true;
+      }
       if (!res.ok) {
         throw new Error(`${provider.name} retornou ${res.status}`);
       }
@@ -98,5 +137,9 @@ export async function fetchCnpjData(cnpj: string): Promise<CnpjData> {
     }
   }
 
-  throw lastError || new Error("Todas as APIs de CNPJ falharam");
+  if (isNotFound) {
+    throw new Error("CNPJ não encontrado na Receita Federal. Preencha os dados manualmente.");
+  }
+
+  throw lastError || new Error("Não foi possível consultar o CNPJ automaticamente. Preencha os dados manualmente.");
 }

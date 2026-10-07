@@ -473,9 +473,9 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
           phone: data.phone || prev.phone
         }));
         toast.success("Dados preenchidos!", { id: toastId });
-      } catch (error) {
-        console.error("CNPJ fetch error:", error);
-        toast.error("Erro ao buscar CNPJ. Tente novamente.", { id: toastId });
+      } catch (error: any) {
+        console.warn("CNPJ lookup info:", error?.message);
+        toast.info(error?.message || "CNPJ não localizado. Preencha os dados manualmente.", { id: toastId, duration: 4000 });
       }
     };
  

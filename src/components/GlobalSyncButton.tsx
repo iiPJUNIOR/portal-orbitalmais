@@ -8,10 +8,10 @@ export function GlobalSyncButton() {
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
 
-  const updateCount = () => {
+  const updateCount = async () => {
     try {
-      const drafts = getDrafts();
-      const unsynced = drafts.filter((d) => !d.synced);
+      const drafts = await getDrafts();
+      const unsynced = Array.isArray(drafts) ? drafts.filter((d: any) => !d.synced) : [];
       setUnsyncedCount(unsynced.length);
     } catch (err) {
       console.warn("GlobalSyncButton: failed to read drafts", err);

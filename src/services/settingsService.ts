@@ -379,7 +379,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
         try {
           const { data: masterData } = await supabase
             .from("user_settings")
-            .select("product_fields, slide_mappings")
+            .select("*")
             .limit(1)
             .maybeSingle();
 
