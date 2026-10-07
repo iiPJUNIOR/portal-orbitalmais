@@ -357,7 +357,8 @@ export function QualificationWizard({ onCancel }: QualificationWizardProps) {
                 value={formData.observacoes}
                 onChange={(e) => set("observacoes", e.target.value)}
                 placeholder="Informações adicionais para o documento..."
-                rows={3}
+                rows={8}
+                className="min-h-[200px] resize-y text-base p-3 rounded-xl leading-relaxed"
               />
             </div>
           </div>

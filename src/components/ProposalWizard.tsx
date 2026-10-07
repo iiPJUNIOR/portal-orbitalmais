@@ -935,7 +935,7 @@ export function ProposalWizard({ initialSellerData, onComplete, onCancel, initia
                 placeholder="Observações gerais do orçamento (opcional)"
                 value={formData.observations || ""}
                 onChange={(e) => setFormData((prev: any) => ({ ...prev, observations: e.target.value }))}
-                className="h-32 rounded-xl resize-none"
+                className="min-h-[300px] md:min-h-[380px] text-base p-4 rounded-2xl resize-y leading-relaxed shadow-sm focus:ring-2 border-neutral-300 dark:border-neutral-700"
               />
             </div>
           </div>
