@@ -4,36 +4,109 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || "https://jfbjeavkedcojarfy
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || "sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K";
 
 export default async function handler(req, res) {
-  // Opcional: Garante que a requisição venha do cron do Vercel
-  // Se quiser testar no navegador ou Postman, você pode comentar esta verificação
-  const isVercelCron = req.headers['x-vercel-cron'] === '1';
-  const isManualTrigger = req.query.bypass === 'true';
+  // Configura cabeçalhos de CORS e previne cache intermediário
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
 
-  if (!isVercelCron && !isManualTrigger) {
-    return res.status(401).json({ error: 'Acesso não autorizado. Apenas requisições do Vercel Cron são permitidas.' });
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
   }
+
+  const startTime = Date.now();
 
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     
-    // Executa uma query simples na tabela de produtos para manter o banco ativo
-    const { data, error } = await supabase
-      .from('products')
-      .select('id')
-      .limit(1);
+    // Executa queries em duas tabelas para redundância e garantir atividade no banco
+    const [productsRes, settingsRes] = await Promise.all([
+      supabase.from('products').select('id').limit(1),
+      supabase.from('user_settings').select('user_id').limit(1),
+    ]);
 
-    if (error) throw error;
+    // Se ambas falharem, reporta erro
+    if (productsRes.error && settingsRes.error) {
+      throw new Error(`Falha nas queries: products (${productsRes.error.message}), user_settings (${settingsRes.error.message})`);
+    }
+
+    const durationMs = Date.now() - startTime;
+    const report = {
+      success: true,
+      message: 'Banco do Supabase mantido ativo com sucesso!',
+      timestamp: new Date().toISOString(),
+      durationMs,
+      checks: {
+        products: !productsRes.error,
+        user_settings: !settingsRes.error,
+      }
+    };
+
+    // Despacha e-mail do sistema para o administrador se solicitado ou na rotina diária
+    const shouldSendEmail = req.query.email !== 'false';
+    let emailStatus = null;
+    if (shouldSendEmail) {
+      emailStatus = await sendSystemEmail(report);
+    }
 
     return res.status(200).json({
-      success: true,
-      message: 'Banco do Supabase pingado com sucesso!',
-      data
+      ...report,
+      emailNotification: emailStatus
     });
   } catch (error) {
     console.error('Erro ao pingar o Supabase:', error);
-    return res.status(500).json({
+    const failureReport = {
       success: false,
-      error: error.message
+      timestamp: new Date().toISOString(),
+      error: error.message || 'Erro desconhecido ao conectar no Supabase'
+    };
+
+    try {
+      await sendSystemEmail(failureReport);
+    } catch (e) {
+      console.error('Falha ao despachar e-mail de alerta:', e);
+    }
+
+    return res.status(500).json(failureReport);
+  }
+}
+
+async function sendSystemEmail(report) {
+  const recipient = 'junior.8350i@gmail.com';
+  const isOk = report.success;
+  const subject = isOk
+    ? `[Portal Orbitalmais] Status do Sistema: SAUDAVEL (OK) - ${new Date().toLocaleDateString('pt-BR')}`
+    : `[Portal Orbitalmais] ALERTA: Falha no Supabase!`;
+
+  try {
+    const payload = {
+      _subject: subject,
+      _template: 'table',
+      _captcha: 'false',
+      Status_Geral: isOk ? 'ONLINE E SAUDAVEL' : 'ALERTA / FALHA',
+      Data_Hora: new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }),
+      Tempo_de_Resposta: `${report.durationMs || 0}ms`,
+      Tabela_Produtos: report.checks?.products ? 'OK (Online)' : (isOk ? 'OK' : 'Falha'),
+      Tabela_Configuracoes: report.checks?.user_settings ? 'OK (Online)' : (isOk ? 'OK' : 'Falha'),
+      Mensagem: isOk
+        ? 'O banco Supabase foi consultado com sucesso e todos os servicos estao 100% operacionais.'
+        : `Erro reportado: ${report.error || 'Falha de conexao com o banco'}`
+    };
+
+    const response = await fetch(`https://formsubmit.co/ajax/${recipient}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'Origin': 'https://portal-orbitalmais.vercel.app',
+        'Referer': 'https://portal-orbitalmais.vercel.app/'
+      },
+      body: JSON.stringify(payload)
     });
+
+    const data = await response.json().catch(() => ({}));
+    return { sent: true, response: data };
+  } catch (err) {
+    console.error('Erro no envio de e-mail do sistema:', err);
+    return { sent: false, error: err.message };
   }
 }

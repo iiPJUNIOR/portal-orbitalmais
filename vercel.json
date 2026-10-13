@@ -2,14 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "rewrites": [
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ],
   "crons": [
     {
       "path": "/api/keep-alive",
-      "schedule": "0 0 */3 * *"
+      "schedule": "15 5 * * *"
     }
   ]
 }

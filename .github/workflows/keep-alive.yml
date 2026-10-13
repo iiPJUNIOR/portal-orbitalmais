@@ -2,16 +2,57 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Executa às 00:00 a cada 3 dias (Supabase free desativa após 7 dias de inatividade)
-    - cron: '0 0 */3 * *'
+    # Executa 2 vezes ao dia (04:20 e 16:20 UTC) em horários alternados para evitar congestionamento do GitHub Actions
+    # e garantir redundância máxima contra a pausa de 7 dias do Supabase
+    - cron: '20 4,16 * * *'
   workflow_dispatch: # Permite execução manual pelo painel do GitHub Actions
+
+# Permissões necessárias para o keepalive-workflow renovar a atividade do repositório
+permissions:
+  actions: write
+  contents: write
 
 jobs:
   keep_alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Supabase API (Query Products Table)
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prevenir desativação automática do GitHub Actions (Regra de 60 dias de inatividade)
+        uses: gautamkrishnar/keepalive-workflow@v2
+        with:
+          committer_username: 'github-actions[bot]'
+          committer_email: 'github-actions[bot]@users.noreply.github.com'
+          commit_message: 'chore(keepalive): renovar atividade para manter cronjob ativo [skip ci]'
+          time_elapsed: 45
+
+      - name: Ping Supabase REST API (Products & User Settings)
         run: |
-          curl -i -X GET "https://jfbjeavkedcojarfygzf.supabase.co/rest/v1/products?select=id&limit=1" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
+          SUPABASE_URL="${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_URL || 'https://jfbjeavkedcojarfygzf.supabase.co' }}"
+          SUPABASE_KEY="${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
+
+          echo "Pinging Supabase REST API: $SUPABASE_URL/rest/v1/products"
+          HTTP_STATUS_PRODUCTS=$(curl -s -o /tmp/products_res.json -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/products?select=id&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          echo "Status Products: $HTTP_STATUS_PRODUCTS"
+          cat /tmp/products_res.json
+          echo ""
+
+          echo "Pinging Supabase REST API: $SUPABASE_URL/rest/v1/user_settings"
+          HTTP_STATUS_SETTINGS=$(curl -s -o /tmp/settings_res.json -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/user_settings?select=user_id&limit=1" \
+            -H "apikey: $SUPABASE_KEY" \
+            -H "Authorization: Bearer $SUPABASE_KEY")
+
+          echo "Status User Settings: $HTTP_STATUS_SETTINGS"
+          cat /tmp/settings_res.json
+          echo ""
+
+          if [ "$HTTP_STATUS_PRODUCTS" != "200" ] && [ "$HTTP_STATUS_SETTINGS" != "200" ]; then
+            echo "ERRO CRITICO: Ambas as chamadas ao banco do Supabase falharam!"
+            exit 1
+          fi
+
+          echo "Sucesso: Supabase respondendo normalmente e banco mantido ativo."
