@@ -2,37 +2,23 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    # Executa 2 vezes ao dia (04:20 e 16:20 UTC) em horários alternados para evitar congestionamento do GitHub Actions
-    # e garantir redundância máxima contra a pausa de 7 dias do Supabase
+    # Executa 2 vezes ao dia (04:20 e 16:20 UTC) para redundancia contra a pausa do Supabase
     - cron: '20 4,16 * * *'
-  workflow_dispatch: # Permite execução manual pelo painel do GitHub Actions
-
-# Permissões necessárias para o keepalive-workflow renovar a atividade do repositório
-permissions:
-  actions: write
-  contents: write
+  workflow_dispatch: # Permite execucao manual pelo painel de Actions
 
 jobs:
   keep_alive:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Prevenir desativação automática do GitHub Actions (Regra de 60 dias de inatividade)
-        uses: gautamkrishnar/keepalive-workflow@v2
-        with:
-          committer_username: 'github-actions[bot]'
-          committer_email: 'github-actions[bot]@users.noreply.github.com'
-          commit_message: 'chore(keepalive): renovar atividade para manter cronjob ativo [skip ci]'
-          time_elapsed: 45
-
-      - name: Ping Supabase REST API (Products & User Settings)
+      - name: Ping Supabase REST API & Vercel
+        env:
+          INPUT_URL: ${{ secrets.SUPABASE_URL }}
+          INPUT_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
-          SUPABASE_URL="${{ secrets.SUPABASE_URL != '' && secrets.SUPABASE_URL || 'https://jfbjeavkedcojarfygzf.supabase.co' }}"
-          SUPABASE_KEY="${{ secrets.SUPABASE_ANON_KEY != '' && secrets.SUPABASE_ANON_KEY || 'sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K' }}"
+          SUPABASE_URL="${INPUT_URL:-https://jfbjeavkedcojarfygzf.supabase.co}"
+          SUPABASE_KEY="${INPUT_KEY:-sb_publishable_iZF7xYWylMX9Lp56OTarSw_WjI1Tt5K}"
 
-          echo "Pinging Supabase REST API: $SUPABASE_URL/rest/v1/products"
+          echo "1. Pinging Supabase REST API: $SUPABASE_URL/rest/v1/products"
           HTTP_STATUS_PRODUCTS=$(curl -s -o /tmp/products_res.json -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/products?select=id&limit=1" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
@@ -41,7 +27,7 @@ jobs:
           cat /tmp/products_res.json
           echo ""
 
-          echo "Pinging Supabase REST API: $SUPABASE_URL/rest/v1/user_settings"
+          echo "2. Pinging Supabase REST API: $SUPABASE_URL/rest/v1/user_settings"
           HTTP_STATUS_SETTINGS=$(curl -s -o /tmp/settings_res.json -w "%{http_code}" -X GET "$SUPABASE_URL/rest/v1/user_settings?select=user_id&limit=1" \
             -H "apikey: $SUPABASE_KEY" \
             -H "Authorization: Bearer $SUPABASE_KEY")
@@ -50,9 +36,15 @@ jobs:
           cat /tmp/settings_res.json
           echo ""
 
+          echo "3. Pinging Vercel Keep-Alive Serverless Function"
+          HTTP_STATUS_VERCEL=$(curl -s -o /tmp/vercel_res.json -w "%{http_code}" -X GET "https://portal-orbitalmais.vercel.app/api/keep-alive?email=false")
+          echo "Status Vercel: $HTTP_STATUS_VERCEL"
+          cat /tmp/vercel_res.json
+          echo ""
+
           if [ "$HTTP_STATUS_PRODUCTS" != "200" ] && [ "$HTTP_STATUS_SETTINGS" != "200" ]; then
             echo "ERRO CRITICO: Ambas as chamadas ao banco do Supabase falharam!"
             exit 1
           fi
 
-          echo "Sucesso: Supabase respondendo normalmente e banco mantido ativo."
+          echo "Sucesso: Supabase e Vercel respondendo normalmente. Banco mantido ativo."
